@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="description" content="A browser life sim with a PS2-era look: a dense little city, day and night, people, traffic and a touch of magic." />
+    <title>Port Halcyon</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <canvas id="game" tabindex="0"></canvas>
+
+    <div id="ui">
+      <div id="hud" class="hidden">
+        <div id="hud-time" class="panel">
+          <div id="clock">MON 6:00 PM</div>
+          <div id="day" class="sub">DAY 1</div>
+        </div>
+        <div id="hud-money" class="panel">
+          <div id="cash">$0</div>
+          <div id="bank" class="sub">BANK $0</div>
+        </div>
+      </div>
+
+      <div id="location"></div>
+      <div id="prompt"></div>
+      <div id="hint"></div>
+      <div id="toast"></div>
+
+      <div id="dialog" class="hidden">
+        <div id="dialog-name"></div>
+        <div id="dialog-text"></div>
+        <div id="dialog-choices"></div>
+      </div>
+
+      <div id="wardrobe" class="menu hidden">
+        <h2>WARDROBE</h2>
+        <div id="wardrobe-rows"></div>
+        <div class="menu-foot">← → change · ↑ ↓ select · C / Esc done</div>
+        <button class="btn" data-close>DONE</button>
+      </div>
+
+      <div id="pause" class="menu hidden">
+        <h2>PAUSED</h2>
+        <div id="pause-rows"></div>
+        <div class="controls">
+          <div><b>WASD / Arrows</b> walk</div>
+          <div><b>Shift</b> run</div>
+          <div><b>Drag mouse</b> look · <b>Wheel</b> zoom</div>
+          <div><b>E</b> talk / use</div>
+          <div><b>C</b> wardrobe</div>
+          <div><b>T</b> (hold) fast-forward time</div>
+          <div><b>M</b> mute · <b>Esc</b> pause</div>
+        </div>
+        <button class="btn" data-close>RESUME</button>
+      </div>
+
+      <div id="title">
+        <div class="title-inner">
+          <div class="title-logo">PORT HALCYON</div>
+          <div class="title-sub">a life sim · prototype</div>
+          <div class="title-start">PRESS START</div>
+          <div class="title-help">click, tap or press any key</div>
+        </div>
+        <div class="title-foot">memory card: <span id="save-status">no save</span></div>
+      </div>
+
+      <div id="touch" class="hidden">
+        <button class="tbtn" data-key="KeyE">USE</button>
+        <button class="tbtn" data-run>RUN</button>
+        <button class="tbtn small" data-key="KeyC">STYLE</button>
+        <button class="tbtn small" data-key="Escape">MENU</button>
+      </div>
+      <div id="stick"><div id="stick-knob"></div></div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
