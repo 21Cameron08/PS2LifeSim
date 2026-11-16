@@ -83,8 +83,11 @@ export class UI {
       el.classList.add('bump');
       setTimeout(() => el.classList.remove('bump'), 160);
     }
-    const b = `BANK ${money(bank)}`;
-    if (b !== this._bank) $('bank').textContent = this._bank = b;
+    const b = `BANK ${bank < 0 ? '-' : ''}${money(Math.abs(bank))}`;
+    if (b !== this._bank) {
+      $('bank').textContent = this._bank = b;
+      $('bank').classList.toggle('neg', bank < 0);
+    }
   }
   showLocation(name, sub = '') {
     const el = $('location');
@@ -106,6 +109,22 @@ export class UI {
     }
     el.classList.add('show');
   }
+  /** Fade to black, run mid() while the screen is dark, fade back in. */
+  fade(mid, label = 'LOADING') {
+    if (this.fading) return;
+    this.fading = true;
+    const el = $('fade');
+    el.querySelector('span').textContent = label;
+    el.classList.add('on');
+    setTimeout(() => {
+      mid();
+      setTimeout(() => {
+        el.classList.remove('on');
+        this.fading = false;
+      }, 300);
+    }, 420);
+  }
+
   toast(text) {
     const el = $('toast');
     el.textContent = text;

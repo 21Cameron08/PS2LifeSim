@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CITY, roadLine, blockBounds, blockKind } from '../config.js';
+import { CITY, roadLine, blockBounds, blockKind, siteForBlock } from '../config.js';
 import { GeoBuilder, shade, trs } from '../core/geo.js';
 import { Rng, clamp, lerp } from '../core/rng.js';
 import { FACADE_STYLES, FACADE_TILE, SHOP_TILE_W, SIGN_NAMES } from '../render/textures.js';
@@ -51,6 +51,7 @@ export class City {
     this.beacons = [];
     this.interactables = [];
     this.steamVents = [];
+    this.apartmentSites = {};
     this.T = makePropTemplates();
     this.B = {
       facades: FACADE_STYLES.map(() => new GeoBuilder()),
@@ -221,6 +222,7 @@ export class City {
         this.colliders.addC(x, z, 0.3, 0.3, 0.7);
       }
       if (!isCity) continue;
+      if (siteForBlock(b.i, b.j) && e.face === 's') continue;
       // wall-side machines: vending machines glow at night, ATMs give you money
       const wall = S - 0.42;
       const forceAtm = b.i === 3 && b.j === 3 && e.face === 'n';
@@ -256,9 +258,20 @@ export class City {
         ? ['glass', 'office', 'stone', 'glass']
         : t < 0.55
           ? ['stone', 'office', 'cream', 'brick', 'rose']
-          : ['brick', 'cream', 'teal', 'rose', 'brick'];
-    const xs = splits(lot.x0, lot.x1, rng.int(2, 3), rng);
-    const zs = splits(lot.z0, lot.z1, rng.int(2, 3), rng);
+          : ['brick', 'cream', 'teal', 'rose', 'brick', 'factory'];
+    const site = siteForBlock(b.i, b.j);
+    let xs;
+    let zs;
+    if (site) {
+      // reserve the middle of the south side for an apartment building
+      const s = site[1];
+      const mx = (lot.x0 + lot.x1) / 2;
+      xs = [lot.x0, mx - s.width / 2, mx + s.width / 2, lot.x1];
+      zs = [lot.z0, lot.z1 - s.depth, lot.z1];
+    } else {
+      xs = splits(lot.x0, lot.x1, rng.int(2, 3), rng);
+      zs = splits(lot.z0, lot.z1, rng.int(2, 3), rng);
+    }
     for (let a = 0; a < xs.length - 1; a++)
       for (let c = 0; c < zs.length - 1; c++) {
         let x0 = xs[a];
@@ -267,6 +280,10 @@ export class City {
         let z1 = zs[c + 1];
         const faces = { w: a === 0, e: a === xs.length - 2, n: c === 0, s: c === zs.length - 2 };
         const street = faces.w || faces.e || faces.n || faces.s;
+        if (site && a === 1 && c === 1) {
+          this.apartmentBuilding(site[0], site[1], x0, z0, x1, z1);
+          continue;
+        }
         const gap = rng.chance(0.22) ? 1.6 : 0.12;
         if (!faces.w) x0 += gap / 2;
         if (!faces.e) x1 -= gap / 2;
@@ -282,11 +299,23 @@ export class City {
       }
   }
 
+  apartmentBuilding(id, s, x0, z0, x1, z1) {
+    const gf = s.shop ? CITY.GF_H : 0;
+    const H = gf + s.floors * CITY.FLOOR_H;
+    const res = this.building(x0, z0, x1, z1, H, STYLE[s.style], { s: true }, s.shop, {
+      floors: s.floors,
+      noCrown: true,
+      reserve: 3.4,
+      signRow: s.signRow,
+    });
+    this.apartmentSites[id] = { id, x0, z0, x1, z1, gf, top: res.top, floorY: gf + s.unitFloor * CITY.FLOOR_H, style: s.style };
+  }
+
   building(x0, z0, x1, z1, H, style, faces, shop, opts = {}) {
     const rng = this.rng;
     const B = this.B;
     const gf = shop ? CITY.GF_H : 0;
-    const floors = Math.max(1, Math.round((H - gf) / CITY.FLOOR_H));
+    const floors = opts.floors ?? Math.max(1, Math.round((H - gf) / CITY.FLOOR_H));
     const top = gf + floors * CITY.FLOOR_H + 0.4;
     const tint = rng.float(0.86, 1.06);
     const col = [tint * rng.float(0.96, 1.04), tint, tint * rng.float(0.96, 1.04)];
@@ -309,7 +338,7 @@ export class City {
         top: false,
       });
       B.trim.box(x0 - 0.15, gf - 0.1, z0 - 0.15, x1 + 0.15, gf + 0.25, z1 + 0.15, { color: trimCol, bottom: true });
-      for (const f of ['n', 's', 'e', 'w']) if (faces[f]) this.shopFace(faceFrame(f, x0, z0, x1, z1), top);
+      for (const f of ['n', 's', 'e', 'w']) if (faces[f]) this.shopFace(faceFrame(f, x0, z0, x1, z1), top, opts);
     }
     this.roofCap(x0, z0, x1, z1, top, trimCol);
     if (!opts.noCollide) this.colliders.add(x0, z0, x1, z1, 0, top);
@@ -317,7 +346,7 @@ export class City {
     const w = x1 - x0;
     const d = z1 - z0;
     // setback crown on tall towers
-    if (top > 40 && rng.chance(0.7) && w > 8 && d > 8) {
+    if (!opts.noCrown && top > 40 && rng.chance(0.7) && w > 8 && d > 8) {
       const ix = w * rng.float(0.14, 0.24);
       const iz = d * rng.float(0.14, 0.24);
       const ctop = top + 0.45 + rng.int(2, 5) * CITY.FLOOR_H;
@@ -350,6 +379,7 @@ export class City {
         B.prop.addGeometry(this.T.waterTower, trs(rng.float(x0 + 2, x1 - 2), top + 0.05, rng.float(z0 + 2, z1 - 2), rng.float(0, 3)));
       }
     }
+    return { gf, top };
   }
 
   roofCap(x0, z0, x1, z1, top, col) {
@@ -364,14 +394,17 @@ export class City {
     this.B.roof.box(x0, top - 0.2, z0, x1, top + 0.06, z1, { sides: [false, false, false, false], topScale: 4 });
   }
 
-  shopFace(F, top) {
+  shopFace(F, top, opts = {}) {
     const rng = this.rng;
     if (F.len < 6.5) return;
     const SW = 5.2;
-    const c = rng.float(SW / 2 + 0.4, F.len - SW / 2 - 0.4);
+    // `reserve` keeps the first metres of the facade clear (a residential front door)
+    const lo = (opts.reserve ?? 0) + SW / 2 + 0.4;
+    if (lo > F.len - SW / 2 - 0.4) return;
+    const c = rng.float(lo, F.len - SW / 2 - 0.4);
     const n = F.n;
-    if (rng.chance(0.8)) {
-      const row = rng.int(0, SIGN_NAMES.length - 1);
+    if (opts.signRow !== undefined || rng.chance(0.8)) {
+      const row = opts.signRow ?? rng.int(0, SIGN_NAMES.length - 1);
       const v0 = 1 - (row + 1) / 8 + 0.003;
       const v1 = 1 - row / 8 - 0.003;
       const flick = (this._flickers ?? 0) < 4 && rng.chance(0.06);
@@ -380,14 +413,14 @@ export class City {
       B.quad(F.p(c - SW / 2, 3.62, 0.08), F.p(c + SW / 2, 3.62, 0.08), F.p(c + SW / 2, 4.27, 0.08), F.p(c - SW / 2, 4.27, 0.08), n, [0, v0, 1, v1]);
     }
     if (rng.chance(0.45)) {
-      const aw = Math.min(F.len - 1, rng.float(4, 8));
-      const a0 = clamp(c - aw / 2, 0.3, F.len - aw - 0.3);
+      const aw = Math.min(F.len - 1 - (opts.reserve ?? 0), rng.float(4, 8));
+      const a0 = clamp(c - aw / 2, 0.3 + (opts.reserve ?? 0), F.len - aw - 0.3);
       const col = shade(rng.pick(AWNINGS));
       const nn = [n[0] * 0.45, 0.9, n[2] * 0.45];
       this.B.trim.quad2(F.p(a0, 2.85, 1.3), F.p(a0 + aw, 2.85, 1.3), F.p(a0 + aw, 3.45, 0.02), F.p(a0, 3.45, 0.02), nn, [0, 0, 1, 1], col);
       this.B.trim.quad2(F.p(a0, 2.6, 1.3), F.p(a0 + aw, 2.6, 1.3), F.p(a0 + aw, 2.85, 1.3), F.p(a0, 2.85, 1.3), n, [0, 0, 1, 1], col);
     }
-    if (top > 14 && rng.chance(0.14)) {
+    if (!opts.reserve && top > 14 && rng.chance(0.14)) {
       const row = rng.int(0, SIGN_NAMES.length - 1);
       const v0 = 1 - (row + 1) / 8 + 0.003;
       const v1 = 1 - row / 8 - 0.003;
@@ -731,10 +764,28 @@ export class City {
     this._near = [];
   }
 
-  updateLampLights(focus, night) {
+  /** override: optional { list: [{x,y,z,color,power}], on } of interior fixtures. */
+  updateLampLights(focus, night, override = null) {
     if (!this.lampLights) return;
     const near = this._near;
     near.length = 0;
+    if (override) {
+      for (const l of override.list) near.push([(l.x - focus.x) ** 2 + (l.z - focus.z) ** 2 + (l.y - focus.y) ** 2, l]);
+      near.sort((a, b) => a[0] - b[0]);
+      this.lampLights.forEach((light, k) => {
+        const e = near[k];
+        if (!e) {
+          light.intensity = 0;
+          return;
+        }
+        const l = e[1];
+        light.position.set(l.x, l.y, l.z);
+        light.color.copy(l.color);
+        light.distance = 7;
+        light.intensity = 5 * l.power * override.on;
+      });
+      return;
+    }
     for (const l of this.lamps) {
       const d = (l.x - focus.x) ** 2 + (l.z - focus.z) ** 2;
       if (d < 900) near.push([d, l]);
@@ -748,6 +799,8 @@ export class City {
       }
       const [d2, l] = e;
       light.position.set(l.x, l.y - 0.6, l.z);
+      light.color.copy(SODIUM);
+      light.distance = 16;
       const fade = 1 - Math.min(1, Math.max(0, (Math.sqrt(d2) - 12) / 10));
       light.intensity = night * 26 * fade * (l.small ? 0.6 : 1);
     });

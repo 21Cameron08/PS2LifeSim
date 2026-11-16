@@ -73,6 +73,7 @@ export const FACADE_STYLES = [
   { id: 'glass', curtain: true, wall: '#39475a' },
   { id: 'office', ribbon: true, wall: '#9a9ca3', frame: '#2e343c' },
   { id: 'rose', wall: '#a8706a', frame: '#efe6d6', band: '#946059' },
+  { id: 'factory', wall: '#7e4a3a', mortar: '#523428', brick: true, frame: '#2b3034', big: true },
 ];
 
 const CURTAINS = ['#9a5048', '#c8b88a', '#5a6e88', '#ddd6c8', '#7a6680', '#6e7e5c', '#e4ddd0'];
@@ -137,6 +138,25 @@ function facade(style, seed) {
           ge.fillRect(x, y + 10, CW, 14);
           ge.fillStyle = 'rgba(0,0,0,0.5)';
           ge.fillRect(x + 15, y + 10, 2, 14);
+        }
+        continue;
+      }
+      if (style.big) {
+        // tall steel-framed industrial windows
+        g.fillStyle = style.frame;
+        g.fillRect(x + 2, y + 3, 28, 25);
+        glassGradient(g, x + 3, y + 4, 26, 23, '#8aa0b0', '#26313c');
+        g.fillStyle = style.frame;
+        for (let k = 1; k < 4; k++) g.fillRect(x + 3 + Math.round(k * 6.5), y + 4, 1, 23);
+        for (const f of [0.33, 0.66]) g.fillRect(x + 3, y + 4 + Math.round(23 * f), 26, 1);
+        g.fillStyle = 'rgba(255,255,255,0.2)';
+        g.fillRect(x + 1, y + 28, 30, 2);
+        if (floorLit && rng.chance(0.6)) {
+          ge.fillStyle = rng.pick(['#ffd9a0', '#ffe8c0', '#fff1d8']);
+          ge.fillRect(x + 3, y + 4, 26, 23);
+          ge.fillStyle = '#000';
+          for (let k = 1; k < 4; k++) ge.fillRect(x + 3 + Math.round(k * 6.5), y + 4, 1, 23);
+          for (const f of [0.33, 0.66]) ge.fillRect(x + 3, y + 4 + Math.round(23 * f), 26, 1);
         }
         continue;
       }
@@ -682,6 +702,8 @@ function water(seed) {
   }
   return makeTex(cv);
 }
+
+export { makeCanvas, makeTex, noise, rgb, css, mul, jitter, glassGradient };
 
 export function createTextures() {
   const t = {

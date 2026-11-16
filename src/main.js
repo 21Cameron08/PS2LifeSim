@@ -11,7 +11,8 @@ import { City } from './world/city.js';
 import { LanternQuarter } from './world/lanternQuarter.js';
 import { Effects } from './world/effects.js';
 import { Crowd } from './actors/crowd.js';
-import { Player, CameraRig } from './actors/player.js';
+import { Player, CameraRig, citySpace } from './actors/player.js';
+import { Apartments } from './world/apartments.js';
 import { Pedestrians } from './actors/pedestrians.js';
 import { Traffic } from './actors/traffic.js';
 import { defaultPlayerAppearance } from './actors/appearance.js';
@@ -38,7 +39,13 @@ const state = {
   known: save?.known ?? {},
   lastChat: save?.lastChat ?? {},
   appearance: { ...defaultPlayerAppearance(), ...(save?.appearance || {}) },
+  home: save?.home ?? 'starter',
+  rentWeek: save?.rentWeek,
+  seen: save?.seen ?? {},
 };
+const SAVE_VERSION = 2;
+// saves from before apartments existed keep money/looks but start you at home
+const freshStart = !save || save.v !== SAVE_VERSION;
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
 renderer.setPixelRatio(1);
@@ -53,13 +60,27 @@ const city = new City(scene, tex, env);
 city.initLampLights(6);
 const lantern = new LanternQuarter(scene, tex, city.lanternBlock, city.colliders);
 const effects = new Effects(scene, tex, city);
+const apts = new Apartments(scene, city, tex);
+apts.setHome(state.home);
+const outdoor = citySpace(city);
 const crowd = new Crowd(scene, tex, 112);
-const player = new Player(crowd, city, state.appearance, save?.player ?? city.spawn);
+// where do we start? a fresh life starts inside your apartment
+let place = freshStart ? apts.byId[state.home] : save.inside ? apts.byId[save.inside] : null;
+let touring = false;
+const homeApt = apts.byId[state.home];
+const startAt = place ? (freshStart ? place.spawn : save.player) : (save?.player ?? homeApt.exit);
+const player = new Player(crowd, place ? place.space : outdoor, state.appearance, startAt);
 const peds = new Pedestrians(crowd, city, 72);
 const traffic = new Traffic(scene, tex, 24);
 const clock = new Clock(save?.minutes ?? START.hour * 60);
-const rig = new CameraRig(camera, city.colliders, city);
+const rig = new CameraRig(camera, player.space);
 rig.yaw = player.yaw;
+let outdoorDist = 6.2;
+if (place) {
+  apts.show(place);
+  rig.dist = 3.4;
+  rig.pitch = 0.42;
+}
 const talkRng = new Rng(Date.now() & 0xffff);
 
 // special characters
@@ -132,7 +153,11 @@ let resetting = false;
 function saveNow(showToast = false) {
   if (resetting) return;
   const ok = writeSave({
-    v: 1,
+    v: SAVE_VERSION,
+    home: state.home,
+    rentWeek: state.rentWeek,
+    seen: state.seen,
+    inside: place && !touring ? place.id : null,
     cash: state.cash,
     bank: state.bank,
     rel: state.rel,
@@ -289,7 +314,172 @@ function useThing(it) {
   }
 }
 
+// ----------------------------------------------------------------------------
+// Apartments
+const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
+
+function enterApartment(apt, tour = false) {
+  ui.fade(
+    () => {
+      place = apt;
+      touring = tour;
+      apts.show(apt);
+      player.teleport(apt.space, apt.spawn.x, apt.spawn.z, apt.spawn.yaw);
+      outdoorDist = rig.dist;
+      Object.assign(rig, { space: apt.space, dist: 3.4, pitch: 0.42, yaw: apt.spawn.yaw, curDist: 1.5, mode: 'follow', blend: 1 });
+      ui.showLocation(apt.L.name.toUpperCase(), tour ? 'viewing · for lease' : 'home');
+      if (tour) ui.hint('Look around, then use the front door to sign the lease or leave.', 7);
+    },
+    tour ? 'VIEWING' : 'LOADING',
+  );
+}
+
+function exitApartment() {
+  audio.stopMusic();
+  ui.fade(() => {
+    const apt = place;
+    apt.tvOn = false;
+    place = null;
+    touring = false;
+    apts.show(null);
+    player.teleport(outdoor, apt.exit.x, apt.exit.z, apt.exit.yaw);
+    Object.assign(rig, { space: outdoor, dist: outdoorDist, pitch: 0.28, yaw: apt.exit.yaw, curDist: outdoorDist, mode: 'follow', blend: 1 });
+    district = '';
+    if (!state.seen.leaseHint) {
+      state.seen.leaseHint = true;
+      ui.hint('Two nicer homes are up for lease: follow the <b>blue diamonds</b> to a loft in Kiln Heights and a penthouse Downtown.', 10);
+    }
+  });
+}
+
+function signLease(apt, inside) {
+  const L = apt.L;
+  const unlock = () => (player.locked = false);
+  if (state.bank < L.moveIn) {
+    ui.openDialog({
+      name: 'LETTING AGENT',
+      text: `Your bank balance is ${money(state.bank)}, and the move-in is ${money(L.moveIn)}. Deposit cash at any ATM, or come back when work picks up.`,
+      choices: [{ label: 'OK', fn: () => ui.closeDialog() }],
+      onClose: unlock,
+    });
+    return;
+  }
+  const old = apts.byId[state.home];
+  state.bank -= L.moveIn;
+  state.home = apt.id;
+  apts.setHome(apt.id);
+  audio.coin();
+  if (inside) touring = false;
+  ui.openDialog({
+    name: 'LETTING AGENT',
+    text: `Signed! Welcome home to ${L.name}.${old && old !== apt ? ` Your lease on ${old.L.name} has ended.` : ''} Rent of ${money(L.rent)} comes out of your bank every Monday morning.`,
+    choices: [
+      {
+        label: inside ? 'Make yourself at home' : 'Go inside',
+        fn: () => {
+          ui.closeDialog();
+          if (!inside) enterApartment(apt);
+          else ui.showLocation(L.name.toUpperCase(), 'home');
+        },
+      },
+    ],
+    onClose: unlock,
+  });
+  saveNow(true);
+}
+
+function leaseOffer(apt, inside) {
+  const L = apt.L;
+  const choices = [];
+  if (!inside) choices.push({ label: 'Take a tour', fn: () => (ui.closeDialog(), enterApartment(apt, true)) });
+  choices.push({ label: `Sign the lease (${money(L.moveIn)})`, fn: () => signLease(apt, inside) });
+  if (inside) choices.push({ label: 'Leave', fn: () => (ui.closeDialog(), exitApartment()) });
+  choices.push({ label: inside ? 'Keep looking around' : 'Not now', fn: () => ui.closeDialog() });
+  player.locked = true;
+  ui.openDialog({
+    name: 'LETTING AGENT',
+    text: inside
+      ? `So, what do you think? ${L.name} is ${money(L.moveIn)} to move in, then ${money(L.rent)} a week.`
+      : `${L.title}. ${L.blurb} Move-in ${money(L.moveIn)} (deposit + first week), then ${money(L.rent)} a week.`,
+    choices,
+    onClose: () => (player.locked = false),
+  });
+}
+
+const SNACKS = ['Cold noodles. Still good.', 'Half a sandwich of uncertain age.', 'A yoghurt and some grapes.', 'Leftover dumplings. Perfect.', 'Just condiments. And hope.'];
+
+function useApt(it) {
+  const home = !touring;
+  const nope = (t) => ui.toast(t);
+  switch (it.use) {
+    case 'leave':
+      if (touring) return leaseOffer(place, true);
+      return exitApartment();
+    case 'lights':
+      place.lightsOn = !place.lightsOn;
+      return audio.tone(1900, 'square', 0.02, 0.03);
+    case 'tv':
+      place.tvOn = !place.tvOn;
+      return audio.tone(place.tvOn ? 2400 : 900, 'sine', 0.03, 0.12);
+    case 'music':
+      if (audio.music) return audio.stopMusic();
+      return audio.startMusic(place.L.music);
+    case 'sleep':
+      if (!home) return nope('Comfy. You would need to live here to sleep here.');
+      return ui.fade(() => {
+        const cur = clock.minutes;
+        let wake = Math.floor(cur / 1440) * 1440 + 7 * 60;
+        if (cur > wake - 30) wake += 1440;
+        clock.minutes = wake;
+        ui.toast('You slept until 7:00 AM. Good morning!');
+      }, 'SLEEPING');
+    case 'dress':
+      if (!home) return nope('Plenty of closet space.');
+      return openWardrobe();
+    case 'fridge':
+      if (!home) return nope('Empty. It smells brand new.');
+      return ui.toast(talkRng.pick(SNACKS));
+    case 'shower':
+      if (!home) return nope('Great water pressure, according to the listing.');
+      return ui.fade(() => {
+        clock.minutes += 20;
+        ui.toast('Fresh and clean.');
+      }, 'SHOWERING');
+    case 'fire':
+      return ui.toast('The fire crackles. It is gas, but it tries its best.');
+    default:
+      return null;
+  }
+}
+
+function aptLabel(it) {
+  if (it.use === 'lights') return place.lightsOn ? 'Turn the lights off' : 'Turn the lights on';
+  if (it.use === 'tv') return place.tvOn ? 'Turn the TV off' : 'Watch TV';
+  if (it.use === 'music') return audio.music ? 'Stop the music' : it.label;
+  return it.label;
+}
+
 function findInteraction() {
+  if (place) {
+    let best = null;
+    let bd = Infinity;
+    for (const it of place.interactables) {
+      const d = Math.hypot(it.x - player.pos.x, it.z - player.pos.z);
+      if (d < it.r && d < bd) {
+        best = it;
+        bd = d;
+      }
+    }
+    return best ? { label: aptLabel(best), act: () => useApt(best) } : null;
+  }
+  const door = apts.doorNear(player.pos);
+  if (door) {
+    const home = door.id === state.home;
+    return {
+      label: home ? `Enter ${door.L.name} (home)` : `${door.L.name} · for lease`,
+      act: () => (home ? enterApartment(door) : leaseOffer(door, false)),
+    };
+  }
   const npc = peds.nearest(player.pos, 2.3);
   let best = null;
   let bd = Infinity;
@@ -322,7 +512,14 @@ let district = '';
 ui.showTitle(save ? `slot 1 · day ${Math.floor((save.minutes ?? 0) / 1440) + 1}` : 'no save', () => {
   playing = true;
   audio.start();
-  rig.setMode('follow');
+  if (place) {
+    ui.fade(() => Object.assign(rig, { mode: 'follow', blend: 1 }));
+    ui.showLocation(place.L.name.toUpperCase(), 'home');
+  } else rig.setMode('follow');
+  if (place && !state.seen.homeHint) {
+    state.seen.homeHint = true;
+    setTimeout(() => ui.hint('This is your apartment. Explore the rooms, then use the front door (<b>E</b>) to head out into the city.', 9), 10500);
+  }
   ui.hint(
     input.isTouch
       ? 'Left thumb: move · Right thumb: look · <b>USE</b> talk/interact · <b>STYLE</b> wardrobe'
@@ -339,6 +536,34 @@ let saveTimer = 0;
 let districtTimer = 0;
 let current = null;
 const park = city.blocks.find((b) => b.kind === 'park');
+
+function openWardrobe() {
+  player.locked = true;
+  rig.setMode('wardrobe');
+  ui.openWardrobe(
+    state.appearance,
+    (app) => crowd.setAppearance(player.char.id, app),
+    (app) => {
+      state.appearance = app;
+      player.locked = false;
+      rig.setMode('follow');
+      saveNow(true);
+    },
+  );
+}
+
+function payRent() {
+  const week = Math.floor((clock.minutes - 6 * 60) / (7 * 1440));
+  if (state.rentWeek === undefined) state.rentWeek = week;
+  if (week <= state.rentWeek) return;
+  const n = week - state.rentWeek;
+  state.rentWeek = week;
+  const apt = apts.byId[state.home];
+  const due = apt.L.rent * n;
+  state.bank -= due;
+  ui.toast(`Rent paid: -${money(due)} · ${apt.L.name}`);
+  if (state.bank < 0) setTimeout(() => ui.toast('Your bank account is overdrawn!'), 2600);
+}
 
 function handleKeys() {
   if (input.hit('Escape', 'KeyP')) {
@@ -358,21 +583,7 @@ function handleKeys() {
     );
     return;
   }
-  if (input.hit('KeyC')) {
-    player.locked = true;
-    rig.setMode('wardrobe');
-    ui.openWardrobe(
-      state.appearance,
-      (app) => crowd.setAppearance(player.char.id, app),
-      (app) => {
-        state.appearance = app;
-        player.locked = false;
-        rig.setMode('follow');
-        saveNow(true);
-      },
-    );
-    return;
-  }
+  if (input.hit('KeyC')) return openWardrobe();
   if (input.hit('KeyM')) {
     settings.muted = !settings.muted;
     audio.setMuted(settings.muted);
@@ -386,9 +597,11 @@ function frame(now) {
   last = now;
   time += dt;
 
-  input.enabled = playing && !ui.modal;
-  if (playing && !ui.modal) handleKeys();
-  clock.update(dt, playing && !ui.modal && input.keys.has('KeyT'));
+  const free = playing && !ui.modal && !ui.fading;
+  input.enabled = free;
+  if (free) handleKeys();
+  clock.update(dt, free && input.keys.has('KeyT'));
+  if (playing) payRent();
 
   player.update(dt, input, rig.yaw, (p, r) => {
     traffic.push(p, r);
@@ -403,10 +616,14 @@ function frame(now) {
   for (const npc of peds.list) if (npc.mode === 'talk') npc.speaking = !!ui.dialog?.typing;
 
   rig.update(dt, input, player, time);
+  // in tight rooms the camera can end up in your head: hide yourself then
+  player.char.visible = rig.mode === 'title' || camera.position.distanceTo(rig.focus) > 0.75;
   env.magic = lantern.influence(playing ? player.pos : camera.position);
+  env.indoor = place ? 1 : 0;
   env.update(clock.hour, time, player.pos);
   city.update(dt);
-  city.updateLampLights(playing ? player.pos : camera.position, env.night);
+  city.updateLampLights(playing ? player.pos : camera.position, env.night, place ? { list: place.fixtures, on: apts.lampOn } : null);
+  apts.update(dt, time, env, place);
   lantern.update(dt, time, env.night);
   effects.update(time, env);
   sky.update(camera, time);
@@ -417,7 +634,7 @@ function frame(now) {
     ui.setPrompt(current?.label ?? null);
     ui.setClock(clock.format(), clock.day);
     ui.setMoney(state.cash, state.bank);
-    if ((districtTimer -= dt) <= 0) {
+    if (!place && (districtTimer -= dt) <= 0) {
       districtTimer = 0.5;
       const d = city.districtAt(player.pos.x, player.pos.z);
       if (d !== district) {
@@ -434,7 +651,7 @@ function frame(now) {
 
   const parkD = park ? Math.hypot(player.pos.x - park.cx, player.pos.z - park.cz) : 999;
   const green = Math.max(smoothstep(45, 15, parkD), smoothstep(0.6, 1.0, Math.hypot(player.pos.x, player.pos.z) / 160));
-  audio.update({ night: env.night, magic: env.magic, green, time });
+  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place ? 1 : 0 });
 
   pipeline.render(scene, camera, time);
   input.endFrame();
@@ -445,4 +662,25 @@ player.onStep = (run) => playing && audio.step(run);
 requestAnimationFrame(frame);
 
 // handy for debugging from the console
-window.game = { scene, camera, renderer, clock, state, player, peds, traffic, city, env, settings, rig, ui, lantern };
+window.game = {
+  scene,
+  camera,
+  renderer,
+  clock,
+  state,
+  player,
+  peds,
+  traffic,
+  city,
+  env,
+  settings,
+  rig,
+  ui,
+  lantern,
+  apts,
+  enterApartment,
+  exitApartment,
+  get place() {
+    return place;
+  },
+};

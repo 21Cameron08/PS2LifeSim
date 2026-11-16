@@ -349,6 +349,30 @@ body.touch #hint {
   color: var(--text);
 }
 
+#fade {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.35s;
+  pointer-events: none;
+}
+#fade.on {
+  opacity: 1;
+}
+#fade span {
+  position: absolute;
+  right: 24px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: var(--muted);
+  animation: blink 1s steps(2, start) infinite;
+}
+#bank.neg {
+  color: var(--bad);
+}
+
 #title {
   position: absolute;
   inset: 0;

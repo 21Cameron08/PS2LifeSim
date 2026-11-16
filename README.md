@@ -41,12 +41,40 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   for pedestrians, and honk if you stand in the road.
 - **Money**: cash + bank balance, working ATMs (deposit/withdraw), vending machines,
   a lantern seller and a fortune teller in the night market.
+- **Apartments**: you start in **Unit 3B**, a cramped walk-up above a laundromat in
+  Old Market. Two better homes are up for lease (follow the blue diamonds):
+  **Loft 4** at The Kiln Works in Kiln Heights, and the **Meridian Tower Penthouse**
+  Downtown. See below.
 - **Customization**: the wardrobe (C) edits skin, hair style/colour, top style
   (tee, long sleeve, jacket over a shirt), colours, bottoms, shoes, height, build.
 - **Save**: autosaves to localStorage ("memory card"): position, time, money,
   looks, friendships, settings.
 - **Sound**: all synthesised with WebAudio: city rumble, wind, crickets, footsteps,
   horns, distant sirens, UI blips, typewriter ticks.
+
+## Apartments
+
+| | Unit 3B (start) | Loft 4 | Meridian Penthouse |
+| --- | --- | --- | --- |
+| Where | Old Market, 3rd floor above a laundromat, facing the park | Kiln Heights, converted factory, 3rd floor | Downtown, top floor of an 18-storey glass tower |
+| Rooms | hall, bathroom, bedroom, living room + kitchenette | open-plan kitchen/dining/living, bedroom, bathroom | entry, kitchen, great room, study, master bedroom, ensuite |
+| Move in / rent | $300 / $85 a week | $2,500 / $280 a week | $12,000 / $950 a week |
+
+- Each interior is built **on its real floor inside its building**, so the windows show
+  the live street: traffic, people, weather of the day/night cycle. From the penthouse
+  you look out over the skyline.
+- Walk up to the street door (E): enter your home, or for a listing **take a tour** and
+  **sign the lease** (paid from your bank account; deposit cash at an ATM). Signing
+  moves you in and ends your old lease. Rent leaves your bank every Monday morning.
+- At home: **sleep** (skip to 7 AM), **shower/bath**, **change clothes** at the closet,
+  raid the fridge, flip the **light switch**, watch **TV** (it really plays), and put on
+  music: a crackly AM radio, a lo-fi record player, or the penthouse grand piano.
+- Interiors use **baked vertex lighting** like PS2 games did: every lamp and window is
+  pre-computed into the walls and furniture (plus soft contact shadows), and blended at
+  runtime with the time of day and the light switch. Characters still get real lights.
+- Layouts are plain data in `src/world/interior/layouts.js`: rooms, walls with door and
+  window openings, and furniture from the kit in `src/world/interior/kit.js`. Adding an
+  apartment = a building site in `src/config.js` + a layout.
 
 ## How the PS2 look works
 
@@ -81,7 +109,9 @@ src/
   config.js               city layout constants, special blocks, start values
   core/                   seeded RNG + math, merged-geometry builder, input
   render/                 PS2 post pipeline, procedural textures, sky, time-of-day palette
-  world/                  city generator, street props, Lantern Quarter, colliders, particles
+  world/                  city generator, street props, Lantern Quarter, colliders, particles,
+                          apartments (doors, markers, interiors)
+  world/interior/         room/wall builder, furniture kit, baked lighting, apartment layouts
   actors/                 crowd renderer (instanced puppets), appearance model,
                           player + camera, pedestrians AI, traffic
   game/                   clock + save system, NPC dialogue data
@@ -95,12 +125,13 @@ calls. It should run well on integrated GPUs and phones.
 
 ## Roadmap (suggested order)
 
-1. **Needs + home**: hunger/energy/fun/social bars, an apartment you can enter, a bed.
+1. **Needs**: hunger/energy/fun/social bars that the fridge, bed, shower and TV refill.
 2. **Jobs**: shift jobs at shops (clock in, mini‑tasks, wages paid to the bank), job
    board, schedules tied to the clock.
 3. **Economy**: rent and bills, a bank screen with transactions, shop inventories.
 4. **Clothes shops**: buy items that unlock in the wardrobe; outfits as data.
-5. **Furniture**: interior lots with a grid placement mode, catalogue, save layout.
+5. **Furniture**: buy and place furniture in your apartment (the kit already has the
+   pieces; this needs a placement mode and saving the layout).
 6. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
 7. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
 8. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.

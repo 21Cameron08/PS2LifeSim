@@ -43,6 +43,16 @@ export const SPECIAL_BLOCKS = {
 };
 export const blockKind = (i, j) => SPECIAL_BLOCKS[`${i},${j}`] ?? 'city';
 
+// Apartment buildings. Each interior (src/world/interior/layouts.js) is built on
+// its real floor inside one of these buildings, so its windows look out at the
+// actual street. The building sits in the middle of the block's south side.
+export const APARTMENT_SITES = {
+  starter: { block: [1, 1], width: 13, depth: 14, floors: 4, style: 'brick', shop: true, signRow: 6, unitFloor: 1 },
+  loft: { block: [4, 1], width: 16, depth: 14, floors: 4, style: 'factory', shop: false, unitFloor: 2 },
+  penthouse: { block: [3, 2], width: 22, depth: 18, floors: 18, style: 'glass', shop: false, unitFloor: 17 },
+};
+export const siteForBlock = (i, j) => Object.entries(APARTMENT_SITES).find(([, s]) => s.block[0] === i && s.block[1] === j);
+
 export const START = {
   hour: 17.6, // golden hour, so the first night falls a couple of minutes in
   cash: 240,

@@ -51,6 +51,7 @@ export class Environment {
     scene.fog = new THREE.Fog(0x000000, 20, 200);
     this.night = 0;
     this.magic = 0; // 0..1, how close the player is to the Lantern Quarter
+    this.indoor = 0; // 0..1, the player is inside an apartment
     this.listeners = [];
     this.fogColor = new THREE.Color();
     this.tmp = new THREE.Color();
@@ -91,10 +92,11 @@ export class Environment {
     this.sun.position.copy(focus).addScaledVector(lightDir, 100);
     this.sun.target.position.copy(focus);
     this.sun.color.copy(su.sunColor.value);
-    this.sun.intensity = lerp(A.sunI, B.sunI, t);
+    // indoors the sun and sky only reach people through the windows
+    this.sun.intensity = lerp(A.sunI, B.sunI, t) * (1 - this.indoor * 0.6);
     mixColor(this.hemi.color, A.hemiSky, B.hemiSky, t);
     mixColor(this.hemi.groundColor, A.hemiGround, B.hemiGround, t);
-    this.hemi.intensity = lerp(A.hemi, B.hemi, t);
+    this.hemi.intensity = lerp(A.hemi, B.hemi, t) * (1 - this.indoor * 0.35);
 
     // fog = horizon colour, nudged towards violet near the Lantern Quarter
     this.fogColor.copy(su.horizon.value).lerp(this.magicFog, this.magic * (0.35 + this.night * 0.3));

@@ -30,6 +30,12 @@ export class Ambience {
     this.master = ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.8;
     this.master.connect(ctx.destination);
+    // outdoor ambience goes through a filter that muffles it when you're inside
+    this.ambLP = ctx.createBiquadFilter();
+    this.ambLP.type = 'lowpass';
+    this.ambLP.frequency.value = 20000;
+    this.amb = ctx.createGain();
+    this.amb.connect(this.ambLP).connect(this.master);
 
     this.white = loopBuffer(ctx, 2, (d) => {
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -72,7 +78,7 @@ export class Ambience {
 
     // city rumble
     this.cityG = gain(0);
-    src(brown).connect(filter('lowpass', 380)).connect(this.cityG).connect(this.master);
+    src(brown).connect(filter('lowpass', 380)).connect(this.cityG).connect(this.amb);
     // wind with a slow sweep
     this.windG = gain(0);
     const wf = filter('bandpass', 700, 0.6);
@@ -81,10 +87,10 @@ export class Ambience {
     const lfoG = gain(350);
     lfo.connect(lfoG).connect(wf.frequency);
     lfo.start();
-    src(this.white).connect(wf).connect(this.windG).connect(this.master);
+    src(this.white).connect(wf).connect(this.windG).connect(this.amb);
     // crickets
     this.crickG = gain(0);
-    src(crickets).connect(filter('highpass', 2500)).connect(this.crickG).connect(this.master);
+    src(crickets).connect(filter('highpass', 2500)).connect(this.crickG).connect(this.amb);
 
     // mystical pad (lydian chord) through a feedback delay
     this.padG = gain(0);
@@ -93,10 +99,10 @@ export class Ambience {
     delay.delayTime.value = 0.42;
     const fb = gain(0.45);
     padF.connect(this.padG);
-    this.padG.connect(this.master);
+    this.padG.connect(this.amb);
     this.padG.connect(delay);
     delay.connect(fb).connect(delay);
-    delay.connect(this.master);
+    delay.connect(this.amb);
     for (const [f, type] of [
       [146.8, 'triangle'],
       [220.0, 'sine'],
@@ -117,7 +123,7 @@ export class Ambience {
       o.start();
     }
     this.chimeBus = gain(1);
-    this.chimeBus.connect(this.master);
+    this.chimeBus.connect(this.amb);
     this.chimeBus.connect(delay);
   }
 
@@ -126,11 +132,15 @@ export class Ambience {
     if (this.master) this.master.gain.setTargetAtTime(m ? 0 : 0.8, this.ctx.currentTime, 0.1);
   }
 
-  /** s: { night, magic, green, time } */
+  /** s: { night, magic, green, time, indoor } */
   update(s) {
     const ctx = this.ctx;
     if (!ctx) return;
     const t = ctx.currentTime;
+    const ind = s.indoor ?? 0;
+    this.amb.gain.setTargetAtTime(1 - ind * 0.45, t, 0.3);
+    this.ambLP.frequency.setTargetAtTime(20000 - ind * 19300, t, 0.3);
+    if (this.music) this.scheduleMusic();
     this.cityG.gain.setTargetAtTime((0.34 - s.night * 0.16) * (1 - s.magic * 0.6), t, 0.5);
     this.windG.gain.setTargetAtTime(0.035 + s.night * 0.03 + s.magic * 0.03, t, 0.5);
     this.crickG.gain.setTargetAtTime(s.night * (0.012 + s.green * 0.05) * (1 - s.magic * 0.5), t, 0.8);
@@ -143,7 +153,7 @@ export class Ambience {
     }
     if (t > this.nextDistant) {
       this.nextDistant = t + 20 + Math.random() * 40;
-      if (Math.random() < 0.6) this.horn(0.035, 600);
+      if (Math.random() < 0.6) this.horn(0.035, 600, this.amb);
       else this.siren();
     }
   }
@@ -187,7 +197,7 @@ export class Ambience {
     this.noiseHit(run ? 0.09 : 0.055, 900 + Math.random() * 500, run ? 0.09 : 0.07);
   }
 
-  horn(vol = 0.12, cutoff = 2200) {
+  horn(vol = 0.12, cutoff = 2200, dest = this.amb) {
     const ctx = this.ctx;
     if (!ctx) return;
     const t = ctx.currentTime;
@@ -199,7 +209,7 @@ export class Ambience {
     g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
     g.gain.setValueAtTime(vol, t + 0.35);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
-    f.connect(g).connect(this.master);
+    f.connect(g).connect(dest);
     for (const fr of [392, 494]) {
       const o = ctx.createOscillator();
       o.type = 'square';
@@ -229,9 +239,153 @@ export class Ambience {
       o.frequency.linearRampToValueAtTime(1000, t + k + 0.5);
       o.frequency.linearRampToValueAtTime(700, t + k + 1);
     }
-    o.connect(f).connect(g).connect(this.master);
+    o.connect(f).connect(g).connect(this.amb);
     o.start(t);
     o.stop(t + 7.1);
+  }
+
+  // ---------------------------------------------------------------- music
+  // A tiny generative player: Dm7 - G7 - Cmaj7 - Am7 with a different voice per
+  // apartment (crackly AM radio, lo-fi records, a grand piano).
+  startMusic(style) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    this.stopMusic();
+    const out = ctx.createGain();
+    out.gain.value = 0.0001;
+    out.gain.setTargetAtTime(style === 'piano' ? 0.16 : 0.12, ctx.currentTime, 0.4);
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = style === 'radio' ? 2400 : style === 'records' ? 4200 : 9000;
+    out.connect(lp);
+    let tail = lp;
+    if (style === 'radio') {
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 350;
+      lp.connect(hp);
+      tail = hp;
+    }
+    tail.connect(this.master);
+    const nodes = [];
+    if (style !== 'piano') {
+      const crackle = ctx.createBufferSource();
+      crackle.buffer = this.white;
+      crackle.loop = true;
+      const cf = ctx.createBiquadFilter();
+      cf.type = 'highpass';
+      cf.frequency.value = 3500;
+      const cg = ctx.createGain();
+      cg.gain.value = style === 'radio' ? 0.05 : 0.025;
+      crackle.connect(cf).connect(cg).connect(out);
+      crackle.start();
+      nodes.push(crackle);
+    }
+    this.music = { style, out, nodes, bar: 0, next: ctx.currentTime + 0.15, len: style === 'piano' ? 2.6 : 2.2 };
+  }
+
+  stopMusic() {
+    const m = this.music;
+    if (!m) return;
+    this.music = null;
+    m.out.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.25);
+    setTimeout(() => {
+      for (const n of m.nodes) {
+        try {
+          n.stop();
+        } catch {
+          /* already stopped */
+        }
+      }
+      m.out.disconnect();
+    }, 1500);
+  }
+
+  scheduleMusic() {
+    const m = this.music;
+    const ctx = this.ctx;
+    while (m.next < ctx.currentTime + 0.6) {
+      this.playBar(m, m.next);
+      m.next += m.len;
+      m.bar++;
+    }
+  }
+
+  playBar(m, t) {
+    const prog = [
+      [62, 65, 69, 72],
+      [55, 59, 62, 65],
+      [60, 64, 67, 71],
+      [57, 60, 64, 67],
+    ];
+    const chord = prog[m.bar % 4];
+    const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const L = m.len;
+    const scale = [72, 74, 76, 79, 81, 84];
+    if (m.style === 'piano') {
+      chord.forEach((n, i) => this.voice(m.out, hz(n), t + i * 0.16, 2.2, 'triangle', 0.06, 0.004));
+      this.voice(m.out, hz(chord[0] - 24), t, 2.4, 'sine', 0.1, 0.01);
+      for (let k = 0; k < 3; k++) if (Math.random() < 0.75) this.voice(m.out, hz(scale[Math.floor(Math.random() * scale.length)]), t + 0.9 + k * 0.45, 1.2, 'triangle', 0.05, 0.004);
+      return;
+    }
+    chord.forEach((n) => this.voice(m.out, hz(n), t, L * 0.95, m.style === 'radio' ? 'square' : 'triangle', m.style === 'radio' ? 0.012 : 0.03, 0.08));
+    this.voice(m.out, hz(chord[0] - 24), t, L * 0.45, 'sine', 0.14, 0.01);
+    this.voice(m.out, hz(chord[2] - 24), t + L / 2, L * 0.45, 'sine', 0.12, 0.01);
+    // lazy boom-bap
+    for (const b of [0, 0.5]) this.kick(m.out, t + b * L);
+    for (const b of [0.25, 0.75]) this.snare(m.out, t + b * L);
+    for (let k = 0; k < 8; k++) this.hat(m.out, t + (k * L) / 8 + (k % 2 ? 0.03 : 0));
+    for (let k = 0; k < 4; k++) if (Math.random() < 0.6) this.voice(m.out, hz(scale[Math.floor(Math.random() * scale.length)]), t + (k * L) / 4 + 0.05, 0.5, 'sine', 0.05, 0.005);
+  }
+
+  voice(dest, freq, t, dur, type, vol, attack) {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(dest);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+
+  kick(dest, t) {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(120, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.25, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    o.connect(g).connect(dest);
+    o.start(t);
+    o.stop(t + 0.3);
+  }
+
+  noiseAt(dest, t, freq, vol, dur, type = 'bandpass') {
+    const ctx = this.ctx;
+    const s = ctx.createBufferSource();
+    s.buffer = this.white;
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f).connect(g).connect(dest);
+    s.start(t, Math.random());
+    s.stop(t + dur + 0.02);
+  }
+
+  snare(dest, t) {
+    this.noiseAt(dest, t, 1800, 0.12, 0.16);
+  }
+
+  hat(dest, t) {
+    this.noiseAt(dest, t, 8000, 0.025, 0.04, 'highpass');
   }
 
   blip(up = true) {
