@@ -281,7 +281,8 @@ export class City {
         const faces = { w: a === 0, e: a === xs.length - 2, n: c === 0, s: c === zs.length - 2 };
         const street = faces.w || faces.e || faces.n || faces.s;
         if (site && a === 1 && c === 1) {
-          this.apartmentBuilding(site[0], site[1], x0, z0, x1, z1);
+          if (site[0] === 'store') this.storeBuilding(site[1], x0, z0, x1, z1);
+          else this.apartmentBuilding(site[0], site[1], x0, z0, x1, z1);
           continue;
         }
         const gap = rng.chance(0.22) ? 1.6 : 0.12;
@@ -311,10 +312,17 @@ export class City {
     this.apartmentSites[id] = { id, x0, z0, x1, z1, gf, top: res.top, floorY: gf + s.unitFloor * CITY.FLOOR_H, style: s.style };
   }
 
+  storeBuilding(s, x0, z0, x1, z1) {
+    // the ground floor is left open: the store interior provides its own walls
+    const H = s.groundH + s.floors * CITY.FLOOR_H;
+    const res = this.building(x0, z0, x1, z1, H, STYLE[s.style], { s: true }, false, { floors: s.floors, noCrown: true, gf: s.groundH, collideFrom: s.groundH });
+    this.storeSite = { x0, z0, x1, z1, gf: s.groundH, top: res.top };
+  }
+
   building(x0, z0, x1, z1, H, style, faces, shop, opts = {}) {
     const rng = this.rng;
     const B = this.B;
-    const gf = shop ? CITY.GF_H : 0;
+    const gf = opts.gf ?? (shop ? CITY.GF_H : 0);
     const floors = opts.floors ?? Math.max(1, Math.round((H - gf) / CITY.FLOOR_H));
     const top = gf + floors * CITY.FLOOR_H + 0.4;
     const tint = rng.float(0.86, 1.06);
@@ -341,7 +349,7 @@ export class City {
       for (const f of ['n', 's', 'e', 'w']) if (faces[f]) this.shopFace(faceFrame(f, x0, z0, x1, z1), top, opts);
     }
     this.roofCap(x0, z0, x1, z1, top, trimCol);
-    if (!opts.noCollide) this.colliders.add(x0, z0, x1, z1, 0, top);
+    if (!opts.noCollide) this.colliders.add(x0, z0, x1, z1, opts.collideFrom ?? 0, top);
 
     const w = x1 - x0;
     const d = z1 - z0;

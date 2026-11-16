@@ -86,7 +86,7 @@ export function bake(geo, ctx) {
         const ndl = (nx * dx + ny * dy + nz * dz) / dl;
         let w = Math.max(0, (ndl + 0.12) / 1.12);
         // ceiling fixtures throw most of their light downward
-        if (L.down) w *= 0.3 + 0.7 * Math.max(0, -dy / dl);
+        if (L.down) w *= 0.3 + 0.7 * Math.max(0, dy / dl);
         const att = (L.power * 1.7) / (1 + d2 * 0.6);
         r += L.color.r * w * att;
         g += L.color.g * w * att;

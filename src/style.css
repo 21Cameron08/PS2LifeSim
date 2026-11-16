@@ -349,6 +349,172 @@ body.touch #hint {
   color: var(--text);
 }
 
+#shift {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 14px;
+  border-radius: 6px;
+  background: rgba(20, 60, 40, 0.8);
+  border: 1px solid rgba(140, 230, 170, 0.6);
+  text-align: center;
+  font-weight: 700;
+  font-size: 16px;
+  text-shadow: 0 1px 2px #000;
+  max-width: calc(100% - 380px);
+}
+#shift ul {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffe08a;
+}
+@media (max-width: 760px) {
+  #shift {
+    top: 70px;
+    max-width: calc(100% - 32px);
+  }
+}
+
+#register {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(760px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  background: linear-gradient(180deg, #1c2a24, #0c1410);
+  border: 2px solid #5ab07a;
+  border-radius: 10px;
+  box-shadow: 0 0 30px rgba(90, 200, 130, 0.3);
+  pointer-events: auto;
+  padding: 14px 16px;
+}
+.reg-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: #8dff9a;
+  border-bottom: 1px solid rgba(140, 255, 160, 0.3);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+.reg-body {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 640px) {
+  .reg-body {
+    grid-template-columns: 1fr;
+  }
+}
+.reg-body h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+.reg-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.reg-btn {
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  min-height: 40px;
+}
+.reg-btn:hover {
+  background: rgba(140, 255, 160, 0.18);
+  border-color: #8dff9a;
+}
+.reg-btn span {
+  color: #8dff9a;
+  margin-right: 6px;
+}
+.reg-btn em {
+  display: block;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+}
+.reg-btn.go {
+  background: rgba(90, 200, 130, 0.3);
+  border-color: #8dff9a;
+}
+.reg-btn.no {
+  background: rgba(220, 80, 80, 0.25);
+  border-color: #ff8a8a;
+}
+.receipt {
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 14px;
+  background: #f2f0e6;
+  color: #1e1e22;
+  border-radius: 4px;
+  padding: 8px 10px;
+  min-height: 120px;
+}
+.receipt div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.receipt .tot {
+  border-top: 1px dashed #555;
+  margin-top: 4px;
+  padding-top: 4px;
+  font-weight: 700;
+}
+.idcard {
+  background: linear-gradient(135deg, #cfe4f2, #a8c8e0);
+  color: #1e2a3a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-size: 15px;
+  border: 1px solid #6a8ab0;
+}
+.idcard b {
+  display: block;
+  letter-spacing: 0.15em;
+  font-size: 12px;
+  color: #3a5a8a;
+}
+.reg-note {
+  margin: 6px 0 8px;
+  color: #ffe08a;
+  font-size: 15px;
+}
+.reg-foot {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+#dialog-text.mono {
+  font-family: 'Courier New', ui-monospace, monospace;
+  font-size: 15px;
+  white-space: pre;
+  overflow-x: auto;
+  line-height: 1.3;
+}
+
 #fade {
   position: absolute;
   inset: 0;

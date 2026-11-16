@@ -13,6 +13,8 @@ import { Effects } from './world/effects.js';
 import { Crowd } from './actors/crowd.js';
 import { Player, CameraRig, citySpace } from './actors/player.js';
 import { Apartments } from './world/apartments.js';
+import { Store } from './world/store.js';
+import { StoreJob } from './game/job.js';
 import { Pedestrians } from './actors/pedestrians.js';
 import { Traffic } from './actors/traffic.js';
 import { defaultPlayerAppearance } from './actors/appearance.js';
@@ -42,6 +44,7 @@ const state = {
   home: save?.home ?? 'starter',
   rentWeek: save?.rentWeek,
   seen: save?.seen ?? {},
+  job: save?.job,
 };
 const SAVE_VERSION = 2;
 // saves from before apartments existed keep money/looks but start you at home
@@ -63,7 +66,8 @@ const effects = new Effects(scene, tex, city);
 const apts = new Apartments(scene, city, tex);
 apts.setHome(state.home);
 const outdoor = citySpace(city);
-const crowd = new Crowd(scene, tex, 112);
+const store = new Store(scene, city, tex, apts.tex);
+const crowd = new Crowd(scene, tex, 120);
 // where do we start? a fresh life starts inside your apartment
 let place = freshStart ? apts.byId[state.home] : save.inside ? apts.byId[save.inside] : null;
 let touring = false;
@@ -73,6 +77,12 @@ const player = new Player(crowd, place ? place.space : outdoor, state.appearance
 const peds = new Pedestrians(crowd, city, 72);
 const traffic = new Traffic(scene, tex, 24);
 const clock = new Clock(save?.minutes ?? START.hour * 60);
+const job = new StoreJob({ store, crowd, ui, audio, state, clock, player });
+if (state.job.hired) store.helpWanted.visible = false;
+store.onChime = () => camera.position.distanceTo(store.doorCenter) < 35 && audio.chime();
+const storeSpace = { ...outdoor, indoor: true, ceiling: store.origin.y + store.H };
+let inStore = false;
+let cctvTick = 0;
 const rig = new CameraRig(camera, player.space);
 rig.yaw = player.yaw;
 let outdoorDist = 6.2;
@@ -157,6 +167,7 @@ function saveNow(showToast = false) {
     home: state.home,
     rentWeek: state.rentWeek,
     seen: state.seen,
+    job: state.job,
     inside: place && !touring ? place.id : null,
     cash: state.cash,
     bank: state.bank,
@@ -472,12 +483,14 @@ function findInteraction() {
     }
     return best ? { label: aptLabel(best), act: () => useApt(best) } : null;
   }
+  const work = job.findInteraction(player.pos);
+  if (work) return work;
   const door = apts.doorNear(player.pos);
   if (door) {
     const home = door.id === state.home;
     return {
       label: home ? `Enter ${door.L.name} (home)` : `${door.L.name} · for lease`,
-      act: () => (home ? enterApartment(door) : leaseOffer(door, false)),
+      act: () => (job.J.shift ? ui.toast("You're on the clock. Clock out first.") : home ? enterApartment(door) : leaseOffer(door, false)),
     };
   }
   const npc = peds.nearest(player.pos, 2.3);
@@ -538,6 +551,7 @@ let current = null;
 const park = city.blocks.find((b) => b.kind === 'park');
 
 function openWardrobe() {
+  if (job.J.shift) return ui.toast("You're in uniform. Clock out first.");
   player.locked = true;
   rig.setMode('wardrobe');
   ui.openWardrobe(
@@ -600,13 +614,35 @@ function frame(now) {
   const free = playing && !ui.modal && !ui.fading;
   input.enabled = free;
   if (free) handleKeys();
-  clock.update(dt, free && input.keys.has('KeyT'));
+  clock.update(dt, free && input.keys.has('KeyT') && !job.J.shift);
   if (playing) payRent();
 
   player.update(dt, input, rig.yaw, (p, r) => {
     traffic.push(p, r);
     peds.push(p, r);
   });
+  job.push(player.pos, player.radius);
+  // walking into the shop: tighter camera, shop music, shop lighting
+  if (!place) {
+    const nowIn = store.contains(player.pos, -0.05);
+    if (nowIn !== inStore) {
+      inStore = nowIn;
+      player.space = rig.space = nowIn ? storeSpace : outdoor;
+      if (nowIn) {
+        outdoorDist = rig.dist;
+        rig.dist = 3.6;
+        if (playing) {
+          ui.showLocation('HALCYON 24', job.J.hired ? 'your workplace' : 'open 24 hours');
+          audio.startMusic('muzak');
+        }
+      } else {
+        rig.dist = outdoorDist;
+        audio.stopMusic();
+        district = '';
+      }
+    }
+  }
+  job.update(dt, time, { playerPos: player.pos });
   peds.update(dt, player.pos, env.night);
   traffic.update(dt, player.pos, peds.list, env.night);
   if (traffic.honk && playing) {
@@ -619,10 +655,15 @@ function frame(now) {
   // in tight rooms the camera can end up in your head: hide yourself then
   player.char.visible = rig.mode === 'title' || camera.position.distanceTo(rig.focus) > 0.75;
   env.magic = lantern.influence(playing ? player.pos : camera.position);
-  env.indoor = place ? 1 : 0;
+  env.indoor = place ? 1 : inStore ? 0.6 : 0;
   env.update(clock.hour, time, player.pos);
   city.update(dt);
-  city.updateLampLights(playing ? player.pos : camera.position, env.night, place ? { list: place.fixtures, on: apts.lampOn } : null);
+  city.updateLampLights(
+    playing ? player.pos : camera.position,
+    env.night,
+    place ? { list: place.fixtures, on: apts.lampOn } : inStore ? { list: store.fixtures, on: 1 } : null,
+  );
+  store.update(dt, time, env, job.people(player.pos), camera);
   apts.update(dt, time, env, place);
   lantern.update(dt, time, env.night);
   effects.update(time, env);
@@ -651,8 +692,10 @@ function frame(now) {
 
   const parkD = park ? Math.hypot(player.pos.x - park.cx, player.pos.z - park.cz) : 999;
   const green = Math.max(smoothstep(45, 15, parkD), smoothstep(0.6, 1.0, Math.hypot(player.pos.x, player.pos.z) / 160));
-  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place ? 1 : 0 });
+  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place ? 1 : inStore ? 0.5 : 0, store: inStore ? 1 : 0 });
 
+  // the shop's security cameras (only when you're close enough to see a monitor)
+  if (!place && cctvTick++ % 4 === 0 && camera.position.distanceTo(store.doorCenter) < 30) store.renderCCTV(renderer, scene);
   pipeline.render(scene, camera, time);
   input.endFrame();
   requestAnimationFrame(frame);
@@ -678,6 +721,8 @@ window.game = {
   ui,
   lantern,
   apts,
+  store,
+  job,
   enterApartment,
   exitApartment,
   get place() {

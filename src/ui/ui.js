@@ -157,12 +157,13 @@ export class UI {
 
   // ---------------------------------------------------------------- dialogue
   /** choices: [{ label, fn }]. fn() can open another dialog or call closeDialog(). */
-  openDialog({ name, text, choices, onClose }) {
+  openDialog({ name, text, choices, onClose, mono = false }) {
     this.modal = 'dialog';
     this.dialog = { name, text, choices: choices?.length ? choices : [{ label: 'OK', fn: () => this.closeDialog() }], onClose, shown: 0, typing: true, sel: 0 };
     $('dialog').classList.remove('hidden');
     $('dialog-name').textContent = name;
     $('dialog-text').textContent = '';
+    $('dialog-text').classList.toggle('mono', mono || name.includes('SLIP'));
     $('dialog-choices').innerHTML = '';
     $('hint').classList.remove('show');
     this.hintTimer = 0;
@@ -208,6 +209,144 @@ export class UI {
     d.sel = (d.sel + delta + d.choices.length) % d.choices.length;
     [...$('dialog-choices').children].forEach((b, i) => b.classList.toggle('sel', i === d.sel));
     this.audio.blip(false);
+  }
+
+  // ---------------------------------------------------------------- shift HUD
+  setShift(text, tasks = []) {
+    const el = $('shift');
+    if (!text) {
+      el.classList.add('hidden');
+      return;
+    }
+    el.classList.remove('hidden');
+    $('shift-title').textContent = text;
+    const html = tasks.map((t) => `<li>${t}</li>`).join('');
+    if (html !== this._tasks) $('shift-tasks').innerHTML = this._tasks = html;
+  }
+
+  // ---------------------------------------------------------------- register
+  /** A small point-of-sale: scan items, check ID for alcohol, take card or count out change. */
+  openRegister(o) {
+    this.modal = 'register';
+    this.reg = { ...o, stage: 'scan', pending: o.items.map((it, i) => ({ ...it, code: `0${48 + i}${(it.price * 37) % 9973}`.slice(0, 8) })), scanned: [], given: 0, soldBeerTo: null, refused: null };
+    $('register').classList.remove('hidden');
+    this.setPrompt(null);
+    this.renderRegister();
+  }
+  regTotal() {
+    return this.reg.scanned.reduce((s, it) => s + it.price, 0);
+  }
+  renderRegister() {
+    const r = this.reg;
+    const m = (c) => `$${(c / 100).toFixed(2)}`;
+    const total = this.regTotal();
+    let left = '';
+    if (r.stage === 'scan') {
+      left = `<h3>ON THE COUNTER · ${r.customer.toUpperCase()}</h3><div class="reg-btns">${r.pending
+        .map((it, i) => `<button class="reg-btn" data-scan="${i}"><span>${i + 1}</span>${it.name}<em>${it.code}</em></button>`)
+        .join('')}</div><div class="reg-note">Scan every item (click or press its number).</div>`;
+    } else if (r.stage === 'id') {
+      const id = r.idCard;
+      left = `<h3>ID CHECK · ${r.beer.name.toUpperCase()}</h3>
+        <div class="idcard"><b>HALCYON STATE · DRIVER LICENSE</b>${id.name}<br>DOB&nbsp;&nbsp;<strong>${id.dob}</strong></div>
+        <div class="reg-note">Register: customer must be born on or before <strong>${r.cutoff}</strong>.</div>
+        <div class="reg-btns"><button class="reg-btn go" data-id="sell"><span>Y</span>Sell</button><button class="reg-btn no" data-id="refuse"><span>N</span>Refuse</button></div>`;
+    } else if (r.stage === 'pay') {
+      if (!r.scanned.length) {
+        left = `<h3>NO SALE</h3><div class="reg-note">Nothing left to ring up.</div><div class="reg-btns"><button class="reg-btn go" data-done="1"><span>↵</span>Next customer</button></div>`;
+      } else if (r.card) {
+        left = `<h3>PAYMENT</h3><div class="reg-note">The customer taps their card on the reader…</div><div class="reg-btns"><button class="reg-btn go" data-done="1"><span>↵</span>Approve card</button></div>`;
+      } else {
+        const due = r.paid - total;
+        const den = [
+          [1000, '$10'],
+          [500, '$5'],
+          [100, '$1'],
+          [25, '25¢'],
+          [10, '10¢'],
+          [5, '5¢'],
+          [1, '1¢'],
+        ];
+        left = `<h3>CASH · COUNT OUT THE CHANGE</h3><div class="reg-note">They hand you ${m(r.paid)}. Change due: <strong>${m(due)}</strong>. Counted: <strong>${m(r.given)}</strong></div>
+          <div class="reg-btns">${den.map(([v, l], i) => `<button class="reg-btn" data-cash="${v}"><span>${i + 1}</span>${l}</button>`).join('')}
+          <button class="reg-btn no" data-clear="1"><span>⌫</span>Clear</button><button class="reg-btn go" data-done="1"><span>↵</span>Hand over</button></div>`;
+      }
+    }
+    const lines = r.scanned.map((it) => `<div><span>${it.name}</span><span>${m(it.price)}</span></div>`).join('');
+    const tail =
+      r.stage === 'pay' && r.scanned.length
+        ? r.card
+          ? `<div><span>CARD</span><span>${m(total)}</span></div>`
+          : `<div><span>CASH</span><span>${m(r.paid)}</span></div><div><span>CHANGE</span><span>${m(r.paid - total)}</span></div>`
+        : '';
+    $('register').innerHTML = `<div class="reg-head"><span>HALCYON 24 · REGISTER 1</span><span>${r.today}</span></div>
+      <div class="reg-body"><div>${left}</div><div class="receipt">${lines || '<div><span>— ready —</span></div>'}<div class="tot"><span>TOTAL</span><span>${m(total)}</span></div>${tail}</div></div>
+      <div class="reg-foot">Esc: step away (they keep waiting) · keys: numbers, Y/N, Backspace, Enter</div>`;
+    $('register').querySelectorAll('[data-scan]').forEach((b) => b.addEventListener('click', () => this.regScan(Number(b.dataset.scan))));
+    $('register').querySelectorAll('[data-id]').forEach((b) => b.addEventListener('click', () => this.regId(b.dataset.id === 'sell')));
+    $('register').querySelectorAll('[data-cash]').forEach((b) => b.addEventListener('click', () => this.regCash(Number(b.dataset.cash))));
+    $('register').querySelectorAll('[data-clear]').forEach((b) => b.addEventListener('click', () => this.regCash(0)));
+    $('register').querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', () => this.regDone()));
+  }
+  regAdvance() {
+    const r = this.reg;
+    if (!r.pending.length) {
+      r.stage = 'pay';
+      if (!r.card && r.scanned.length) r.onDrawer?.();
+    }
+    this.renderRegister();
+  }
+  regScan(i) {
+    const r = this.reg;
+    const it = r.pending[i];
+    if (!it || r.stage !== 'scan') return;
+    r.pending.splice(i, 1);
+    if (it.id) {
+      r.stage = 'id';
+      r.beer = it;
+      this.audio.tone(520, 'square', 0.03, 0.18);
+      return this.renderRegister();
+    }
+    r.scanned.push(it);
+    r.onScan?.();
+    this.regAdvance();
+  }
+  regId(sell) {
+    const r = this.reg;
+    if (r.stage !== 'id') return;
+    const who = r.idCard.minor ? 'minor' : 'adult';
+    if (sell) {
+      r.scanned.push(r.beer);
+      r.soldBeerTo = who;
+      r.onScan?.();
+    } else r.refused = who;
+    r.stage = 'scan';
+    this.regAdvance();
+  }
+  regCash(v) {
+    const r = this.reg;
+    if (r.stage !== 'pay' || r.card) return;
+    r.given = v ? r.given + v : 0;
+    this.audio.tone(v ? 1400 : 500, 'triangle', 0.02, 0.05);
+    this.renderRegister();
+  }
+  regDone() {
+    const r = this.reg;
+    if (r.stage !== 'pay') return;
+    const total = this.regTotal();
+    const res = { card: r.card || !r.scanned.length, given: r.given, due: r.paid ? r.paid - total : 0, soldBeerTo: r.soldBeerTo, refused: r.refused, total };
+    if (res.card && r.scanned.length) this.audio.tone(1800, 'sine', 0.04, 0.15);
+    this.reg = null;
+    this.modal = null;
+    $('register').classList.add('hidden');
+    r.onDone?.(res);
+  }
+  closeRegister() {
+    const r = this.reg;
+    this.reg = null;
+    this.modal = null;
+    $('register').classList.add('hidden');
+    r?.onClose?.();
   }
 
   // ---------------------------------------------------------------- menus
@@ -336,6 +475,17 @@ export class UI {
     };
     if (this.modal === 'title') {
       if (!e.repeat) this.start();
+      return eat();
+    }
+    if (this.modal === 'register') {
+      const r = this.reg;
+      if (k === 'Escape') this.closeRegister();
+      else if (r.stage === 'scan' && /^Digit[1-9]$/.test(k)) this.regScan(Number(k.slice(5)) - 1);
+      else if (r.stage === 'id' && (k === 'KeyY' || k === 'KeyS')) this.regId(true);
+      else if (r.stage === 'id' && (k === 'KeyN' || k === 'KeyR')) this.regId(false);
+      else if (r.stage === 'pay' && /^Digit[1-7]$/.test(k)) this.regCash([1000, 500, 100, 25, 10, 5, 1][Number(k.slice(5)) - 1]);
+      else if (r.stage === 'pay' && k === 'Backspace') this.regCash(0);
+      else if (r.stage === 'pay' && (k === 'Enter' || k === 'Space')) this.regDone();
       return eat();
     }
     if (this.modal === 'dialog') {

@@ -229,12 +229,14 @@ export class Crowd {
         // arms swing opposite to the leg on the same side; they ride on the torso
         local(_L, 0, HIP_Y, 0, lean, Math.sin(ph) * 0.08 * a, 0);
         _A.multiplyMatrices(_M, _L);
-        const arm = Math.sin(p) * A * 0.85;
-        const talkWave = c.talk && s === 1 ? -0.5 + Math.sin(performance.now() * 0.006) * 0.15 : 0;
-        local(_L, side * 0.285, NECK_Y - HIP_Y - 0.04, 0, arm + talkWave, 0, side * -0.07);
+        // carrying holds both arms out front; working makes them busy
+        const tnow = performance.now();
+        const arm = c.carry ? -1.05 : c.work ? -0.75 + Math.sin(tnow * 0.011 + s * 2.2) * 0.35 : Math.sin(p) * A * 0.85;
+        const talkWave = !c.carry && !c.work && c.talk && s === 1 ? -0.5 + Math.sin(tnow * 0.006) * 0.15 : 0;
+        local(_L, side * 0.285, NECK_Y - HIP_Y - 0.04, 0, arm + talkWave, 0, side * (c.carry ? 0.1 : -0.07));
         _A.multiply(_L);
         P.upperArm.setMatrixAt(k, _A);
-        const elbow = -(0.18 + 0.5 * run) * (0.4 + 0.6 * a) + (c.talk && s === 1 ? -0.6 : 0);
+        const elbow = c.carry ? -0.55 : c.work ? -0.7 : -(0.18 + 0.5 * run) * (0.4 + 0.6 * a) + (c.talk && s === 1 ? -0.6 : 0);
         local(_L, 0, -0.29, 0, elbow, 0, 0);
         _B.multiplyMatrices(_A, _L);
         P.foreArm.setMatrixAt(k, _B);

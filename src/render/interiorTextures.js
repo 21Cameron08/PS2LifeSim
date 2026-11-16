@@ -613,6 +613,70 @@ function tv() {
   return { tex, draw };
 }
 
+function vct(seed) {
+  // speckled vinyl composition tile: the floor of every convenience store ever
+  const rng = new Rng(seed);
+  const [c, g] = makeCanvas(64, 64);
+  for (let y = 0; y < 2; y++)
+    for (let x = 0; x < 2; x++) {
+      g.fillStyle = jitter('#e4e0d4', rng, 10);
+      g.fillRect(x * 32, y * 32, 32, 32);
+    }
+  for (let k = 0; k < 260; k++) {
+    g.fillStyle = rng.pick(['#9a968a', '#7a8a8a', '#b8a890', '#5a6a6a']);
+    g.fillRect(rng.int(0, 63), rng.int(0, 63), 1, 1);
+  }
+  g.fillStyle = 'rgba(80,80,70,0.35)';
+  g.fillRect(0, 0, 64, 1);
+  g.fillRect(0, 32, 64, 1);
+  g.fillRect(0, 0, 1, 64);
+  g.fillRect(32, 0, 1, 64);
+  for (let k = 0; k < 6; k++) {
+    g.fillStyle = 'rgba(60,50,40,0.06)';
+    g.fillRect(rng.int(0, 50), rng.int(0, 50), rng.int(6, 20), rng.int(4, 12));
+  }
+  return makeTex(c);
+}
+
+function ceilingTile(seed) {
+  const rng = new Rng(seed);
+  const [c, g] = makeCanvas(64, 64);
+  g.fillStyle = '#c8c4b8';
+  g.fillRect(0, 0, 64, 64);
+  g.fillStyle = '#f2f0ea';
+  g.fillRect(2, 2, 60, 60);
+  for (let k = 0; k < 160; k++) {
+    g.fillStyle = 'rgba(120,115,100,0.35)';
+    g.fillRect(rng.int(3, 60), rng.int(3, 60), 1, 1);
+  }
+  if (rng.chance(1)) {
+    g.fillStyle = 'rgba(150,120,70,0.12)';
+    g.beginPath();
+    g.arc(44, 20, 9, 0, Math.PI * 2);
+    g.fill();
+  }
+  return makeTex(c);
+}
+
+function productLabel() {
+  // a generic printed package, tinted per product
+  const [c, g] = makeCanvas(32, 32);
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, 32, 32);
+  g.fillStyle = 'rgba(0,0,0,0.35)';
+  g.fillRect(0, 9, 32, 7);
+  g.fillStyle = '#ffffff';
+  g.fillRect(3, 11, 18, 1);
+  g.fillRect(3, 13, 12, 1);
+  g.fillStyle = 'rgba(255,255,255,0.9)';
+  g.beginPath();
+  g.arc(23, 24, 5, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = 'rgba(0,0,0,0.25)';
+  g.fillRect(0, 29, 32, 3);
+  return makeTex(c, { repeat: false });
+}
+
 export function createInteriorTextures() {
   return {
     plaster: { map: plaster(201), scale: 2 },
@@ -639,6 +703,9 @@ export function createInteriorTextures() {
     curtain: { map: curtain(), scale: 1 },
     blinds: { map: blinds(), scale: 0.25 },
     mirror: { map: mirror(), scale: 1 },
+    vct: { map: vct(221), scale: 0.6 },
+    ceilTile: { map: ceilingTile(222), scale: 1.2 },
+    label: { map: productLabel(), scale: 1 },
     tv: tv(),
   };
 }

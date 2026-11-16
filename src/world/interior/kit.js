@@ -87,8 +87,9 @@ export class InteriorKit {
     this.rooms.push(R);
     const fs = this.scale(R.f.floor);
     this.grid(R.f.floor, [x0, 0, z1], [x1 - x0, 0, 0], [0, 0, -(z1 - z0)], [0, 1, 0], (p) => [p[0] / fs, -p[2] / fs], R.f.floorColor ? C(R.f.floorColor) : WHITE, 0.5);
-    const cs = this.scale('plaster');
-    this.grid('plaster', [x0, this.H, z0], [x1 - x0, 0, 0], [0, 0, z1 - z0], [0, -1, 0], (p) => [p[0] / cs, p[2] / cs], C(R.f.ceil), 0.6);
+    const ck = R.f.ceilKey ?? 'plaster';
+    const cs = this.scale(ck);
+    this.grid(ck, [x0, this.H, z0], [x1 - x0, 0, 0], [0, 0, z1 - z0], [0, -1, 0], (p) => [p[0] / cs, p[2] / cs], C(R.f.ceil), 0.6);
     return R;
   }
 
@@ -103,7 +104,7 @@ export class InteriorKit {
    * ext: 0 = partition centred on c; +1 / -1 = exterior wall whose body lies on that side of c.
    * open: [{ from, to, kind: 'door'|'opening'|'window'|'entry', y0, y1, ...dressing }]
    */
-  wall(axis, c, a0, a1, { t = 0.12, ext = 0, open = [] } = {}) {
+  wall(axis, c, a0, a1, { t = 0.12, ext = 0, open = [], outside = null } = {}) {
     const H = this.H;
     const lo = ext === 0 ? c - t / 2 : ext > 0 ? c : c - t;
     const hi = lo + t;
@@ -111,6 +112,8 @@ export class InteriorKit {
       .map((o) => ({ kind: 'door', y0: 0, y1: o.kind === 'window' ? 2.3 : 2.1, ...o }))
       .map((o) => (o.kind === 'window' ? { y0: 0.85, ...o } : o))
       .sort((p, q) => p.from - q.from);
+    // outside: { key, color, trim } finish for the street side of an exterior wall
+    this._outside = outside ? { f: { wall: outside.key ?? 'solid', wallColor: outside.color, base: null, trim: outside.trim ?? outside.color } } : null;
     let cur = a0;
     const pieces = [];
     for (const o of ops) {
@@ -122,6 +125,7 @@ export class InteriorKit {
     if (cur < a1) pieces.push([cur, a1, 0, H]);
     for (const [p0, p1, q0, q1] of pieces) this.wallPiece(axis, lo, hi, p0, p1, q0, q1, p0 > a0 + 1e-4, p1 < a1 - 1e-4);
     for (const o of ops) this.opening(axis, lo, hi, o, ext);
+    this._outside = null;
   }
 
   // local point from wall-frame coords (a = along, y, d = across)
@@ -141,13 +145,19 @@ export class InteriorKit {
       const d = side < 0 ? lo : hi;
       // a wall can face several rooms along its length: give each its own finish
       const dp = d + side * 0.1;
+      let covered = 0;
       for (const R of this.rooms) {
         const inside = axis === 'x' ? dp >= R.lz0 && dp <= R.lz1 : dp >= R.lx0 && dp <= R.lx1;
         if (!inside) continue;
         const s0 = Math.max(p0, axis === 'x' ? R.lx0 : R.lz0);
         const s1 = Math.min(p1, axis === 'x' ? R.lx1 : R.lz1);
-        if (s1 - s0 > 0.001) this.wallFace(axis, side, d, s0, s1, q0, q1, R);
+        if (s1 - s0 > 0.001) {
+          this.wallFace(axis, side, d, s0, s1, q0, q1, R);
+          covered += s1 - s0;
+        }
       }
+      // the street side of an exterior wall
+      if (covered < 0.01 && this._outside) this.wallFace(axis, side, d, p0, p1, q0, q1, this._outside);
     }
     this.wallEdges(axis, lo, hi, p0, p1, q0, q1, endLo, endHi, mid, yMid);
   }
@@ -228,9 +238,10 @@ export class InteriorKit {
     };
     const mid = (o.from + o.to) / 2;
     const ym = (o.y0 + o.y1) / 2;
+    const outer = this._outside && { f: { trim: o.frame ?? this._outside.f.trim } };
     const sides = [
-      [-1, lo, this.faceRoom(axis, mid, ym, lo, -1)],
-      [1, hi, this.faceRoom(axis, mid, ym, hi, 1)],
+      [-1, lo, this.faceRoom(axis, mid, ym, lo, -1) || outer],
+      [1, hi, this.faceRoom(axis, mid, ym, hi, 1) || outer],
     ].filter((s) => s[2]);
     const cw = 0.07;
     for (const [side, d, R] of sides) {
@@ -345,7 +356,7 @@ export class InteriorKit {
   }
 
   // ---------------------------------------------------------------- build
-  build(group, matOpts = {}) {
+  build(group, matOpts = {}, globalOpts = {}) {
     for (const R of this.rooms) {
       R.lampAmb.setRGB(0, 0, 0);
       R.dayAmb = 0;
@@ -366,7 +377,7 @@ export class InteriorKit {
       if (b.empty) continue;
       const geo = b.build();
       bake(geo, ctx);
-      const o = { ...(matOpts[key] || {}) };
+      const o = { ...globalOpts, ...(matOpts[key] || {}) };
       if (key === 'blinds' || key === 'books') Object.assign(o, { alphaTest: 0.5, side: THREE.DoubleSide });
       if (key === 'curtain') o.side = THREE.DoubleSide;
       const mat = interiorMaterial(this.tex[key].map, this.uniforms, o);
@@ -375,7 +386,7 @@ export class InteriorKit {
       mesh.matrixAutoUpdate = false;
       group.add(mesh);
     }
-    this.glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false });
+    this.glowMat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, ...globalOpts });
     if (!this.glow.empty) group.add(new THREE.Mesh(this.glow.build(), this.glowMat));
     this.glassMat = new THREE.MeshBasicMaterial({
       color: new THREE.Color('#a8c8e0'),
@@ -384,6 +395,7 @@ export class InteriorKit {
       depthWrite: false,
       side: THREE.DoubleSide,
       fog: false,
+      ...globalOpts,
     });
     if (!this.glass.empty) {
       const g = new THREE.Mesh(this.glass.build(), this.glassMat);
@@ -391,7 +403,7 @@ export class InteriorKit {
       group.add(g);
     }
     if (!this.screen.empty) {
-      this.screenMat = new THREE.MeshBasicMaterial({ map: this.tex.tv.tex, fog: false });
+      this.screenMat = new THREE.MeshBasicMaterial({ map: this.tex.tv.tex, fog: false, ...globalOpts });
       group.add(new THREE.Mesh(this.screen.build(), this.screenMat));
     }
     return mats;

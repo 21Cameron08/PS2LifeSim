@@ -47,7 +47,7 @@ export class Player {
     const dz = fz * mv.y + fx * mv.x;
     const mag = Math.min(1, Math.hypot(dx, dz));
     const indoor = this.space.indoor;
-    const target = mag * (running ? (indoor ? 4.4 : 7.2) : indoor ? 2.5 : 3.6);
+    const target = mag * (running ? (indoor ? 4.4 : 7.2) : indoor ? 2.5 : 3.6) * (this.slow ?? 1);
     this.speed = damp(this.speed, target, target > this.speed ? 8 : 12, dt);
     if (mag > 0.05) {
       this.moveDir.set(dx / mag, dz / mag);

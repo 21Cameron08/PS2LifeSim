@@ -45,6 +45,8 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   Old Market. Two better homes are up for lease (follow the blue diamonds):
   **Loft 4** at The Kiln Works in Kiln Heights, and the **Meridian Tower Penthouse**
   Downtown. See below.
+- **A job**: night clerk at **HALCYON 24**, the convenience store next door to Unit 3B.
+  $9 an hour. See below.
 - **Customization**: the wardrobe (C) edits skin, hair style/colour, top style
   (tee, long sleeve, jacket over a shirt), colours, bottoms, shoes, height, build.
 - **Save**: autosaves to localStorage ("memory card"): position, time, money,
@@ -75,6 +77,32 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 - Layouts are plain data in `src/world/interior/layouts.js`: rooms, walls with door and
   window openings, and furniture from the kit in `src/world/interior/kit.js`. Adding an
   apartment = a building site in `src/config.js` + a layout.
+
+## The job: HALCYON 24
+
+A walk-in 24-hour convenience store on the same street as Unit 3B (follow the yellow
+diamond). It isn't a loading-screen interior: the sliding doors open with a chime, you
+can see in through the lit windows from the street, and shoppers walk in off the
+sidewalk.
+
+- **Get hired**: talk to Mrs. Varga behind the counter.
+- **Clock in** at the punch clock in the stockroom (through STAFF ONLY). You put on
+  the green vest; Mrs. Varga goes to the back office.
+- **Register**: customers shop, then queue. Stand behind the counter and press E:
+  scan each item, **check ID for beer** (born on or before the date the register
+  shows, or refuse), then approve the card or **count out the change** from the drawer.
+- **Restock**: shoppers empty the shelves facing by facing. Grab a case from the
+  matching stockroom rack (drinks, snacks, noodles, household) and restock the aisle.
+- **Mop** spills with the mop by the yellow bucket; a wet-floor sign goes up after.
+- **Trash**: when the bin by the door fills, carry the bag out to the dumpster.
+- **Pay**: $9.00 per game hour, paid to your bank when you clock out, with a printed
+  shift slip. Docked for customers who give up waiting ($2), empty shelves ($1),
+  ignored spills ($2), giving too much change, walking off the job ($5), and a $50
+  fine for selling beer to a minor. Occasional tips if your change is exact.
+- The office has a desk and a **live CCTV monitor** (there's another over the counter),
+  so you can watch yourself work.
+
+At $9/hour, Loft 4's $2,500 move-in is roughly 280 hours behind the counter. Not great pay.
 
 ## How the PS2 look works
 
@@ -110,11 +138,11 @@ src/
   core/                   seeded RNG + math, merged-geometry builder, input
   render/                 PS2 post pipeline, procedural textures, sky, time-of-day palette
   world/                  city generator, street props, Lantern Quarter, colliders, particles,
-                          apartments (doors, markers, interiors)
+                          apartments (doors, markers, interiors), the HALCYON 24 store
   world/interior/         room/wall builder, furniture kit, baked lighting, apartment layouts
   actors/                 crowd renderer (instanced puppets), appearance model,
                           player + camera, pedestrians AI, traffic
-  game/                   clock + save system, NPC dialogue data
+  game/                   clock + save system, NPC dialogue data, the store job
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls
   audio/                  procedural ambience and sound effects
 ```
@@ -126,8 +154,8 @@ calls. It should run well on integrated GPUs and phones.
 ## Roadmap (suggested order)
 
 1. **Needs**: hunger/energy/fun/social bars that the fridge, bed, shower and TV refill.
-2. **Jobs**: shift jobs at shops (clock in, mini‑tasks, wages paid to the bank), job
-   board, schedules tied to the clock.
+2. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
+   noodle bar cook, courier, office temp. Promotions and raises at the store.
 3. **Economy**: rent and bills, a bank screen with transactions, shop inventories.
 4. **Clothes shops**: buy items that unlock in the wardrobe; outfits as data.
 5. **Furniture**: buy and place furniture in your apartment (the kit already has the

@@ -122,6 +122,14 @@ export class Ambience {
       o.connect(og).connect(padF);
       o.start();
     }
+    // fluorescent hum + fridge drone inside the store
+    this.humG = gain(0);
+    const hum = ctx.createOscillator();
+    hum.type = 'sawtooth';
+    hum.frequency.value = 120;
+    const humF = filter('lowpass', 420);
+    hum.connect(humF).connect(this.humG).connect(this.master);
+    hum.start();
     this.chimeBus = gain(1);
     this.chimeBus.connect(this.amb);
     this.chimeBus.connect(delay);
@@ -141,6 +149,7 @@ export class Ambience {
     this.amb.gain.setTargetAtTime(1 - ind * 0.45, t, 0.3);
     this.ambLP.frequency.setTargetAtTime(20000 - ind * 19300, t, 0.3);
     if (this.music) this.scheduleMusic();
+    this.humG.gain.setTargetAtTime((s.store ?? 0) * 0.012, t, 0.3);
     this.cityG.gain.setTargetAtTime((0.34 - s.night * 0.16) * (1 - s.magic * 0.6), t, 0.5);
     this.windG.gain.setTargetAtTime(0.035 + s.night * 0.03 + s.magic * 0.03, t, 0.5);
     this.crickG.gain.setTargetAtTime(s.night * (0.012 + s.green * 0.05) * (1 - s.magic * 0.5), t, 0.8);
@@ -253,10 +262,10 @@ export class Ambience {
     this.stopMusic();
     const out = ctx.createGain();
     out.gain.value = 0.0001;
-    out.gain.setTargetAtTime(style === 'piano' ? 0.16 : 0.12, ctx.currentTime, 0.4);
+    out.gain.setTargetAtTime(style === 'piano' ? 0.16 : style === 'muzak' ? 0.07 : 0.12, ctx.currentTime, 0.4);
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = style === 'radio' ? 2400 : style === 'records' ? 4200 : 9000;
+    lp.frequency.value = style === 'radio' ? 2400 : style === 'records' ? 4200 : style === 'muzak' ? 1800 : 9000;
     out.connect(lp);
     let tail = lp;
     if (style === 'radio') {
@@ -268,7 +277,7 @@ export class Ambience {
     }
     tail.connect(this.master);
     const nodes = [];
-    if (style !== 'piano') {
+    if (style !== 'piano' && style !== 'muzak') {
       const crackle = ctx.createBufferSource();
       crackle.buffer = this.white;
       crackle.loop = true;
@@ -281,7 +290,7 @@ export class Ambience {
       crackle.start();
       nodes.push(crackle);
     }
-    this.music = { style, out, nodes, bar: 0, next: ctx.currentTime + 0.15, len: style === 'piano' ? 2.6 : 2.2 };
+    this.music = { style, out, nodes, bar: 0, next: ctx.currentTime + 0.15, len: style === 'piano' ? 2.6 : style === 'muzak' ? 2.8 : 2.2 };
   }
 
   stopMusic() {
@@ -322,6 +331,14 @@ export class Ambience {
     const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
     const L = m.len;
     const scale = [72, 74, 76, 79, 81, 84];
+    if (m.style === 'muzak') {
+      // ceiling-speaker store music: soft electric piano and bass, nothing to offend anyone
+      chord.forEach((n, i) => this.voice(m.out, hz(n + 12), t + i * 0.05, L * 0.9, 'sine', 0.035, 0.04));
+      this.voice(m.out, hz(chord[0] - 24), t, L * 0.5, 'triangle', 0.08, 0.02);
+      this.voice(m.out, hz(chord[1] - 24), t + L / 2, L * 0.45, 'triangle', 0.07, 0.02);
+      for (let k = 0; k < 4; k++) if (Math.random() < 0.55) this.voice(m.out, hz(scale[Math.floor(Math.random() * scale.length)]), t + (k * L) / 4, 0.6, 'sine', 0.04, 0.01);
+      return;
+    }
     if (m.style === 'piano') {
       chord.forEach((n, i) => this.voice(m.out, hz(n), t + i * 0.16, 2.2, 'triangle', 0.06, 0.004));
       this.voice(m.out, hz(chord[0] - 24), t, 2.4, 'sine', 0.1, 0.01);
@@ -386,6 +403,27 @@ export class Ambience {
 
   hat(dest, t) {
     this.noiseAt(dest, t, 8000, 0.025, 0.04, 'highpass');
+  }
+
+  // ---------------------------------------------------------------- store sounds
+  chime() {
+    // a generic two-tone shop door chime
+    this.tone(1318.5, 'sine', 0.06, 0.9);
+    setTimeout(() => this.tone(1046.5, 'sine', 0.06, 1.2), 280);
+  }
+  beep() {
+    this.tone(2400, 'square', 0.025, 0.07);
+  }
+  drawer() {
+    this.noiseHit(0.08, 2500, 0.08);
+    setTimeout(() => this.tone(2800, 'triangle', 0.03, 0.4), 60);
+  }
+  punch() {
+    this.noiseHit(0.12, 600, 0.06);
+    setTimeout(() => this.noiseHit(0.08, 1800, 0.04), 90);
+  }
+  thud() {
+    this.noiseHit(0.18, 220, 0.25);
   }
 
   blip(up = true) {

@@ -51,7 +51,12 @@ export const APARTMENT_SITES = {
   loft: { block: [4, 1], width: 16, depth: 14, floors: 4, style: 'factory', shop: false, unitFloor: 2 },
   penthouse: { block: [3, 2], width: 22, depth: 18, floors: 18, style: 'glass', shop: false, unitFloor: 17 },
 };
-export const siteForBlock = (i, j) => Object.entries(APARTMENT_SITES).find(([, s]) => s.block[0] === i && s.block[1] === j);
+// Your first job: a 24-hour convenience store on the street next to Unit 3B. Its
+// ground floor is a real walk-in interior (src/world/store.js); flats above.
+export const STORE_SITE = { block: [2, 1], width: 14, depth: 13, floors: 3, style: 'cream', groundH: 3.1 };
+
+const ALL_SITES = [...Object.entries(APARTMENT_SITES), ['store', STORE_SITE]];
+export const siteForBlock = (i, j) => ALL_SITES.find(([, s]) => s.block[0] === i && s.block[1] === j);
 
 export const START = {
   hour: 17.6, // golden hour, so the first night falls a couple of minutes in
