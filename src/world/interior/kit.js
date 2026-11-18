@@ -31,6 +31,7 @@ export class InteriorKit {
     this.shadows = [];
     this.interactables = [];
     this.fans = [];
+    this.fxLights = []; // lights whose colour is driven at runtime (see bake.js: aFx)
   }
 
   b(key) {
@@ -83,13 +84,17 @@ export class InteriorKit {
       f: { floor: 'woodOak', wall: 'plaster', wallColor: '#ece6da', ceil: '#f2f0ea', base: '#ebe6dc', trim: '#f0ece4', ...f },
       lampAmb: new THREE.Color(0, 0, 0),
       dayAmb: 0,
+      // rooms in the same zone share their lights (one big space split into rectangles)
+      zone: f.zone,
     };
     this.rooms.push(R);
     const fs = this.scale(R.f.floor);
     this.grid(R.f.floor, [x0, 0, z1], [x1 - x0, 0, 0], [0, 0, -(z1 - z0)], [0, 1, 0], (p) => [p[0] / fs, -p[2] / fs], R.f.floorColor ? C(R.f.floorColor) : WHITE, 0.5);
     const ck = R.f.ceilKey ?? 'plaster';
     const cs = this.scale(ck);
-    this.grid(ck, [x0, this.H, z0], [x1 - x0, 0, 0], [0, 0, z1 - z0], [0, -1, 0], (p) => [p[0] / cs, p[2] / cs], C(R.f.ceil), 0.6);
+    // f.h: a lower ceiling than the kit's H (the walls still run full height above it)
+    const ch = R.f.h ?? this.H;
+    if (!R.f.noCeil) this.grid(ck, [x0, ch, z0], [x1 - x0, 0, 0], [0, 0, z1 - z0], [0, -1, 0], (p) => [p[0] / cs, p[2] / cs], C(R.f.ceil), 0.6);
     return R;
   }
 
@@ -361,17 +366,21 @@ export class InteriorKit {
       R.lampAmb.setRGB(0, 0, 0);
       R.dayAmb = 0;
     }
+    const zone = (k) => (k < 0 ? -1 : (this.rooms[k].zone ?? `#${k}`));
     for (const L of this.lights) {
       L.room = roomAt(this.rooms, L.x, L.z);
-      const R = this.rooms[L.room];
-      if (R) R.lampAmb.add(L.color.clone().multiplyScalar(L.power * 0.07));
+      if (L.room < 0) continue;
+      const z = zone(L.room);
+      const amb = L.color.clone().multiplyScalar(L.power * 0.07);
+      this.rooms.forEach((R, k) => zone(k) === z && R.lampAmb.add(amb));
     }
+    for (const L of this.fxLights) L.room = roomAt(this.rooms, L.x, L.z);
     for (const Wn of this.windows) {
       Wn.room = roomAt(this.rooms, Wn.x + Wn.nx * 0.3, Wn.z + Wn.nz * 0.3);
       const R = this.rooms[Wn.room];
       if (R) R.dayAmb += (Wn.area / ((R.x1 - R.x0) * (R.z1 - R.z0))) * 0.45;
     }
-    const ctx = { rooms: this.rooms, lights: this.lights, windows: this.windows, shadows: this.shadows, floorY: this.o.y, ceil: this.H };
+    const ctx = { rooms: this.rooms, lights: this.lights, windows: this.windows, shadows: this.shadows, floorY: this.o.y, ceil: this.H, fx: this.fxLights };
     const mats = {};
     for (const [key, b] of this.B) {
       if (b.empty) continue;
@@ -479,6 +488,12 @@ class Placer {
   light(x, y, z, col, power, down = false) {
     const p = this.point(x, y, z);
     this.k.lights.push({ x: p.x, y: p.y, z: p.z, color: new THREE.Color(col), power, down });
+    return this;
+  }
+  /** A light baked into colour channel ch (0-3) of aFx; its colour is set at runtime. */
+  fxLight(x, y, z, ch, power, { down = false, fall = 0.6 } = {}) {
+    const p = this.point(x, y, z);
+    this.k.fxLights.push({ x: p.x, y: p.y, z: p.z, ch, power, down, fall });
     return this;
   }
   interact(x, z, def) {

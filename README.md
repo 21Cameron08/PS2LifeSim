@@ -47,6 +47,8 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   Downtown. See below.
 - **A job**: night clerk at **HALCYON 24**, the convenience store next door to Unit 3B.
   $9 an hour. See below.
+- **A nightclub**: **SUBSTATION**, a converted power substation in Ember Row, across the
+  road from the Lantern Quarter. Open 10 PM to 4 AM. See below.
 - **Customization**: the wardrobe (C) edits skin, hair style/colour, top style
   (tee, long sleeve, jacket over a shirt), colours, bottoms, shoes, height, build.
 - **Save**: autosaves to localStorage ("memory card"): position, time, money,
@@ -104,6 +106,38 @@ sidewalk.
 
 At $9/hour, Loft 4's $2,500 move-in is roughly 280 hours behind the counter. Not great pay.
 
+## SUBSTATION (nightclub)
+
+A 1950s power substation turned club, in Ember Row facing the Lantern Quarter. Like the
+store it's part of the street: no loading screen.
+
+- **The door**: a queue behind a velvet rope, Dmitri on the door, a neon sign buzzing over a
+  steel canopy, and Ray's fries cart on the curb ($4, open 9 PM to 5 AM). Cover is $20 ($30 on
+  Saturdays), cash only; the stamp on your hand lets you come and go until close. From down
+  the street you only hear the kick drum; it opens up when the doors swing open.
+- **Inside**: a lobby with a coat check (it really takes your jacket off you, $2), gig posters,
+  an ATM and a photo booth (out of film for now), a strip curtain into one tall concrete hall:
+  an 8x8 LED dance floor under a mirror ball and a lighting truss, a DJ on an old transformer
+  housing in front of a giant copper coil, ceramic insulator stacks, speaker stacks whose
+  cones pump on the kick, a long backlit bar, red velvet booths, toilets covered in stickers,
+  and the VIP stairs (roped off: the balcony is "closed for a refit").
+- **The show**: an original synthesised house track at 124 BPM that loops through intro,
+  groove, breakdown, build and drop. The lights follow it: washes pulse on the kick, the
+  floor runs patterns per section, the mirror ball spots swirl in the breakdown, beams sweep
+  through the haze, lasers fan out on the drop and the crowd puts its hands up.
+- **People**: up to ~40 clubbers depending on the night (Saturday is packed, Monday isn't),
+  who walk in through the lobby, dance, prop up the bar, sit in the booths and leave. Staff:
+  bouncer, security, DJ, two bartenders, coat check.
+- **4 AM: lights up.** House lights snap on, the music cuts, everyone files out. At 4:30
+  security walks you out.
+- **Flashing lights** (pause menu): FULL adds strobes, REDUCED (default) keeps beat pulses
+  without strobing, OFF keeps everything slow and calm.
+
+How the lights work: on top of the baked lamp light, the club's surfaces have four more
+baked light channels (house lights, two stage washes, the LED floor) whose colours are set
+every frame from the music, so the whole hall changes colour on the beat with no real-time
+lights on the walls. People get the shared pool of real point lights, recoloured the same way.
+
 ## How the PS2 look works
 
 It's mostly a rendering recipe, not expensive art (see `src/render/ps2pipeline.js`):
@@ -138,13 +172,16 @@ src/
   core/                   seeded RNG + math, merged-geometry builder, input
   render/                 PS2 post pipeline, procedural textures, sky, time-of-day palette
   world/                  city generator, street props, Lantern Quarter, colliders, particles,
-                          apartments (doors, markers, interiors), the HALCYON 24 store
+                          apartments (doors, markers, interiors), the HALCYON 24 store,
+                          the SUBSTATION club (club.js)
   world/interior/         room/wall builder, furniture kit, baked lighting, apartment layouts
-  actors/                 crowd renderer (instanced puppets), appearance model,
-                          player + camera, pedestrians AI, traffic
+  actors/                 crowd renderer (instanced puppets, walk/carry/dance/sit poses),
+                          appearance model, player + camera, pedestrians AI, traffic,
+                          clubbers (the club's staff, queue and crowd)
   game/                   clock + save system, NPC dialogue data, the store job
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls
-  audio/                  procedural ambience and sound effects
+  audio/                  procedural ambience, sound effects and music; clubTrack.js is the
+                          club song's arrangement, shared with the lights
 ```
 
 Performance notes: static scenery is merged into one mesh per material and every
@@ -157,18 +194,22 @@ The big goal: **lots of cool places to hang out**. Every new space (diner, arcad
 rooftop, karaoke bar, record shop, a 2 AM laundromat, the pier) gets a real walk-in
 interior with the same detail, light and sound as the apartments and the store.
 
-1. **Needs**: hunger/energy/fun/social bars that the fridge, bed, shower and TV refill.
-2. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
+1. **SUBSTATION phase 2**: a dance rhythm game, a proper drinks menu and buying drinks for
+   people, a dress code at the door, the VIP balcony and the roof terrace, a working photo
+   booth (keep the strip, hang it at home), club chat for NPCs. **Phase 3**: theme nights,
+   regulars, a bartender job, and a door behind the transformer that opens at 3:33 AM.
+2. **Needs**: hunger/energy/fun/social bars that the fridge, bed, shower and TV refill.
+3. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
    noodle bar cook, courier, office temp. Promotions and raises at the store.
-3. **Economy**: rent and bills, a bank screen with transactions, shop inventories.
-4. **Clothes shops**: buy items that unlock in the wardrobe; outfits as data.
-5. **Furniture**: buy and place furniture in your apartment (the kit already has the
+4. **Economy**: rent and bills, a bank screen with transactions, shop inventories.
+5. **Clothes shops**: buy items that unlock in the wardrobe; outfits as data.
+6. **Furniture**: buy and place furniture in your apartment (the kit already has the
    pieces; this needs a placement mode and saving the layout).
-6. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
-7. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
-8. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
-9. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
-10. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
+7. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
+8. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
+9. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
+10. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
+11. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
     streets, chat and visiting apartments; the bank must move server‑side then.
 
 All names, shops and brands in the game are made up.

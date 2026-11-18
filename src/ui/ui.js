@@ -22,6 +22,8 @@ const RES = [240, 360, 448, 540, 720];
 const AMOUNTS = [100, 500, 1000, 5000, 10000, 50000, 100000, 1e6, 1e7, 1e8];
 const MAX_AMOUNT = 1e12;
 const RES_NAMES = ['240p · PS1-ish', '360p', '448p · PS2', '540p', '720p · HD-ish'];
+const FLASH = ['full', 'reduced', 'off'];
+const FLASH_NAMES = ['FULL · strobes', 'REDUCED', 'OFF · calm'];
 
 export class UI {
   constructor(audio) {
@@ -433,6 +435,11 @@ export class UI {
       onoff('scanlines', 'Scanlines'),
       onoff('crisp', 'Crisp pixels'),
       { label: 'Sound', value: s.muted ? 'OFF' : 'ON', change: () => (s.muted = !s.muted) },
+      {
+        label: 'Flashing lights',
+        value: FLASH_NAMES[Math.max(0, FLASH.indexOf(s.flash))],
+        change: (d) => (s.flash = FLASH[(Math.max(0, FLASH.indexOf(s.flash)) + d + FLASH.length) % FLASH.length]),
+      },
       { label: 'New life', value: 'ERASE SAVE', action: () => this.menu.onReset?.() },
     ];
   }

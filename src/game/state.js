@@ -65,4 +65,5 @@ export const DEFAULT_SETTINGS = {
   soft: true,
   crisp: false,
   muted: false,
+  flash: 'reduced', // the club's strobes: 'full' | 'reduced' | 'off'
 };

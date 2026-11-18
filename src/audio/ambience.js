@@ -1,3 +1,5 @@
+import { SPB, sectionAt, CHORDS, ROOTS, chordAt, hz as noteHz } from './clubTrack.js';
+
 // All sound is synthesised at runtime with WebAudio: no audio files needed yet.
 // Layers: city rumble, wind, night crickets, a mystical pad near the Lantern
 // Quarter, plus one-shots (footsteps, car horns, UI blips, text ticks).
@@ -256,10 +258,11 @@ export class Ambience {
   // ---------------------------------------------------------------- music
   // A tiny generative player: Dm7 - G7 - Cmaj7 - Am7 with a different voice per
   // apartment (crackly AM radio, lo-fi records, a grand piano).
-  startMusic(style) {
+  startMusic(style, opts = {}) {
     const ctx = this.ctx;
     if (!ctx) return;
     this.stopMusic();
+    if (style === 'club') return this.startClub(opts.beat ?? 0);
     const out = ctx.createGain();
     out.gain.value = 0.0001;
     out.gain.setTargetAtTime(style === 'piano' ? 0.16 : style === 'muzak' ? 0.07 : 0.12, ctx.currentTime, 0.4);
@@ -293,6 +296,162 @@ export class Ambience {
     this.music = { style, out, nodes, bar: 0, next: ctx.currentTime + 0.15, len: style === 'piano' ? 2.6 : style === 'muzak' ? 2.8 : 2.2 };
   }
 
+  // ---------------------------------------------------------------- club
+  /** The club's sound system. beat: where the club's song is right now. */
+  startClub(beat) {
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = 0.0001;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 300;
+    out.connect(lp).connect(this.master);
+    // everything melodic ducks under the kick (sidechain pump)
+    const pump = ctx.createGain();
+    pump.connect(out);
+    const filt = (f, q = 0.8) => {
+      const b = ctx.createBiquadFilter();
+      b.type = 'lowpass';
+      b.frequency.value = f;
+      b.Q.value = q;
+      b.connect(pump);
+      return b;
+    };
+    const t0 = ctx.currentTime - beat * SPB;
+    const bar = Math.ceil(beat / 4 + 0.02);
+    this.music = {
+      style: 'club',
+      out,
+      lp,
+      pump,
+      bassF: filt(420, 2),
+      stabF: filt(1200, 5),
+      padF: filt(1600),
+      nodes: [],
+      t0,
+      bar,
+      next: t0 + bar * 4 * SPB,
+      len: 4 * SPB,
+    };
+  }
+
+  /** Where the club's song is, in beats (null when it isn't playing). */
+  musicBeat() {
+    const m = this.music;
+    return m?.style === 'club' ? (this.ctx.currentTime - m.t0) / SPB : null;
+  }
+
+  /** Muffle the music by where you're standing: the street gets the thump only. */
+  setMusicMix(cutoff, gain) {
+    const m = this.music;
+    if (!m?.lp) return;
+    const t = this.ctx.currentTime;
+    m.lp.frequency.setTargetAtTime(cutoff, t, 0.12);
+    m.out.gain.setTargetAtTime(Math.max(0.0001, gain), t, 0.2);
+  }
+
+  playClubBar(m, t) {
+    const S = sectionAt(m.bar);
+    const sb = SPB;
+    const ci = chordAt(m.bar);
+    const chord = CHORDS[ci];
+    const root = ROOTS[ci];
+    const D = m.out;
+    const P = m.pump.gain;
+    // the stab filter opens through the build
+    const open = S.name === 'build' ? 900 + (S.bar / S.len) * 3600 : S.name === 'breakdown' ? 800 : 2600;
+    m.stabF.frequency.setValueAtTime(open, t);
+    for (let k = 0; k < 4; k++) {
+      const tb = t + k * sb;
+      if (S.kick) {
+        this.clubKick(D, tb);
+        P.setValueAtTime(0.3, tb);
+        P.linearRampToValueAtTime(1, tb + sb * 0.6);
+      }
+      if (S.clap && (k === 1 || k === 3)) this.clap(D, tb);
+      if (S.hats) {
+        this.noiseAt(D, tb + sb / 2, 9000, 0.05, 0.04, 'highpass');
+        if (S.name === 'drop' || S.name === 'build') for (const q of [0.25, 0.75]) this.noiseAt(D, tb + sb * q, 10000, 0.018, 0.025, 'highpass');
+      }
+      if (S.open) this.noiseAt(D, tb + sb / 2, 7000, 0.035, 0.22, 'highpass');
+      if (S.bass) {
+        this.voice(m.bassF, noteHz(root - 12), tb + sb / 2, sb * 0.42, 'sawtooth', 0.16, 0.005);
+        this.voice(m.bassF, noteHz(root - 24), tb + sb / 2, sb * 0.42, 'sine', 0.14, 0.005);
+      }
+    }
+    if (S.stabs)
+      for (const q of [0.75, 1.5, 2.75, 3.5])
+        for (const n of chord) this.voice(m.stabF, noteHz(n), t + q * sb, 0.2, 'sawtooth', 0.028, 0.004);
+    if (S.pad) for (const n of chord) this.voice(m.padF, noteHz(n - 12), t, 4 * sb * 1.05, 'triangle', 0.045, 0.6);
+    if (S.lead) {
+      const arp = [chord[0] + 12, chord[2] + 12, chord[3] + 12, chord[1] + 24];
+      for (let k = 0; k < 16; k++) if (k % 4 !== 3) this.voice(m.pump, noteHz(arp[k % 4]), t + (k * sb) / 4, sb * 0.2, 'square', 0.016, 0.004);
+    }
+    if (S.riser && S.bar === 0) {
+      // noise riser over the whole build, snare roll over its last two bars
+      const len = S.len * 4 * sb;
+      const ctx = this.ctx;
+      const src = ctx.createBufferSource();
+      src.buffer = this.white;
+      src.loop = true;
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 2;
+      f.frequency.setValueAtTime(300, t);
+      f.frequency.exponentialRampToValueAtTime(6000, t + len);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.09, t + len);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + len + 0.1);
+      src.connect(f).connect(g).connect(D);
+      src.start(t);
+      src.stop(t + len + 0.2);
+    }
+    if (S.riser && S.bar >= S.len - 2) {
+      const n = S.bar === S.len - 1 ? 16 : 8;
+      for (let k = 0; k < n; k++) this.noiseAt(D, t + (k * 4 * sb) / n, 1800, 0.05 + (k / n) * 0.05, 0.08);
+    }
+    if (S.name === 'drop' && S.bar === 0) this.cheer(D, t);
+  }
+
+  clubKick(dest, t) {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(160, t);
+    o.frequency.exponentialRampToValueAtTime(46, t + 0.09);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.55, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.36);
+    o.connect(g).connect(dest);
+    o.start(t);
+    o.stop(t + 0.4);
+    this.noiseAt(dest, t, 3500, 0.04, 0.012, 'highpass');
+  }
+
+  clap(dest, t) {
+    for (let k = 0; k < 3; k++) this.noiseAt(dest, t + k * 0.011, 1400, 0.07, k === 2 ? 0.16 : 0.03);
+  }
+
+  /** a crowd "woo" when the drop lands */
+  cheer(dest, t) {
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = this.white;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.Q.value = 1.2;
+    f.frequency.setValueAtTime(900, t);
+    f.frequency.linearRampToValueAtTime(1600, t + 0.6);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.06, t + 0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+    src.connect(f).connect(g).connect(dest);
+    src.start(t);
+    src.stop(t + 2.3);
+  }
+
   stopMusic() {
     const m = this.music;
     if (!m) return;
@@ -313,6 +472,12 @@ export class Ambience {
   scheduleMusic() {
     const m = this.music;
     const ctx = this.ctx;
+    // after a stall (background tab) skip the missed bars instead of playing them all at once
+    if (m.next < ctx.currentTime - 0.1) {
+      const skip = Math.ceil((ctx.currentTime - m.next) / m.len);
+      m.next += skip * m.len;
+      m.bar += skip;
+    }
     while (m.next < ctx.currentTime + 0.6) {
       this.playBar(m, m.next);
       m.next += m.len;
@@ -321,6 +486,7 @@ export class Ambience {
   }
 
   playBar(m, t) {
+    if (m.style === 'club') return this.playClubBar(m, t);
     const prog = [
       [62, 65, 69, 72],
       [55, 59, 62, 65],

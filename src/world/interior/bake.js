@@ -19,8 +19,18 @@ export function makeInteriorUniforms() {
   };
 }
 
+/**
+ * Optional runtime colour channels (the nightclub): uniforms.uFx = [Color x4].
+ * Each vertex then also gets aFx (vec4): how much of each channel reaches it, so
+ * stage washes can change colour and pulse to the beat, still with no real lights.
+ */
+export function makeFxUniforms() {
+  return { uFx: { value: [0, 1, 2, 3].map(() => new THREE.Color(0, 0, 0)) } };
+}
+
 export function interiorMaterial(map, uniforms, opts = {}) {
   const m = new THREE.MeshBasicMaterial({ map, vertexColors: true, fog: false, ...opts });
+  const fx = !!uniforms.uFx;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uniforms);
     sh.vertexShader = sh.vertexShader
@@ -32,18 +42,20 @@ attribute float aDay;
 uniform float uLampOn;
 uniform vec3 uDayColor;
 uniform vec3 uAmbient;
+${fx ? 'attribute vec4 aFx;\nuniform vec3 uFx[4];' : ''}
 varying vec3 vBake;`,
       )
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
-vBake = uAmbient + aLamp * uLampOn + aDay * uDayColor;`,
+vBake = uAmbient + aLamp * uLampOn + aDay * uDayColor;
+${fx ? 'vBake += aFx.x * uFx[0] + aFx.y * uFx[1] + aFx.z * uFx[2] + aFx.w * uFx[3];' : ''}`,
       );
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>\nvarying vec3 vBake;`)
       .replace('#include <color_fragment>', `#include <color_fragment>\ndiffuseColor.rgb *= vBake;`);
   };
-  m.customProgramCacheKey = () => 'interior-baked';
+  m.customProgramCacheKey = () => (fx ? 'interior-baked-fx' : 'interior-baked');
   return m;
 }
 
@@ -58,6 +70,11 @@ export function bake(geo, ctx) {
   const lamp = new Float32Array(n * 3);
   const day = new Float32Array(n);
   const { rooms, lights, windows, shadows, floorY, ceil } = ctx;
+  const fxLights = ctx.fx ?? [];
+  const fx = fxLights.length ? new Float32Array(n * 4) : null;
+  const zone = (k) => (k < 0 ? -1 : (rooms[k].zone ?? `#${k}`));
+  const fxZone = fxLights.map((L) => zone(L.room));
+  const lightZone = lights.map((L) => zone(L.room));
   for (let i = 0; i < n; i++) {
     const px = pos.getX(i);
     const py = pos.getY(i);
@@ -66,18 +83,33 @@ export function bake(geo, ctx) {
     const ny = nrm.getY(i);
     const nz = nrm.getZ(i);
     const room = roomAt(rooms, px + nx * 0.12, pz + nz * 0.12);
+    const z = zone(room);
     let r = 0;
     let g = 0;
     let b = 0;
     let d = 0;
+    const f = [0, 0, 0, 0];
     if (room >= 0) {
       const R = rooms[room];
       r = R.lampAmb.r;
       g = R.lampAmb.g;
       b = R.lampAmb.b;
       d = R.dayAmb;
-      for (const L of lights) {
-        if (L.room !== room) continue;
+      for (let k = 0; k < fxLights.length; k++) {
+        const L = fxLights[k];
+        if (fxZone[k] !== z) continue;
+        const dx = L.x - px;
+        const dy = L.y - py;
+        const dz = L.z - pz;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        const dl = Math.sqrt(d2) || 1e-4;
+        let w = Math.max(0, ((nx * dx + ny * dy + nz * dz) / dl + 0.12) / 1.12);
+        if (L.down) w *= 0.3 + 0.7 * Math.max(0, dy / dl);
+        f[L.ch] += (w * L.power * 1.7) / (1 + d2 * L.fall);
+      }
+      for (let k = 0; k < lights.length; k++) {
+        const L = lights[k];
+        if (lightZone[k] !== z) continue;
         const dx = L.x - px;
         const dy = L.y - py;
         const dz = L.z - pz;
@@ -126,9 +158,11 @@ export function bake(geo, ctx) {
     lamp[i * 3 + 1] = g * ao;
     lamp[i * 3 + 2] = b * ao;
     day[i] = d * ao;
+    if (fx) for (let c = 0; c < 4; c++) fx[i * 4 + c] = f[c] * ao;
   }
   geo.setAttribute('aLamp', new THREE.BufferAttribute(lamp, 3));
   geo.setAttribute('aDay', new THREE.BufferAttribute(day, 1));
+  if (fx) geo.setAttribute('aFx', new THREE.BufferAttribute(fx, 4));
 }
 
 export function roomAt(rooms, x, z) {

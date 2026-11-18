@@ -181,12 +181,16 @@ export class City {
       for (let k = 0; k < n; k++) {
         const t = 4 + k * spacing;
         const [lx, lz] = at(t, 0.6);
-        this.addLamp(lx, lz, ry, b);
+        // the club's entrance gets its canopy lights instead of a lamp post
+        const clubDoor = e.face === 's' && siteForBlock(b.i, b.j)?.[0] === 'club' && Math.abs(lx - (b.cx - 5.1)) < 2.5;
+        if (!clubDoor) this.addLamp(lx, lz, ry, b);
         if (k === n - 1) continue;
         const tm = t + spacing / 2;
         const r = rng.next();
         // keep the entrances of the park / Lantern Quarter clear
         if (!isCity && Math.abs(tm - e.len / 2) < 5) continue;
+        // and the pavement in front of the club (queue, rope line, fries cart)
+        if (e.face === 's' && siteForBlock(b.i, b.j)?.[0] === 'club' && Math.abs(tm - e.len / 2) < 13) continue;
         if (r < leafy) {
           const [x, z] = at(tm, 0.95);
           this.addTree(x, z);
@@ -282,6 +286,7 @@ export class City {
         const street = faces.w || faces.e || faces.n || faces.s;
         if (site && a === 1 && c === 1) {
           if (site[0] === 'store') this.storeBuilding(site[1], x0, z0, x1, z1);
+          else if (site[0] === 'club') this.clubSite = { x0, z0, x1, z1 }; // the club builds its own shell
           else this.apartmentBuilding(site[0], site[1], x0, z0, x1, z1);
           continue;
         }
@@ -798,7 +803,7 @@ export class City {
         const l = e[1];
         light.position.set(l.x, l.y, l.z);
         light.color.copy(l.color);
-        light.distance = 7;
+        light.distance = l.dist ?? 7;
         light.intensity = 5 * l.power * override.on;
       });
       return;

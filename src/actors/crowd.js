@@ -185,17 +185,34 @@ export class Crowd {
       const a = c.amount;
       const run = c.run;
       const ph = c.phase;
-      const bob = Math.abs(Math.sin(ph)) * (0.035 + 0.04 * run) * a + Math.sin(performance.now() * 0.002 + id) * 0.004 * (1 - a);
+      let bob = Math.abs(Math.sin(ph)) * (0.035 + 0.04 * run) * a + Math.sin(performance.now() * 0.002 + id) * 0.004 * (1 - a);
+      let twist = Math.sin(ph) * 0.08 * a;
+      let roll = 0;
+      let nodDance = 0;
+      // dancing: c.dance (0..1) blends in a move (c.move 0-3) locked to c.beat
+      const dn = c.dance || 0;
+      let B = 0;
+      let hit = 0;
+      let half = 0;
+      if (dn > 0) {
+        B = c.beat + (c.groove || 0);
+        hit = Math.pow(Math.abs(Math.cos(Math.PI * B)), 6); // 1 on the beat, quickly back to 0
+        half = Math.sin(Math.PI * B * 0.5);
+        bob = -0.055 * hit * dn;
+        twist = half * 0.22 * dn;
+        roll = Math.sin(Math.PI * B) * 0.05 * dn;
+        nodDance = 0.16 * hit * dn;
+      }
       local(_M, c.x, c.y + bob, c.z, 0, c.yaw, 0, app.build, app.height, app.build);
 
       const lean = (0.04 + 0.12 * run) * a;
-      local(_L, 0, HIP_Y, 0, lean, Math.sin(ph) * 0.08 * a, 0);
+      local(_L, 0, HIP_Y, 0, lean, twist, roll);
       _A.multiplyMatrices(_M, _L);
       P.torso.setMatrixAt(id, _A);
       P.jacket.setMatrixAt(id, app.topStyle === 2 ? _A : ZERO);
 
       // head (child of torso)
-      const nod = c.nod + (c.talk ? Math.sin(performance.now() * 0.012) * 0.06 : 0);
+      const nod = c.nod + nodDance + (c.talk ? Math.sin(performance.now() * 0.012) * 0.06 : 0);
       local(_L, 0, NECK_Y - HIP_Y, 0, nod - lean * 0.6, c.headYaw, 0);
       _B.multiplyMatrices(_A, _L);
       P.head.setMatrixAt(id, _B);
@@ -217,8 +234,16 @@ export class Crowd {
         const p = ph + (s === 0 ? 0 : Math.PI);
         const k = id * 2 + s;
         // legs
-        const thigh = -Math.sin(p) * A;
-        const knee = (0.08 + (0.55 + 0.5 * run) * Math.max(0, Math.cos(p))) * a;
+        let thigh = -Math.sin(p) * A;
+        let knee = (0.08 + (0.55 + 0.5 * run) * Math.max(0, Math.cos(p))) * a;
+        if (c.sit) {
+          thigh = -1.5;
+          knee = 1.45;
+        } else if (dn > 0) {
+          const lift = c.move === 3 ? Math.max(0, side * Math.sin(Math.PI * B)) : 0;
+          thigh = (-0.15 * hit - 0.4 * lift) * dn;
+          knee = (0.3 * hit + 0.6 * lift) * dn;
+        }
         local(_L, side * 0.1, HIP_Y, 0, thigh, 0, 0);
         _A.multiplyMatrices(_M, _L);
         P.thigh.setMatrixAt(k, _A);
@@ -227,16 +252,42 @@ export class Crowd {
         P.shin.setMatrixAt(k, _B);
         P.shoe.setMatrixAt(k, _B);
         // arms swing opposite to the leg on the same side; they ride on the torso
-        local(_L, 0, HIP_Y, 0, lean, Math.sin(ph) * 0.08 * a, 0);
+        local(_L, 0, HIP_Y, 0, lean, twist, roll);
         _A.multiplyMatrices(_M, _L);
         // carrying holds both arms out front; working makes them busy
         const tnow = performance.now();
-        const arm = c.carry ? -1.05 : c.work ? -0.75 + Math.sin(tnow * 0.011 + s * 2.2) * 0.35 : Math.sin(p) * A * 0.85;
-        const talkWave = !c.carry && !c.work && c.talk && s === 1 ? -0.5 + Math.sin(tnow * 0.006) * 0.15 : 0;
-        local(_L, side * 0.285, NECK_Y - HIP_Y - 0.04, 0, arm + talkWave, 0, side * (c.carry ? 0.1 : -0.07));
+        let arm = c.carry ? -1.05 : c.work ? -0.75 + Math.sin(tnow * 0.011 + s * 2.2) * 0.35 : Math.sin(p) * A * 0.85;
+        let armRoll = side * (c.carry ? 0.1 : -0.07);
+        let elbow = c.carry ? -0.55 : c.work ? -0.7 : -(0.18 + 0.5 * run) * (0.4 + 0.6 * a) + (c.talk && s === 1 ? -0.6 : 0);
+        if (c.sit) {
+          arm = -0.55;
+          elbow = -0.75;
+        } else if (dn > 0) {
+          if (c.move === 0) {
+            // one fist pumping on the beat
+            arm = side > 0 ? -2.55 - 0.3 * hit : -0.5 + 0.2 * hit;
+            elbow = side > 0 ? -0.25 : -1.3;
+            armRoll = side * -0.12;
+          } else if (c.move === 1) {
+            // both hands up, swaying
+            arm = -2.75 + 0.12 * half * side;
+            armRoll = side * (-0.3 - 0.15 * half);
+            elbow = -0.2 - 0.3 * hit;
+          } else if (c.move === 2) {
+            // elbows in, arms rolling in front
+            arm = -0.75 + 0.3 * Math.sin(Math.PI * B + (side > 0 ? 0 : Math.PI));
+            elbow = -1.45;
+          } else {
+            arm = 0.3 * Math.sin(Math.PI * B) * side;
+            elbow = -0.5 - 0.3 * hit;
+          }
+          arm *= dn;
+          elbow *= dn;
+        }
+        const talkWave = !c.carry && !c.work && !dn && c.talk && s === 1 ? -0.5 + Math.sin(tnow * 0.006) * 0.15 : 0;
+        local(_L, side * 0.285, NECK_Y - HIP_Y - 0.04, 0, arm + talkWave, 0, armRoll);
         _A.multiply(_L);
         P.upperArm.setMatrixAt(k, _A);
-        const elbow = c.carry ? -0.55 : c.work ? -0.7 : -(0.18 + 0.5 * run) * (0.4 + 0.6 * a) + (c.talk && s === 1 ? -0.6 : 0);
         local(_L, 0, -0.29, 0, elbow, 0, 0);
         _B.multiplyMatrices(_A, _L);
         P.foreArm.setMatrixAt(k, _B);

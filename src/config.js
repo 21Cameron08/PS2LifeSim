@@ -58,7 +58,12 @@ export const APARTMENT_SITES = {
 // shop's walls end, so the two never overlap.
 export const STORE_SITE = { block: [2, 1], width: 14, depth: 13, floors: 3, style: 'cream', groundH: 3.1, floorLift: 0.015 };
 
-const ALL_SITES = [...Object.entries(APARTMENT_SITES), ['store', STORE_SITE]];
+// SUBSTATION: a nightclub in an old power substation in Ember Row, across the
+// road from the Lantern Quarter (src/world/club.js). It's a single tall hall with
+// no flats above, so the club builds its own concrete shell instead of a city facade.
+export const CLUB_SITE = { block: [4, 3], width: 24, depth: 18, floorLift: 0.015 };
+
+const ALL_SITES = [...Object.entries(APARTMENT_SITES), ['store', STORE_SITE], ['club', CLUB_SITE]];
 export const siteForBlock = (i, j) => ALL_SITES.find(([, s]) => s.block[0] === i && s.block[1] === j);
 
 export const START = {

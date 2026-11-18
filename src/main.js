@@ -14,6 +14,8 @@ import { Crowd } from './actors/crowd.js';
 import { Player, CameraRig, citySpace } from './actors/player.js';
 import { Apartments } from './world/apartments.js';
 import { Store } from './world/store.js';
+import { Club } from './world/club.js';
+import { Clubbers } from './actors/clubbers.js';
 import { StoreJob } from './game/job.js';
 import { Pedestrians } from './actors/pedestrians.js';
 import { Traffic } from './actors/traffic.js';
@@ -45,6 +47,8 @@ const state = {
   rentWeek: save?.rentWeek,
   seen: save?.seen ?? {},
   job: save?.job,
+  clubStamp: save?.clubStamp, // the night your hand was stamped at SUBSTATION
+  coatCheck: save?.coatCheck, // your jacket, if it's at the club's coat check
 };
 const SAVE_VERSION = 2;
 // saves from before apartments existed keep money/looks but start you at home
@@ -67,7 +71,7 @@ const apts = new Apartments(scene, city, tex);
 apts.setHome(state.home);
 const outdoor = citySpace(city);
 const store = new Store(scene, city, tex, apts.tex);
-const crowd = new Crowd(scene, tex, 120);
+const crowd = new Crowd(scene, tex, 200);
 // where do we start? a fresh life starts inside your apartment
 let place = freshStart ? apts.byId[state.home] : save.inside ? apts.byId[save.inside] : null;
 let touring = false;
@@ -83,6 +87,19 @@ store.onChime = () => camera.position.distanceTo(store.doorCenter) < 35 && audio
 const storeSpace = { ...outdoor, indoor: true, ceiling: store.origin.y + store.H };
 let inStore = false;
 let cctvTick = 0;
+const club = new Club(scene, city, tex, apts.tex);
+const clubbers = new Clubbers(crowd, club, city);
+// the club's lobby is low, its hall is 7 m tall: the camera asks where you are
+const clubSpace = {
+  ...outdoor,
+  indoor: true,
+  get ceiling() {
+    return club.ceilingAt(player.pos);
+  },
+};
+let inClub = false;
+const nightOf = (m) => Math.floor((m - 6 * 60) / 1440);
+let lightsUpNight = -1;
 const rig = new CameraRig(camera, player.space);
 rig.yaw = player.yaw;
 let outdoorDist = 6.2;
@@ -167,6 +184,8 @@ function saveNow(showToast = false) {
     home: state.home,
     rentWeek: state.rentWeek,
     seen: state.seen,
+    clubStamp: state.clubStamp,
+    coatCheck: state.coatCheck,
     job: state.job,
     inside: place && !touring ? place.id : null,
     cash: state.cash,
@@ -484,6 +503,8 @@ function findInteraction() {
   }
   const work = job.findInteraction(player.pos);
   if (work) return work;
+  const nightlife = clubInteraction();
+  if (nightlife) return nightlife;
   const door = apts.doorNear(player.pos);
   if (door) {
     const home = door.id === state.home;
@@ -509,6 +530,160 @@ function findInteraction() {
 }
 
 // ----------------------------------------------------------------------------
+// SUBSTATION
+const near = (p, q, r) => Math.hypot(p.x - q.x, p.z - q.z) < r;
+const coverCharge = () => (Clubbers.weekdayOfNight(clock.minutes) === 'SAT' ? 30 : 20);
+
+function clubInteraction() {
+  const p = player.pos;
+  const open = club.status === 'open';
+  if (!inClub) {
+    if (club.status !== 'closed' && near(p, club.bouncerSpot, 1.9)) return { label: 'Talk to the bouncer', act: bouncerTalk };
+    if (club.status === 'closed' && near(p, club.doorOut, 1.5)) return { label: 'SUBSTATION', act: () => ui.toast('Locked. Doors open at 10 PM.') };
+    if (club.cartOpen && near(p, club.friesSpot, 1.4)) return { label: 'Buy fries ($4)', act: buyFries };
+    return null;
+  }
+  if (near(p, club.coatCounter, 1.3) && club.status !== 'closed') return { label: state.coatCheck ? 'Collect your jacket' : 'Check your jacket ($2)', act: coatCheck };
+  if (near(p, club.photoSpot, 1.1)) return { label: 'Photo booth', act: () => ui.toast('OUT OF FILM. A taped-on note says: back soon.') };
+  if (near(p, club.vipSpot, 1.3)) return { label: 'VIP balcony', act: () => ui.toast("Wristbands only, and the balcony's shut for a refit tonight.") };
+  if (open && club.barSpots.some((b) => near(p, b, 1.0))) return { label: 'Order at the bar', act: barOrder };
+  if (open && near(p, club.w(11.7, 3.0), 1.3)) return { label: 'Request a song', act: () => ui.toast('The DJ points at their headphones, grins, and plays whatever they want.') };
+  return null;
+}
+
+function bouncerTalk() {
+  const tonight = nightOf(clock.minutes);
+  const unlock = () => (player.locked = false);
+  const say = (text, choices) => ui.openDialog({ name: 'DMITRI · DOOR', text, choices, onClose: unlock });
+  player.locked = true;
+  if (club.status === 'lightsup') return say("Lights are up, we're done. Go home, drink some water.");
+  if (state.clubStamp === tonight) return say(talkRng.pick(["You've got a stamp. Go on in.", 'Back again? Go on.', 'Stamp checks out. In you go.']));
+  const cover = coverCharge();
+  const greet = talkRng.pick([`${cover} to get in. Cash.`, `Evening. It's ${cover} tonight, cash only.`, `You on your own? ${cover}, cash.`]);
+  say(greet, [
+    {
+      label: `Pay $${cover}`,
+      fn: () => {
+        if (state.cash < cover) return say("Cash only, friend. Come back when you've got it.");
+        state.cash -= cover;
+        state.clubStamp = tonight;
+        audio.coin();
+        say("He stamps the back of your hand: a little lightning bolt. \"You can come and go till close. Have a good one.\"");
+        saveNow();
+      },
+    },
+    { label: 'Not tonight', fn: () => ui.closeDialog() },
+  ]);
+}
+
+function coatCheck() {
+  const app = state.appearance;
+  if (state.coatCheck) {
+    app.topStyle = 2;
+    app.jacket = state.coatCheck.jacket;
+    state.coatCheck = null;
+    crowd.setAppearance(player.char.id, app);
+    return ui.toast('Ticket 42. Your jacket, back on.');
+  }
+  if (app.topStyle !== 2) return ui.toast("You're not wearing a jacket.");
+  if (state.cash < 2) return ui.toast('Two dollars, cash.');
+  state.cash -= 2;
+  state.coatCheck = { jacket: app.jacket };
+  app.topStyle = 1;
+  crowd.setAppearance(player.char.id, app);
+  audio.coin();
+  ui.toast("You hand over your jacket and get ticket 42.");
+}
+
+const DRINKS = [
+  ['Tap water', 0, 'Free. The bartender slides it over without looking up.'],
+  ['Cola', 4, 'Ice, straw, slice of lemon nobody asked for.'],
+  ['Lime soda', 5, 'Sharp and cold. Perfect.'],
+  ['Beer', 7, 'Plastic cup. Mostly foam. Still good.'],
+];
+function barOrder() {
+  player.locked = true;
+  ui.openDialog({
+    name: 'BAR',
+    text: talkRng.pick(['What can I get you?', "What'll it be?", 'Yeah? What are you having?']),
+    choices: [
+      ...DRINKS.map(([name, price, line]) => ({
+        label: price ? `${name} ($${price})` : name,
+        fn: () => {
+          ui.closeDialog();
+          if (state.cash < price) return ui.toast("Cash only bar, and you're short.");
+          state.cash -= price;
+          if (price) audio.coin();
+          ui.toast(line);
+        },
+      })),
+      { label: 'Nothing', fn: () => ui.closeDialog() },
+    ],
+    onClose: () => (player.locked = false),
+  });
+}
+
+function buyFries() {
+  if (state.cash < 4) return ui.toast('Four dollars, cash. Card reader died in 2003.');
+  state.cash -= 4;
+  audio.coin();
+  ui.toast(talkRng.pick(['Hot, salty, too many. Exactly right.', 'Ray adds extra salt without asking. Legend.', 'Paper cone of fries, burning your fingers.']));
+}
+
+/** Where the club's music is muffled, and how loud, from where you're standing. */
+function clubMix() {
+  if (inClub) {
+    const z = club.zoneAt(player.pos);
+    return z === 'hall' ? [18000, 0.55] : z === 'lobby' ? [1100, 0.36] : z === 'stairs' ? [900, 0.3] : z === 'toilets' ? [420, 0.28] : [700, 0.28];
+  }
+  const d = Math.hypot(player.pos.x - club.doorCenter.x, player.pos.z - club.doorCenter.z);
+  const fall = Math.pow(Math.max(0, 1 - d / 60), 1.6);
+  return [170 + 900 * club.doorOpen, 0.0001 + 0.34 * fall * (0.7 + 0.3 * club.doorOpen)];
+}
+
+function updateClub(dt) {
+  const tonight = nightOf(clock.minutes);
+  const open = club.status === 'open';
+  const allow = inClub || (open && state.clubStamp === tonight);
+  const people = clubbers.people();
+  if (allow && !inClub) people.push(player.pos);
+  club.update(dt, time, env, { hour: clock.hour, beat: audio.musicBeat(), flash: settings.flash, camera, people, allow });
+  clubbers.update(dt, {
+    status: club.status,
+    hour: clock.hour,
+    weekday: Clubbers.weekdayOfNight(clock.minutes),
+    beat: club.beat,
+    section: club.section,
+    playerPos: player.pos,
+    playerInside: inClub,
+    near: camera.position.distanceTo(club.floorCenter) < 95,
+    nearDoor: near(player.pos, club.doorCenter, 10),
+    time,
+  });
+  // the sound system
+  const dClub = Math.hypot(player.pos.x - club.floorCenter.x, player.pos.z - club.floorCenter.z);
+  const want = playing && !place && open && dClub < 75;
+  if (want && audio.music?.style !== 'club') audio.startMusic('club', { beat: club.beat });
+  if (!want && audio.music?.style === 'club') audio.stopMusic();
+  if (audio.music?.style === 'club') audio.setMusicMix(...clubMix());
+  if (!playing) return;
+  // 4 AM: lights up, music off; at 4:30 security walks out anyone still here
+  if (inClub && club.status === 'lightsup' && lightsUpNight !== tonight) {
+    lightsUpNight = tonight;
+    ui.toast("4 AM. Lights up! That's the night.");
+  }
+  if (inClub && club.status === 'closed' && !ui.modal && !ui.fading) {
+    ui.fade(() => {
+      leaveInterior();
+      const sp = club.outsideSpot;
+      player.teleport(outdoor, sp.x, sp.z, 0);
+      Object.assign(rig, { space: outdoor, pitch: 0.28, yaw: 0, curDist: rig.dist, mode: 'follow', blend: 1 });
+      ui.toast('Security walks you out. Go home, get some sleep.');
+    }, 'CLOSING TIME');
+  }
+}
+
+// ----------------------------------------------------------------------------
 // Secret cheat menu. Type B-L-I-N-G while walking around (none of those keys do
 // anything else), or tap the money display five times on a touch screen.
 const CHEAT_CODE = ['KeyB', 'KeyL', 'KeyI', 'KeyN', 'KeyG'];
@@ -518,6 +693,7 @@ const CHEAT_TIMES = [
   { label: 'Noon', hour: 12 },
   { label: 'Golden hour · 5:30 PM', hour: 17.5 },
   { label: 'Night · 9 PM', hour: 21 },
+  { label: 'Club night · 11 PM', hour: 23 },
   { label: 'Midnight', hour: 0 },
 ];
 let codeAt = 0;
@@ -559,6 +735,7 @@ function leaveInterior() {
   }
   if (rig.space !== outdoor) rig.dist = outdoorDist;
   inStore = false;
+  inClub = false;
   district = '';
 }
 
@@ -581,6 +758,7 @@ function cheatPlaces() {
     list.push({ label: `${apt.L.name} · tour`, go: () => ui.fade(() => (leaveInterior(), moveIntoApartment(apt, true)), 'WARPING') });
   }
   list.push({ label: 'HALCYON 24', go: () => warpOutside({ ...store.outsideSpot, yaw: Math.PI }) });
+  list.push({ label: 'SUBSTATION', go: () => warpOutside(club.outsideSpot) });
   if (park) list.push({ label: 'Greenway Park', go: () => warpOutside(sidewalk(park)) });
   list.push({ label: 'Lantern Quarter', go: () => warpOutside(sidewalk(city.lanternBlock)) });
   return list;
@@ -709,7 +887,8 @@ function handleKeys() {
 }
 
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  // the first frame's timestamp can be older than `last`: never let time run backwards
+  const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
   time += dt;
 
@@ -743,8 +922,24 @@ function frame(now) {
         district = '';
       }
     }
+    const nowInClub = club.contains(player.pos, -0.05);
+    if (nowInClub !== inClub) {
+      inClub = nowInClub;
+      player.space = rig.space = nowInClub ? clubSpace : outdoor;
+      if (nowInClub) {
+        outdoorDist = rig.dist;
+        rig.dist = 4.2;
+        if (playing) ui.showLocation('SUBSTATION', club.status === 'open' ? `${Clubbers.weekdayOfNight(clock.minutes).toLowerCase()} night` : 'lights up');
+      } else {
+        rig.dist = outdoorDist;
+        district = '';
+        if (playing && state.coatCheck) ui.toast("Your jacket's still at coat check.");
+      }
+    }
   }
   job.update(dt, time, { playerPos: player.pos });
+  if (!place) clubbers.push(player.pos, inClub ? 0.28 : player.radius);
+  updateClub(dt);
   peds.update(dt, player.pos, env.night);
   traffic.update(dt, player.pos, peds.list, env.night);
   if (traffic.honk && playing) {
@@ -757,13 +952,14 @@ function frame(now) {
   // in tight rooms the camera can end up in your head: hide yourself then
   player.char.visible = rig.mode === 'title' || camera.position.distanceTo(rig.focus) > 0.75;
   env.magic = lantern.influence(playing ? player.pos : camera.position);
-  env.indoor = place ? 1 : inStore ? 0.6 : 0;
+  env.indoor = place ? 1 : inStore ? 0.6 : inClub ? 0.9 : 0;
+  if (inClub) env.magic *= 0.25;
   env.update(clock.hour, time, player.pos);
   city.update(dt);
   city.updateLampLights(
     playing ? player.pos : camera.position,
     env.night,
-    place ? { list: place.fixtures, on: apts.lampOn } : inStore ? { list: store.fixtures, on: 1 } : null,
+    place ? { list: place.fixtures, on: apts.lampOn } : inStore ? { list: store.fixtures, on: 1 } : inClub ? { list: club.fixtures, on: 1 } : null,
   );
   store.update(dt, time, env, job.people(player.pos), camera);
   apts.update(dt, time, env, place);
@@ -794,7 +990,7 @@ function frame(now) {
 
   const parkD = park ? Math.hypot(player.pos.x - park.cx, player.pos.z - park.cz) : 999;
   const green = Math.max(smoothstep(45, 15, parkD), smoothstep(0.6, 1.0, Math.hypot(player.pos.x, player.pos.z) / 160));
-  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place ? 1 : inStore ? 0.5 : 0, store: inStore ? 1 : 0 });
+  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place ? 1 : inStore ? 0.5 : inClub ? 0.85 : 0, store: inStore ? 1 : 0 });
 
   // the shop's security cameras (only when you're close enough to see a monitor)
   if (!place && cctvTick++ % 4 === 0 && camera.position.distanceTo(store.doorCenter) < 30) store.renderCCTV(renderer, scene);
@@ -825,6 +1021,10 @@ window.game = {
   apts,
   store,
   job,
+  club,
+  clubbers,
+  crowd,
+  audio,
   enterApartment,
   exitApartment,
   get place() {

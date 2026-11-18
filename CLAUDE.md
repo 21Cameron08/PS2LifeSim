@@ -24,6 +24,11 @@ features, controls and the code map.
   space or their own space (see `world/apartments.js`, `world/store.js`).
 - Avoid coplanar overlapping faces (z-fighting): end panels outside spans, labels and
   glows at least 5 mm proud, buildings must not overlap their neighbours' trim.
+- SUBSTATION (`world/club.js`, `actors/clubbers.js`, `audio/clubTrack.js`): interiors can
+  carry four extra baked light channels (`fxLight` in the kit, `aFx` in bake.js) recoloured
+  per frame; rooms with the same `zone` share lights. Phase 1 is built (door, hall, bar,
+  booths, toilets, coat check, music, lights, crowd, 4 AM lights up). Phase 2 and 3 are in the
+  README roadmap.
 - Secret cheat menu (money, warps, time) for testing: type `BLING` while walking around,
   or tap the money display five times. Code is in `main.js` (`openCheats`) and
   `ui/ui.js` (`openCheats`). Not listed in the in-game controls on purpose.
