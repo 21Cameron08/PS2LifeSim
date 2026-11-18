@@ -313,10 +313,12 @@ export class City {
   }
 
   storeBuilding(s, x0, z0, x1, z1) {
-    // the ground floor is left open: the store interior provides its own walls
-    const H = s.groundH + s.floors * CITY.FLOOR_H;
-    const res = this.building(x0, z0, x1, z1, H, STYLE[s.style], { s: true }, false, { floors: s.floors, noCrown: true, gf: s.groundH, collideFrom: s.groundH });
-    this.storeSite = { x0, z0, x1, z1, gf: s.groundH, top: res.top };
+    // the ground floor is left open: the store interior provides its own walls,
+    // and the facade above starts exactly at the top of those walls
+    const gf = CITY.CURB + s.floorLift + s.groundH;
+    const H = gf + s.floors * CITY.FLOOR_H;
+    const res = this.building(x0, z0, x1, z1, H, STYLE[s.style], { s: true }, false, { floors: s.floors, noCrown: true, gf, collideFrom: gf });
+    this.storeSite = { x0, z0, x1, z1, gf, top: res.top };
   }
 
   building(x0, z0, x1, z1, H, style, faces, shop, opts = {}) {
@@ -345,10 +347,11 @@ export class City {
         ou: rng.float(0, 1),
         top: false,
       });
-      B.trim.box(x0 - 0.15, gf - 0.1, z0 - 0.15, x1 + 0.15, gf + 0.25, z1 + 0.15, { color: trimCol, bottom: true });
+      const ov = (f) => (faces[f] ? 0.15 : 0.02);
+      B.trim.box(x0 - ov('w'), gf - 0.1, z0 - ov('n'), x1 + ov('e'), gf + 0.25, z1 + ov('s'), { color: trimCol, bottom: true });
       for (const f of ['n', 's', 'e', 'w']) if (faces[f]) this.shopFace(faceFrame(f, x0, z0, x1, z1), top, opts);
     }
-    this.roofCap(x0, z0, x1, z1, top, trimCol);
+    this.roofCap(x0, z0, x1, z1, top, trimCol, faces);
     if (!opts.noCollide) this.colliders.add(x0, z0, x1, z1, opts.collideFrom ?? 0, top);
 
     const w = x1 - x0;
@@ -390,15 +393,17 @@ export class City {
     return { gf, top };
   }
 
-  roofCap(x0, z0, x1, z1, top, col) {
-    const c = 0.28;
+  roofCap(x0, z0, x1, z1, top, col, faces = null) {
+    // the cornice overhangs the street; on sides that face a neighbour it stays
+    // just proud of the wall so it can't overlap the building next door
+    const c = (f) => (!faces || faces[f] ? 0.28 : 0.03);
     const w = 0.45;
     const h = 0.45;
     const t = this.B.trim;
-    t.box(x0 - c, top, z0 - c, x1 + c, top + h, z0 + w, { color: col, bottom: true });
-    t.box(x0 - c, top, z1 - w, x1 + c, top + h, z1 + c, { color: col, bottom: true });
-    t.box(x0 - c, top, z0 + w, x0 + w, top + h, z1 - w, { color: col, bottom: true });
-    t.box(x1 - w, top, z0 + w, x1 + c, top + h, z1 - w, { color: col, bottom: true });
+    t.box(x0 - c('w'), top, z0 - c('n'), x1 + c('e'), top + h, z0 + w, { color: col, bottom: true });
+    t.box(x0 - c('w'), top, z1 - w, x1 + c('e'), top + h, z1 + c('s'), { color: col, bottom: true });
+    t.box(x0 - c('w'), top, z0 + w, x0 + w, top + h, z1 - w, { color: col, bottom: true });
+    t.box(x1 - w, top, z0 + w, x1 + c('e'), top + h, z1 - w, { color: col, bottom: true });
     this.B.roof.box(x0, top - 0.2, z0, x1, top + 0.06, z1, { sides: [false, false, false, false], topScale: 4 });
   }
 
@@ -674,7 +679,11 @@ export class City {
     this.scene.add(group);
     const add = (builder, mat) => {
       const m = builder.mesh(mat);
-      if (m) group.add(m);
+      if (m) {
+        const fi = B.facades.indexOf(builder);
+        m.name = `city:${fi >= 0 ? `facade${fi}` : Object.keys(B).find((k) => B[k] === builder)}`;
+        group.add(m);
+      }
       return m;
     };
     const lam = (o) => new THREE.MeshLambertMaterial(o);

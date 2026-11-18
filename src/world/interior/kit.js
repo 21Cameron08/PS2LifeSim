@@ -383,6 +383,7 @@ export class InteriorKit {
       const mat = interiorMaterial(this.tex[key].map, this.uniforms, o);
       mats[key] = mat;
       const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = `interior:${key}`;
       mesh.matrixAutoUpdate = false;
       group.add(mesh);
     }
@@ -753,8 +754,8 @@ export const F = {
   },
   microwave(P, { x = 0, z = 0.1 } = {}) {
     P.box('solid', x - 0.25, 0.9, z, x + 0.25, 1.18, z + 0.36, C('#e0e0dc'));
-    P.box('solid', x - 0.22, 0.93, z + 0.36, x + 0.1, 1.15, z + 0.362, C('#1a1a1c'));
-    P.box('glow', x + 0.13, 1.1, z + 0.361, x + 0.21, 1.13, z + 0.363, C('#3aff6a'));
+    P.box('solid', x - 0.22, 0.93, z + 0.36, x + 0.1, 1.15, z + 0.365, C('#1a1a1c'));
+    P.box('glow', x + 0.13, 1.1, z + 0.36, x + 0.21, 1.13, z + 0.365, C('#3aff6a'));
   },
   kettle(P, { x = 0, z = 0.3 } = {}) {
     P.geo('solid', cyl(0.08, 0.1, 0.2, 10), x, 1.0, z, C('#c03a2a'));

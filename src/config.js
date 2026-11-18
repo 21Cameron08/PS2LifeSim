@@ -53,7 +53,10 @@ export const APARTMENT_SITES = {
 };
 // Your first job: a 24-hour convenience store on the street next to Unit 3B. Its
 // ground floor is a real walk-in interior (src/world/store.js); flats above.
-export const STORE_SITE = { block: [2, 1], width: 14, depth: 13, floors: 3, style: 'cream', groundH: 3.1 };
+// groundH is the shop's ceiling height; floorLift keeps its floor off the pavement
+// it is built on (coplanar surfaces z-fight). The flats start exactly where the
+// shop's walls end, so the two never overlap.
+export const STORE_SITE = { block: [2, 1], width: 14, depth: 13, floors: 3, style: 'cream', groundH: 3.1, floorLift: 0.015 };
 
 const ALL_SITES = [...Object.entries(APARTMENT_SITES), ['store', STORE_SITE]];
 export const siteForBlock = (i, j) => ALL_SITES.find(([, s]) => s.block[0] === i && s.block[1] === j);

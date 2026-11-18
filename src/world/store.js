@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CITY } from '../config.js';
+import { CITY, STORE_SITE } from '../config.js';
 import { GeoBuilder, shade, trs } from '../core/geo.js';
 import { Rng, damp, smoothstep } from '../core/rng.js';
 import { InteriorKit, F, C } from './interior/kit.js';
@@ -16,7 +16,7 @@ import { additive } from '../render/materials.js';
 
 const W = 13.4;
 const D = 12.4;
-const H = 3.1;
+const H = STORE_SITE.groundH;
 const GREEN = '#2e6a46';
 const DARK_GREEN = '#24402e';
 
@@ -127,8 +127,8 @@ export class Store {
     this.city = city;
     const site = city.storeSite;
     this.site = site;
-    // 1.5cm above the pavement so the shop floor never z-fights the sidewalk under it
-    this.origin = new THREE.Vector3(site.x0 + 0.3, CITY.CURB + 0.015, site.z0 + 0.3);
+    // a little above the pavement so the shop floor never z-fights the sidewalk under it
+    this.origin = new THREE.Vector3(site.x0 + 0.3, CITY.CURB + STORE_SITE.floorLift, site.z0 + 0.3);
     this.W = W;
     this.D = D;
     this.H = H;
@@ -268,7 +268,7 @@ export class Store {
         }
       for (const e of [-1, 1]) G.box('solid', -0.45, 0, e > 0 ? len / 2 : -len / 2 - 0.03, 0.45, 1.6, e > 0 ? len / 2 + 0.03 : -len / 2, C(GREEN));
       G.box('solid', -0.45, 1.6, len / 2 - 0.02, 0.45, 1.95, len / 2 + 0.01, C('#f2f0ea'));
-      G.panel('signs', -0.42, 1.65, 0.42, 1.9, len / 2 + 0.012, rowUV([5, 6, 7][u]));
+      G.panel('signs', -0.42, 1.65, 0.42, 1.9, len / 2 + 0.02, rowUV([5, 6, 7][u]));
       G.collide(-0.46, -len / 2 - 0.03, 0.46, len / 2 + 0.03, 1.95);
       gcats[u].forEach((cat, side) => {
         const sx = side === 0 ? -0.24 : 0.24;
@@ -294,10 +294,10 @@ export class Store {
       const w = x1 - x0;
       S.box('solid', -w / 2, 0, 0, w / 2, 0.12, 0.4, C('#3a3e3a'));
       S.box('solid', -w / 2, 0.12, 0, w / 2, 1.95, 0.03, C('#c8ccc6'));
-      for (const e of [-1, 1]) S.box('solid', e * w / 2 - (e > 0 ? 0.03 : 0), 0, 0, e * w / 2 + (e > 0 ? 0 : 0.03), 1.95, 0.42, C(GREEN));
+      for (const e of [-1, 1]) S.box('solid', e > 0 ? w / 2 : -w / 2 - 0.03, 0, 0, e > 0 ? w / 2 + 0.03 : -w / 2, 1.95, 0.43, C(GREEN));
       for (const y of [0.17, 0.57, 0.97, 1.37]) {
         S.box('solid', -w / 2, y - 0.025, 0.03, w / 2, y, 0.42, C('#dcdedc'), { bottom: true });
-        S.box('solid', -w / 2, y - 0.065, 0.41, w / 2, y, 0.425, C(GREEN), { bottom: true });
+        S.box('solid', -w / 2, y - 0.065, 0.42, w / 2, y, 0.435, C(GREEN), { bottom: true });
         for (let k = 0; k < 2; k++) {
           const sx0 = x0 + 0.05 + (k * (w - 0.1)) / 2;
           this.addSlot(cat, this.w(sx0 + (w - 0.1) / 4, 4.26, y), 'x', (w - 0.1) / 2 - 0.06, 1);
@@ -312,7 +312,7 @@ export class Store {
     const K = P(11.3, 4.06);
     F.counter(K, { x0: -1.3, x1: 1.3, cab: '#5a3a26', cabKey: 'wood', top: '#2a2a2a', d: 0.6 });
     K.box('solid', -1.1, 0.9, 0.05, -0.4, 1.6, 0.5, C('#2a2a2e'));
-    K.box('glow', -1.0, 1.35, 0.501, -0.5, 1.5, 0.502, C('#ffb84a'));
+    K.box('glow', -1.0, 1.35, 0.5, -0.5, 1.5, 0.506, C('#ffb84a'));
     for (const x of [-0.95, -0.65]) K.box('solid', x, 0.9, 0.3, x + 0.12, 1.1, 0.45, C('#c8ccd0'));
     for (const x of [0.0, 0.3]) K.geo('solid', new THREE.CylinderGeometry(0.08, 0.08, 0.35, 10), x, 1.08, 0.3, C('#c82a2a'));
     K.geo('solid', new THREE.CylinderGeometry(0.05, 0.04, 0.45, 8), 0.7, 1.13, 0.25, C('#f2f0ea'));
@@ -332,9 +332,9 @@ export class Store {
     RG.box('solid', -0.22, 1.0, -0.25, 0.22, 1.12, 0.25, C('#2a2a2e'));
     RG.box('solid', -0.05, 1.12, -0.03, 0.05, 1.3, 0.03, C('#2a2a2e'));
     RG.box('solid', 0.05, 1.28, -0.2, 0.2, 1.52, 0.2, C('#1e1e22'));
-    RG.box('glow', 0.201, 1.31, -0.17, 0.202, 1.49, 0.17, C('#6ab0e8'));
+    RG.box('glow', 0.2, 1.31, -0.17, 0.206, 1.49, 0.17, C('#6ab0e8'));
     RG.box('solid', -0.25, 1.12, -0.08, -0.15, 1.24, 0.08, C('#1e1e22'));
-    RG.box('glow', -0.251, 1.15, -0.06, -0.25, 1.21, 0.06, C('#3aff6a'));
+    RG.box('glow', -0.256, 1.15, -0.06, -0.25, 1.21, 0.06, C('#3aff6a'));
     RG.box('solid', 0.08, 1.0, 0.32, 0.2, 1.1, 0.42, C('#1e1e22'));
     this.registerSpot = this.w(12.0, 7.6);
     this.customerSpot = this.w(10.05, 7.6);
@@ -351,8 +351,8 @@ export class Store {
     // shelves behind the cashier: batteries, medicine, phone cards
     const BS = P(W, 8.6, -R90);
     BS.box('solid', -2.0, 0, 0, 2.0, 2.0, 0.03, C('#e8e4dc'));
-    BS.box('solid', -2.0, 0, 0, 2.0, 0.85, 0.38, C('#d8d4c8'));
-    for (const e of [-1, 1]) BS.box('solid', e * 2.0 - (e > 0 ? 0.03 : 0), 0, 0, e * 2.0 + (e > 0 ? 0 : 0.03), 2.0, 0.38, C(GREEN));
+    BS.box('solid', -2.0, 0, 0.03, 2.0, 0.8, 0.37, C('#d8d4c8'));
+    for (const e of [-1, 1]) BS.box('solid', e > 0 ? 2.0 : -2.03, 0, 0, e > 0 ? 2.03 : -2.0, 2.0, 0.39, C(GREEN));
     for (const y of [0.9, 1.3, 1.7]) {
       BS.box('solid', -2.0, y - 0.025, 0.03, 2.0, y, 0.36, C('#dcdedc'), { bottom: true });
       BS.box('solid', -2.0, y - 0.06, 0.36, 2.0, y, 0.38, C(GREEN), { bottom: true });
@@ -373,7 +373,7 @@ export class Store {
     const IC = P(4.6, D - 0.5);
     IC.box('solid', -0.7, 0, -0.4, 0.7, 0.85, 0.4, C('#f2f0ea'));
     IC.box('solid', -0.7, 0.85, -0.4, 0.7, 0.9, 0.4, C('#c8ccd0'));
-    IC.panel('solid', -0.5, 0.35, 0.5, 0.65, -0.401, [0, 0, 1, 1], C('#2a6ae0'));
+    IC.quad('solid', [0.5, 0.35, -0.406], [-0.5, 0.35, -0.406], [-0.5, 0.65, -0.406], [0.5, 0.65, -0.406], [0, 0, -1], [0, 0, 1, 1], C('#2a6ae0'));
     IC.collide(-0.7, -0.4, 0.7, 0.4, 0.9);
     P(6.7, D - 0.7).box('solid', -0.8, 0, -0.6, 0.8, 0.012, 0.6, C('#2a2a2a'));
     this.binSpot = this.w(8.35, D - 0.6);
@@ -396,13 +396,13 @@ export class Store {
         [-0.95, 0.58],
         [0.9, 0.58],
       ])
-        S.box('solid', x, 0, z, x + 0.05, 2.1, z + 0.05, C('#5a6a7a'));
+        S.box('solid', x - 0.004, 0, z - 0.004, x + 0.054, 2.1, z + 0.054, C('#5a6a7a'));
       for (const y of [0.15, 0.85, 1.55]) {
         S.box('solid', -0.95, y - 0.04, 0.02, 0.95, y, 0.63, C('#8a9aa8'), { bottom: true });
         for (let k = 0; k < 4; k++) {
           const bx = -0.85 + k * 0.44;
           S.box('solid', bx, y, 0.08, bx + 0.38, y + 0.34 + (k % 2) * 0.08, 0.55, C('#b08a5a', 0.9 + (k % 3) * 0.06));
-          S.box('solid', bx + 0.05, y + 0.12, 0.551, bx + 0.33, y + 0.22, 0.552, C(PALETTES[cat][k % PALETTES[cat].length]));
+          S.box('solid', bx + 0.05, y + 0.12, 0.55, bx + 0.33, y + 0.22, 0.556, C(PALETTES[cat][k % PALETTES[cat].length]));
         }
       }
       S.panel('signs', -0.6, 2.12, 0.6, 2.32, 0.64, rowUV(row));
@@ -426,7 +426,7 @@ export class Store {
     // time clock and card rack beside the staff door (stockroom side)
     const TC = P(6.0, 3.94, PI);
     TC.box('solid', -0.15, 1.2, 0, 0.15, 1.55, 0.14, C('#c8c4b8'));
-    TC.box('glow', -0.08, 1.42, 0.141, 0.08, 1.48, 0.142, C('#ff5a3a'));
+    TC.box('glow', -0.08, 1.42, 0.14, 0.08, 1.48, 0.146, C('#ff5a3a'));
     TC.box('solid', 0.25, 1.0, 0, 0.55, 1.6, 0.04, C('#8a8a86'));
     for (let k = 0; k < 6; k++) TC.box('solid', 0.28 + (k % 2) * 0.14, 1.05 + Math.floor(k / 2) * 0.18, 0.04, 0.38 + (k % 2) * 0.14, 1.2 + Math.floor(k / 2) * 0.18, 0.05, C('#f2eee0'));
     kit.interactables.push({ job: 'clock', label: 'Time clock', ...xz(this.w(6.0, 3.35)), r: 0.9 });
@@ -434,7 +434,7 @@ export class Store {
     const LK = P(8.94, 3.3, -R90);
     for (let k = 0; k < 3; k++) {
       LK.box('solid', -0.6 + k * 0.4, 0, 0, -0.22 + k * 0.4, 1.9, 0.45, C('#6a7a8a'));
-      for (let v = 0; v < 3; v++) LK.box('solid', -0.55 + k * 0.4, 1.55 + v * 0.06, 0.451, -0.27 + k * 0.4, 1.57 + v * 0.06, 0.452, C('#3a4a5a'));
+      for (let v = 0; v < 3; v++) LK.box('solid', -0.55 + k * 0.4, 1.55 + v * 0.06, 0.45, -0.27 + k * 0.4, 1.57 + v * 0.06, 0.455, C('#3a4a5a'));
     }
     LK.collide(-0.62, 0, 0.62, 0.46, 1.9);
     for (const x of [2.0, 6.5]) F.ceilingLight(P(x, 2.0), H, { style: 'tube', power: 0.7 });
@@ -446,7 +446,7 @@ export class Store {
     P(W - 0.2, 2.0, -R90).box('solid', -0.3, 0.9, -0.02, 0.3, 1.32, 0.0, C('#1e1e22'));
     P(9.55, 0.3).box('solid', -0.25, 0, 0, 0.25, 1.3, 0.55, C('#8a8e92')).collide(-0.25, 0, 0.25, 0.55, 1.3);
     P(12.85, 0.3).box('solid', -0.3, 0, 0, 0.3, 0.75, 0.6, C('#2a2e30')).box('solid', -0.05, 0.4, 0.6, 0.05, 0.5, 0.65, C('#c8b070')).collide(-0.3, 0, 0.3, 0.6, 0.75);
-    P(11.2, 0).box('wood', -0.5, 1.2, 0, 0.5, 1.95, 0.03, C('#6a4a2a')).panel('cork', -0.46, 1.24, 0.46, 1.91, 0.031);
+    P(11.2, 0).box('wood', -0.5, 1.2, 0, 0.5, 1.95, 0.03, C('#6a4a2a')).panel('cork', -0.46, 1.24, 0.46, 1.91, 0.036);
     P(9.7, 3.4, R90).box('solid', -0.3, 0, 0, 0.3, 0.85, 0.5, C('#e8e4dc')).collide(-0.3, 0, 0.3, 0.5, 0.85);
     F.microwave(P(9.7, 3.4, R90), { x: 0, z: 0.05 });
     F.ceilingLight(P(11.2, 2.0), H, { style: 'dome', power: 0.6 });
@@ -711,13 +711,14 @@ export class Store {
     });
     this.neonMat = new THREE.MeshBasicMaterial({ map: neonTex, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
     const neon = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.35), this.neonMat);
-    neon.position.set(o.x + 10.9, o.y + 2.25, o.z + D + 0.18);
+    // in front of the window mullions (which sit 0.12-0.19 into the wall), not level with them
+    neon.position.set(o.x + 10.9, o.y + 2.25, o.z + D + 0.23);
     this.scene.add(neon);
 
     // light spilling onto the sidewalk
     this.spillMat = additive({ map: cityTex.glow, color: new THREE.Color('#dff8ea'), opacity: 0.4 });
-    const spill = new THREE.Mesh(new THREE.PlaneGeometry(13, 4.5).rotateX(-Math.PI / 2), this.spillMat);
-    spill.position.set(o.x + W / 2, CITY.CURB + 0.03, o.z + D + 0.3 + 1.8);
+    const spill = new THREE.Mesh(new THREE.PlaneGeometry(13, CITY.SIDEWALK - 0.1).rotateX(-Math.PI / 2), this.spillMat);
+    spill.position.set(o.x + W / 2, CITY.CURB + 0.03, this.site.z1 + CITY.SIDEWALK / 2);
     spill.renderOrder = 2;
     this.scene.add(spill);
 
