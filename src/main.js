@@ -1,6 +1,6 @@
 import './style.css';
 import * as THREE from 'three';
-import { START } from './config.js';
+import { START, CITY } from './config.js';
 import { Rng, clamp, smoothstep } from './core/rng.js';
 import { Input } from './core/input.js';
 import { createTextures } from './render/textures.js';
@@ -330,19 +330,18 @@ function useThing(it) {
 const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
 
 function enterApartment(apt, tour = false) {
-  ui.fade(
-    () => {
-      place = apt;
-      touring = tour;
-      apts.show(apt);
-      player.teleport(apt.space, apt.spawn.x, apt.spawn.z, apt.spawn.yaw);
-      outdoorDist = rig.dist;
-      Object.assign(rig, { space: apt.space, dist: 3.4, pitch: 0.42, yaw: apt.spawn.yaw, curDist: 1.5, mode: 'follow', blend: 1 });
-      ui.showLocation(apt.L.name.toUpperCase(), tour ? 'viewing · for lease' : 'home');
-      if (tour) ui.hint('Look around, then use the front door to sign the lease or leave.', 7);
-    },
-    tour ? 'VIEWING' : 'LOADING',
-  );
+  ui.fade(() => moveIntoApartment(apt, tour), tour ? 'VIEWING' : 'LOADING');
+}
+
+function moveIntoApartment(apt, tour) {
+  place = apt;
+  touring = tour;
+  apts.show(apt);
+  player.teleport(apt.space, apt.spawn.x, apt.spawn.z, apt.spawn.yaw);
+  outdoorDist = rig.dist;
+  Object.assign(rig, { space: apt.space, dist: 3.4, pitch: 0.42, yaw: apt.spawn.yaw, curDist: 1.5, mode: 'follow', blend: 1 });
+  ui.showLocation(apt.L.name.toUpperCase(), tour ? 'viewing · for lease' : 'home');
+  if (tour) ui.hint('Look around, then use the front door to sign the lease or leave.', 7);
 }
 
 function exitApartment() {
@@ -507,6 +506,109 @@ function findInteraction() {
   if (npc && nd <= bd) return { label: `Talk to ${npc.known ? npc.name : 'stranger'}`, act: () => talkTo(npc) };
   if (best) return { label: best.label, act: () => useThing(best) };
   return null;
+}
+
+// ----------------------------------------------------------------------------
+// Secret cheat menu. Type B-L-I-N-G while walking around (none of those keys do
+// anything else), or tap the money display five times on a touch screen.
+const CHEAT_CODE = ['KeyB', 'KeyL', 'KeyI', 'KeyN', 'KeyG'];
+const CHEAT_TIMES = [
+  { label: 'Sunrise · 6 AM', hour: 6 },
+  { label: 'Morning · 9 AM', hour: 9 },
+  { label: 'Noon', hour: 12 },
+  { label: 'Golden hour · 5:30 PM', hour: 17.5 },
+  { label: 'Night · 9 PM', hour: 21 },
+  { label: 'Midnight', hour: 0 },
+];
+let codeAt = 0;
+let codeTime = 0;
+window.addEventListener('keydown', (e) => {
+  if (e.repeat) return;
+  const now = performance.now();
+  if (now - codeTime > 1500) codeAt = 0;
+  codeTime = now;
+  codeAt = e.code === CHEAT_CODE[codeAt] ? codeAt + 1 : e.code === CHEAT_CODE[0] ? 1 : 0;
+  if (codeAt === CHEAT_CODE.length) {
+    codeAt = 0;
+    openCheats();
+  }
+});
+{
+  let taps = 0;
+  let lastTap = 0;
+  document.getElementById('hud-money').addEventListener('pointerdown', () => {
+    const now = performance.now();
+    taps = now - lastTap < 1000 ? taps + 1 : 1;
+    lastTap = now;
+    if (taps >= 5) {
+      taps = 0;
+      openCheats();
+    }
+  });
+}
+
+/** Leave whatever interior you're in (apartment or shop) without moving yet. */
+function leaveInterior() {
+  audio.stopMusic();
+  if (touring) ui.clearHint();
+  if (place) {
+    place.tvOn = false;
+    place = null;
+    touring = false;
+    apts.show(null);
+  }
+  if (rig.space !== outdoor) rig.dist = outdoorDist;
+  inStore = false;
+  district = '';
+}
+
+function warpOutside(spot) {
+  ui.fade(() => {
+    leaveInterior();
+    player.teleport(outdoor, spot.x, spot.z, spot.yaw);
+    Object.assign(rig, { space: outdoor, pitch: 0.28, yaw: spot.yaw, curDist: rig.dist, mode: 'follow', blend: 1 });
+  }, 'WARPING');
+}
+
+function cheatPlaces() {
+  const S = CITY.SIDEWALK;
+  // the middle of a block's north sidewalk, looking in (yaw 0 faces south)
+  const sidewalk = (b) => ({ x: b.cx, z: b.z0 + S / 2, yaw: 0 });
+  const home = apts.byId[state.home];
+  const list = [{ label: `Home · ${home.L.name}`, go: () => ui.fade(() => (leaveInterior(), moveIntoApartment(home, false)), 'WARPING') }];
+  for (const apt of apts.list) {
+    if (apt === home) continue;
+    list.push({ label: `${apt.L.name} · tour`, go: () => ui.fade(() => (leaveInterior(), moveIntoApartment(apt, true)), 'WARPING') });
+  }
+  list.push({ label: 'HALCYON 24', go: () => warpOutside({ ...store.outsideSpot, yaw: Math.PI }) });
+  if (park) list.push({ label: 'Greenway Park', go: () => warpOutside(sidewalk(park)) });
+  list.push({ label: 'Lantern Quarter', go: () => warpOutside(sidewalk(city.lanternBlock)) });
+  return list;
+}
+
+function openCheats() {
+  if (!playing || ui.modal || ui.fading) return;
+  player.locked = true;
+  [784, 988, 1175, 1568].forEach((f, i) => setTimeout(() => audio.tone(f, 'square', 0.035, 0.1), i * 70));
+  ui.openCheats({
+    give(kind, amount) {
+      if (!amount) return ui.toast('Type an amount first.');
+      state[kind] += amount;
+      audio.coin();
+      ui.toast(`+${money(amount)} ${kind === 'cash' ? 'cash' : 'in the bank'}`);
+      saveNow();
+    },
+    places: cheatPlaces(),
+    times: CHEAT_TIMES,
+    setTime(hour) {
+      ui.fade(() => {
+        let t = Math.floor(clock.minutes / 1440) * 1440 + hour * 60;
+        if (t <= clock.minutes) t += 1440;
+        clock.minutes = t;
+      }, 'LATER');
+    },
+    onClose: () => (player.locked = false),
+  });
 }
 
 // ----------------------------------------------------------------------------

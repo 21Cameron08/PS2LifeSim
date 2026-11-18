@@ -18,6 +18,9 @@ const WARDROBE_ROWS = [
 ];
 
 const RES = [240, 360, 448, 540, 720];
+// cheat menu money presets; any amount can also be typed with the number keys
+const AMOUNTS = [100, 500, 1000, 5000, 10000, 50000, 100000, 1e6, 1e7, 1e8];
+const MAX_AMOUNT = 1e12;
 const RES_NAMES = ['240p · PS1-ish', '360p', '448p · PS2', '540p', '720p · HD-ish'];
 
 export class UI {
@@ -138,6 +141,11 @@ export class UI {
     this.hintTimer = seconds;
   }
 
+  clearHint() {
+    $('hint').classList.remove('show');
+    this.hintTimer = 0;
+  }
+
   update(dt) {
     if (this.locTimer > 0 && (this.locTimer -= dt) <= 0) $('location').classList.remove('show');
     if (this.toastTimer > 0 && (this.toastTimer -= dt) <= 0) $('toast').classList.remove('show');
@@ -165,8 +173,7 @@ export class UI {
     $('dialog-text').textContent = '';
     $('dialog-text').classList.toggle('mono', mono || name.includes('SLIP'));
     $('dialog-choices').innerHTML = '';
-    $('hint').classList.remove('show');
-    this.hintTimer = 0;
+    this.clearHint();
     this.setPrompt(null);
   }
   finishTyping() {
@@ -354,6 +361,7 @@ export class UI {
     this.modal = 'wardrobe';
     this.menu = { kind: 'wardrobe', app: { ...app }, sel: 0, onChange, onClose };
     $('wardrobe').classList.remove('hidden');
+    document.body.classList.add('in-menu');
     this.setPrompt(null);
     this.renderWardrobe();
   }
@@ -406,6 +414,7 @@ export class UI {
     this.modal = 'pause';
     this.menu = { kind: 'pause', s: settings, sel: 0, onChange, onClose, onReset };
     $('pause').classList.remove('hidden');
+    document.body.classList.add('in-menu');
     this.setPrompt(null);
     this.renderPause();
   }
@@ -454,6 +463,84 @@ export class UI {
     this.renderPause();
   }
 
+  // ---------------------------------------------------------------- cheats
+  /**
+   * The secret cheat menu. ctx: { give(kind, amount), places: [{ label, go }],
+   * times: [{ label, hour }], setTime(hour), onClose }.
+   */
+  openCheats(ctx) {
+    this.modal = 'cheats';
+    this.menu = { kind: 'cheats', ctx, sel: 0, amount: 10000, typed: false, place: 0, time: 0, onClose: ctx.onClose };
+    $('cheats').classList.remove('hidden');
+    document.body.classList.add('in-menu');
+    this.setPrompt(null);
+    this.renderCheats();
+  }
+  cheatRows() {
+    const m = this.menu;
+    const c = m.ctx;
+    const wrap = (i, n) => (i + n) % n;
+    const amt = m.amount ? money(m.amount) : '$0';
+    return [
+      { label: 'Amount', value: amt, change: (d) => this.stepAmount(d) },
+      { label: 'Cash', button: `+ ${amt} CASH`, act: () => c.give('cash', m.amount) },
+      { label: 'Bank', button: `+ ${amt} BANK`, act: () => c.give('bank', m.amount) },
+      { label: 'Warp to', value: c.places[m.place].label, change: (d) => (m.place = wrap(m.place + d, c.places.length)), button: 'GO', act: () => this.cheatAndClose(() => c.places[m.place].go()) },
+      { label: 'Time', value: c.times[m.time].label, change: (d) => (m.time = wrap(m.time + d, c.times.length)), button: 'SET', act: () => this.cheatAndClose(() => c.setTime(c.times[m.time].hour)) },
+    ];
+  }
+  cheatAndClose(fn) {
+    this.closeMenu();
+    fn();
+  }
+  stepAmount(d) {
+    const m = this.menu;
+    const a = m.amount;
+    m.amount = d > 0 ? (AMOUNTS.find((v) => v > a) ?? AMOUNTS[0]) : ([...AMOUNTS].reverse().find((v) => v < a) ?? AMOUNTS[AMOUNTS.length - 1]);
+    m.typed = false;
+  }
+  typeAmount(digit) {
+    const m = this.menu;
+    if (digit < 0) m.amount = Math.floor(m.amount / 10);
+    else if (!m.typed) m.amount = digit;
+    else if (m.amount * 10 + digit <= MAX_AMOUNT) m.amount = m.amount * 10 + digit;
+    m.typed = digit >= 0 || m.amount > 0;
+    this.audio.tick();
+    this.renderCheats();
+  }
+  renderCheats() {
+    const m = this.menu;
+    const box = $('cheat-rows');
+    box.innerHTML = '';
+    this.cheatRows().forEach((r, i) => {
+      const div = document.createElement('div');
+      div.className = `row${i === m.sel ? ' sel' : ''}`;
+      const value = r.change
+        ? `<button class="arrow" data-d="-1">◀</button><span class="cheat-val${i === 0 && m.typed ? ' typing' : ''}">${r.value}</span><button class="arrow" data-d="1">▶</button>`
+        : '';
+      const btn = r.act ? `<button class="arrow wide" data-act>${r.button}</button>` : '';
+      div.innerHTML = `<span class="label">${r.label}</span><span class="val">${value}${btn}</span>`;
+      div.querySelectorAll('[data-d]').forEach((b) =>
+        b.addEventListener('click', () => {
+          m.sel = i;
+          this.cheatChange(r, Number(b.dataset.d));
+        }),
+      );
+      div.querySelector('[data-act]')?.addEventListener('click', () => {
+        m.sel = i;
+        r.act();
+        if (this.menu === m) this.renderCheats();
+      });
+      box.appendChild(div);
+    });
+  }
+  cheatChange(r, d) {
+    if (!r.change) return;
+    r.change(d);
+    this.audio.blip(d > 0);
+    this.renderCheats();
+  }
+
   closeMenu() {
     const m = this.menu;
     if (!m) return;
@@ -461,6 +548,8 @@ export class UI {
     this.modal = null;
     $('wardrobe').classList.add('hidden');
     $('pause').classList.add('hidden');
+    $('cheats').classList.add('hidden');
+    document.body.classList.remove('in-menu');
     this.audio.blip(false);
     m.onClose?.(m.kind === 'wardrobe' ? m.app : m.s);
   }
@@ -498,6 +587,25 @@ export class UI {
     }
     const m = this.menu;
     if (!m) return;
+    if (m.kind === 'cheats') {
+      const rows = this.cheatRows();
+      const r = rows[m.sel];
+      const digit = /^(Digit|Numpad)([0-9])$/.exec(k);
+      if (digit) this.typeAmount(Number(digit[2]));
+      else if (k === 'Backspace') this.typeAmount(-1);
+      else if (k === 'ArrowUp' || k === 'KeyW' || k === 'ArrowDown' || k === 'KeyS') {
+        m.sel = (m.sel + (k === 'ArrowUp' || k === 'KeyW' ? -1 : 1) + rows.length) % rows.length;
+        this.audio.blip(false);
+        this.renderCheats();
+      } else if (k === 'ArrowLeft' || k === 'KeyA' || k === 'ArrowRight' || k === 'KeyD') this.cheatChange(r, k === 'ArrowLeft' || k === 'KeyA' ? -1 : 1);
+      else if (k === 'Enter' || k === 'Space' || k === 'KeyE') {
+        if (r.act) {
+          r.act();
+          if (this.menu === m) this.renderCheats();
+        } else this.cheatChange(r, 1);
+      } else if (k === 'Escape') this.closeMenu();
+      return eat();
+    }
     const rows = m.kind === 'wardrobe' ? this.wardrobeRows() : this.pauseRows();
     const render = () => (m.kind === 'wardrobe' ? this.renderWardrobe() : this.renderPause());
     if (k === 'ArrowUp' || k === 'KeyW') {

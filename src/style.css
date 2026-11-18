@@ -332,6 +332,79 @@ body.touch #hint {
   background: rgba(127, 212, 255, 0.2);
   cursor: pointer;
 }
+#hud-money {
+  pointer-events: auto; /* tap it five times: the touch way into the cheat menu */
+}
+#cheats {
+  border-color: rgba(255, 210, 120, 0.8);
+  box-shadow: 0 0 30px rgba(255, 190, 90, 0.35);
+  width: min(500px, calc(100% - 32px));
+}
+#cheats h2 {
+  color: var(--warm);
+  text-shadow: 0 0 12px rgba(255, 190, 90, 0.8);
+  margin-bottom: 2px;
+}
+.menu-sub {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 0.2em;
+  margin-bottom: 12px;
+}
+.arrow.wide {
+  width: auto;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+.cheat-val {
+  min-width: 120px;
+  text-align: center;
+}
+.cheat-val.typing::after {
+  content: '▌';
+  color: var(--warm);
+  animation: blink 1s steps(2, start) infinite;
+}
+#cheats .val {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+body.in-menu #touch,
+body.touch #cheats .menu-foot {
+  display: none !important; /* menus have their own buttons; keyboard hints mean nothing on a phone */
+}
+@media (max-width: 600px) {
+  #cheats {
+    padding: 14px;
+  }
+  #cheats h2 {
+    font-size: 22px;
+  }
+  #cheats .row {
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 4px 6px;
+  }
+  #cheats .row .label {
+    flex-basis: 100%;
+    min-width: 0;
+    font-size: 14px;
+  }
+  #cheats .val {
+    flex: 1;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+  #cheats .cheat-val {
+    flex: 1;
+    min-width: 0;
+    font-size: 16px;
+  }
+  #cheats .val > [data-act]:only-child {
+    flex: 1;
+  }
+}
 .menu-foot {
   margin-top: 10px;
   font-size: 13px;

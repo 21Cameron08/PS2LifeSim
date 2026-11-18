@@ -153,6 +153,10 @@ calls. It should run well on integrated GPUs and phones.
 
 ## Roadmap (suggested order)
 
+The big goal: **lots of cool places to hang out**. Every new space (diner, arcade,
+rooftop, karaoke bar, record shop, a 2 AM laundromat, the pier) gets a real walk-in
+interior with the same detail, light and sound as the apartments and the store.
+
 1. **Needs**: hunger/energy/fun/social bars that the fridge, bed, shower and TV refill.
 2. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
    noodle bar cook, courier, office temp. Promotions and raises at the store.
