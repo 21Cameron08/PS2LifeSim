@@ -16,6 +16,9 @@ import { Apartments } from './world/apartments.js';
 import { Store } from './world/store.js';
 import { Club } from './world/club.js';
 import { Clubbers } from './actors/clubbers.js';
+import { Gullys } from './world/gullys.js';
+import { Diners } from './actors/diners.js';
+import { GullysVisit } from './game/gullysVisit.js';
 import { StoreJob } from './game/job.js';
 import { Pedestrians } from './actors/pedestrians.js';
 import { Traffic } from './actors/traffic.js';
@@ -59,6 +62,10 @@ const state = {
   clubTreat: save?.clubTreat ?? {},
   danceBest: save?.danceBest ?? 0,
   photos: save?.photos ?? [], // photo-booth strips (data URLs), newest first
+  gullToys: save?.gullToys ?? [], // Gull Box toys collected (ids), on top of the fridge
+  gullMeals: save?.gullMeals ?? 0,
+  gullOrders: save?.gullOrders ?? 0,
+  lastMeal: save?.lastMeal,
 };
 const SAVE_VERSION = 2;
 // saves from before apartments existed keep money/looks but start you at home
@@ -81,7 +88,7 @@ const apts = new Apartments(scene, city, tex);
 apts.setHome(state.home);
 const outdoor = citySpace(city);
 const store = new Store(scene, city, tex, apts.tex);
-const crowd = new Crowd(scene, tex, 240);
+const crowd = new Crowd(scene, tex, 264);
 // where do we start? a fresh life starts inside your apartment
 let place = freshStart ? apts.byId[state.home] : save.inside ? apts.byId[save.inside] : null;
 let touring = false;
@@ -113,6 +120,13 @@ const clubSpace = {
 };
 let inClub = false;
 const nightOf = (m) => Math.floor((m - 6 * 60) / 1440);
+const gullys = new Gullys(scene, city, tex, apts.tex);
+const gullysSpace = { ...outdoor, indoor: true, ceiling: gullys.origin.y + gullys.H };
+let inGullys = false;
+const diners = new Diners(crowd, gullys, city, scene);
+const visit = new GullysVisit({ gullys, diners, ui, audio, state, clock, player, input, apts, saveNow: () => saveNow() });
+if (state.gullToys.length) apts.setToys(state.gullToys);
+let gullysKick = 0;
 let lightsUpNight = -1;
 const rig = new CameraRig(camera, player.space);
 rig.yaw = player.yaw;
@@ -208,6 +222,10 @@ function saveNow(showToast = false) {
     clubTreat: state.clubTreat,
     danceBest: state.danceBest,
     photos: state.photos,
+    gullToys: state.gullToys,
+    gullMeals: state.gullMeals,
+    gullOrders: state.gullOrders,
+    lastMeal: state.lastMeal,
     job: state.job,
     inside: place && !touring ? place.id : null,
     cash: state.cash,
@@ -521,10 +539,12 @@ function findInteraction() {
         bd = d;
       }
     }
-    return best ? { label: aptLabel(best), act: () => useApt(best) } : null;
+    return best ? { label: aptLabel(best), act: () => useApt(best) } : visit.anywhere();
   }
   const work = job.findInteraction(player.pos);
   if (work) return work;
+  const food = visit.find();
+  if (food) return food;
   const nightlife = clubInteraction();
   if (nightlife) return nightlife;
   const door = apts.doorNear(player.pos);
@@ -548,7 +568,7 @@ function findInteraction() {
   const nd = npc ? Math.hypot(npc.pos.x - player.pos.x, npc.pos.z - player.pos.z) : Infinity;
   if (npc && nd <= bd) return { label: `Talk to ${npc.known ? npc.name : 'stranger'}`, act: () => talkTo(npc) };
   if (best) return { label: best.label, act: () => useThing(best) };
-  return null;
+  return visit.anywhere();
 }
 
 // ----------------------------------------------------------------------------
@@ -1009,6 +1029,49 @@ function updateClub(dt) {
 }
 
 // ----------------------------------------------------------------------------
+// GULLY'S
+function updateGullys(dt) {
+  const camD = camera.position.distanceTo(gullys.doorCenter);
+  const people = diners.people();
+  if (gullys.open) people.push(player.pos);
+  gullys.update(dt, time, env, { hour: clock.hour, camera, people, serving: diners.serving(), riding: visit.riding > 0 });
+  diners.update(dt, {
+    hour: clock.hour,
+    open: gullys.open,
+    time,
+    playerPos: player.pos,
+    near: camD < 70,
+    watched: camD < 45,
+    cleaning: !gullys.open,
+    serving: visit.serving,
+    talking: visit.talking,
+  });
+  visit.update(dt, inGullys);
+  if (!playing) return;
+  // the in-store radio, and the kitchen
+  const want = inGullys && gullys.open;
+  if (want && audio.music?.style !== 'gullys') {
+    audio.startMusic('gullys');
+    audio.jingle();
+  }
+  if (!want && audio.music?.style === 'gullys') audio.stopMusic();
+  // 2 AM: Pip politely walks the last customers out
+  if (inGullys && !gullys.open && !ui.modal && !ui.fading) {
+    if ((gullysKick += dt) > 12) {
+      gullysKick = 0;
+      ui.fade(() => {
+        visit.interrupt();
+        leaveInterior();
+        const sp = gullys.outsideSpot;
+        player.teleport(outdoor, sp.x, sp.z, sp.yaw);
+        Object.assign(rig, { space: outdoor, pitch: 0.28, yaw: sp.yaw, curDist: rig.dist, mode: 'follow', blend: 1 });
+        ui.toast('Pip walks you to the door. "We\'re closed, hon! Back at six!"');
+      }, 'CLOSING TIME');
+    }
+  } else gullysKick = 0;
+}
+
+// ----------------------------------------------------------------------------
 // Secret cheat menu. Type B-L-I-N-G while walking around (none of those keys do
 // anything else), or tap the money display five times on a touch screen.
 const CHEAT_CODE = ['KeyB', 'KeyL', 'KeyI', 'KeyN', 'KeyG'];
@@ -1061,6 +1124,7 @@ function leaveInterior() {
   if (rig.space !== outdoor) rig.dist = outdoorDist;
   inStore = false;
   inClub = false;
+  inGullys = false;
   district = '';
 }
 
@@ -1068,6 +1132,7 @@ function warpOutside(spot) {
   ui.fade(() => {
     leaveInterior();
     if (seat) standUp();
+    visit.interrupt();
     if (spot.y !== undefined) player.pos.y = spot.y;
     player.teleport(outdoor, spot.x, spot.z, spot.yaw);
     Object.assign(rig, { space: outdoor, pitch: 0.28, yaw: spot.yaw, curDist: rig.dist, mode: 'follow', blend: 1 });
@@ -1085,6 +1150,7 @@ function cheatPlaces() {
     list.push({ label: `${apt.L.name} · tour`, go: () => ui.fade(() => (leaveInterior(), moveIntoApartment(apt, true)), 'WARPING') });
   }
   list.push({ label: 'HALCYON 24', go: () => warpOutside({ ...store.outsideSpot, yaw: Math.PI }) });
+  list.push({ label: "GULLY'S", go: () => warpOutside(gullys.outsideSpot) });
   list.push({ label: 'SUBSTATION', go: () => warpOutside(club.outsideSpot) });
   list.push({ label: 'SUBSTATION · VIP', go: () => warpOutside({ ...club.w(11.0, 15.0, 3.6), yaw: 0 }) });
   list.push({ label: 'SUBSTATION · roof', go: () => warpOutside({ ...club.w(11.0, 12.0, 8.36), yaw: 0 }) });
@@ -1265,10 +1331,29 @@ function frame(now) {
         if (playing && state.coatCheck) ui.toast("Your jacket's still at coat check.");
       }
     }
+    const nowInG = gullys.contains(player.pos, -0.05);
+    if (nowInG !== inGullys) {
+      inGullys = nowInG;
+      player.space = rig.space = nowInG ? gullysSpace : outdoor;
+      if (nowInG) {
+        outdoorDist = rig.dist;
+        rig.dist = 3.8;
+        if (playing) ui.showLocation("GULLY'S", gullys.open ? 'snatch a bite!' : 'closed · back at 6 am');
+        if (playing && gullys.open && !state.seen.gullys) {
+          state.seen.gullys = true;
+          setTimeout(() => ui.hint('Order at a register, wait for your number on the <b>NOW SERVING</b> board, then grab your tray and find a seat.', 9), 1500);
+        }
+      } else {
+        rig.dist = outdoorDist;
+        district = '';
+      }
+    }
   }
   job.update(dt, time, { playerPos: player.pos });
   if (!place) clubbers.push(player.pos, inClub ? 0.28 : player.radius);
+  if (!place && (inGullys || gullys.onPatio(player.pos))) diners.push(player.pos, player.radius);
   updateClub(dt);
+  updateGullys(dt);
   peds.update(dt, player.pos, env.night);
   traffic.update(dt, player.pos, peds.list, env.night);
   if (traffic.honk && playing) {
@@ -1282,14 +1367,14 @@ function frame(now) {
   player.char.visible = rig.mode === 'title' || camera.position.distanceTo(rig.focus) > 0.75;
   env.magic = lantern.influence(playing ? player.pos : camera.position);
   const aloft = !place && !inClub && club.aloft(player.pos);
-  env.indoor = place ? 1 : inStore ? 0.6 : inClub ? 0.9 : 0;
+  env.indoor = place ? 1 : inStore || inGullys ? 0.6 : inClub ? 0.9 : 0;
   if (inClub) env.magic *= 0.25;
   env.update(clock.hour, time, player.pos);
   city.update(dt);
   city.updateLampLights(
     playing ? player.pos : camera.position,
     env.night,
-    place ? { list: place.fixtures, on: apts.lampOn } : inStore ? { list: store.fixtures, on: 1 } : inClub ? { list: club.fixtures, on: 1 } : aloft && club.status === 'open' ? { list: club.roofFixtures, on: 1 } : null,
+    place ? { list: place.fixtures, on: apts.lampOn } : inStore ? { list: store.fixtures, on: 1 } : inClub ? { list: club.fixtures, on: 1 } : inGullys ? { list: gullys.fixtures, on: 1 } : aloft && club.status === 'open' ? { list: club.roofFixtures, on: 1 } : null,
   );
   store.update(dt, time, env, job.people(player.pos), camera);
   apts.update(dt, time, env, place);
@@ -1320,7 +1405,7 @@ function frame(now) {
 
   const parkD = park ? Math.hypot(player.pos.x - park.cx, player.pos.z - park.cz) : 999;
   const green = Math.max(smoothstep(45, 15, parkD), smoothstep(0.6, 1.0, Math.hypot(player.pos.x, player.pos.z) / 160));
-  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place ? 1 : inStore ? 0.5 : inClub ? 0.85 : 0, store: inStore ? 1 : 0 });
+  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place ? 1 : inStore || inGullys ? 0.5 : inClub ? 0.85 : 0, store: inStore ? 1 : 0, kitchen: inGullys && gullys.open ? 1 : 0 });
 
   // the shop's security cameras (only when you're close enough to see a monitor)
   if (!place && cctvTick++ % 4 === 0 && camera.position.distanceTo(store.doorCenter) < 30) store.renderCCTV(renderer, scene);
@@ -1353,6 +1438,9 @@ window.game = {
   job,
   club,
   clubbers,
+  gullys,
+  diners,
+  visit,
   crowd,
   audio,
   dance,

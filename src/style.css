@@ -580,6 +580,117 @@ body.touch #cheats .menu-foot {
   font-size: 12px;
   color: var(--muted);
 }
+/* GULLY'S order panel: teal and cream, like the menu boards */
+#order {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(820px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  background: linear-gradient(180deg, #123c44, #0a1c22);
+  border: 2px solid #17a2a8;
+  border-radius: 10px;
+  box-shadow: 0 0 30px rgba(23, 162, 168, 0.4);
+  pointer-events: auto;
+  padding: 14px 16px;
+}
+.ord-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: #ff9a4a;
+  border-bottom: 1px solid rgba(255, 154, 74, 0.35);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+.ord-greet {
+  color: #fff3dc;
+  margin-bottom: 10px;
+}
+.ord-body {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 640px) {
+  .ord-body {
+    grid-template-columns: 1fr;
+  }
+}
+.ord-menu {
+  max-height: min(52vh, 460px);
+  overflow: auto;
+  display: grid;
+  gap: 4px;
+  padding-right: 4px;
+}
+.ord-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.ord-item.sel {
+  background: rgba(23, 162, 168, 0.22);
+  border-color: rgba(120, 230, 230, 0.6);
+}
+.ord-name {
+  font-weight: 700;
+}
+.ord-name em {
+  font-style: normal;
+  font-size: 12px;
+  color: #ffd23a;
+  letter-spacing: 0.1em;
+}
+.ord-name small {
+  display: block;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ord-price {
+  font-weight: 700;
+  color: #fff3dc;
+}
+.ord-qty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ord-qty b {
+  min-width: 14px;
+  text-align: center;
+}
+.ord-qty .arrow {
+  width: 32px;
+  height: 32px;
+}
+.ord-where,
+.ord-pay {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.reg-btn.on {
+  background: rgba(255, 138, 42, 0.3);
+  border-color: #ff9a4a;
+}
+.reg-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 #dialog-text.mono {
   font-family: 'Courier New', ui-monospace, monospace;
   font-size: 15px;

@@ -1,7 +1,11 @@
 import { SKIN, HAIR_COLORS, CLOTH, SHOES, HAIR_STYLES, TOP_STYLES, BOTTOM_STYLES } from '../actors/appearance.js';
 
 const $ = (id) => document.getElementById(id);
-const money = (n) => `$${Math.round(n).toLocaleString('en-US')}`;
+// whole dollars, unless there are cents (fries cost $2.29)
+const money = (n) => {
+  const c = Math.round(n * 100) / 100;
+  return `$${c.toLocaleString('en-US', Number.isInteger(c) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 const WARDROBE_ROWS = [
   { label: 'Skin', key: 'skin', options: SKIN, swatch: true },
@@ -561,6 +565,85 @@ export class UI {
     m.onClose?.(m.kind === 'wardrobe' ? m.app : m.s);
   }
 
+  // ---------------------------------------------------------------- GULLY'S order panel
+  /** o: { title, sub, greet, menu, cash, bank, onPay(sel) -> error|null, onClose } */
+  openOrder(o) {
+    this.modal = 'order';
+    this.ord = { ...o, qty: o.menu.map(() => 0), sel: 0, toGo: false, note: '' };
+    $('order').classList.remove('hidden');
+    document.body.classList.add('in-menu');
+    this.setPrompt(null);
+    this.renderOrder();
+  }
+  ordTotal() {
+    const r = this.ord;
+    return Math.round(r.menu.reduce((s, it, i) => s + it.price * r.qty[i], 0) * 100) / 100;
+  }
+  renderOrder() {
+    const r = this.ord;
+    const m = (n) => `$${n.toFixed(2)}`;
+    const total = this.ordTotal();
+    const rows = r.menu
+      .map(
+        (it, i) => `<div class="ord-item${i === r.sel ? ' sel' : ''}" data-sel="${i}">
+          <div class="ord-name">${it.name}${it.toy ? ' <em>+ TOY</em>' : ''}<small>${it.desc}</small></div>
+          <div class="ord-price">${m(it.price)}</div>
+          <div class="ord-qty"><button class="arrow" data-minus="${i}">−</button><b>${r.qty[i]}</b><button class="arrow" data-plus="${i}">+</button></div>
+        </div>`,
+      )
+      .join('');
+    const lines = r.menu
+      .map((it, i) => (r.qty[i] ? `<div><span>${r.qty[i]} × ${it.name}</span><span>${m(it.price * r.qty[i])}</span></div>` : ''))
+      .join('');
+    const canCash = total > 0 && r.cash >= total;
+    const canCard = total > 0 && r.bank >= total;
+    $('order').innerHTML = `<div class="ord-head"><span>${r.title}</span><span>${r.sub}</span></div>
+      <div class="ord-greet">${r.greet}</div>
+      <div class="ord-body"><div class="ord-menu">${rows}</div>
+      <div><div class="receipt">${lines || '<div><span>— tap + to add —</span></div>'}<div class="tot"><span>TOTAL</span><span>${m(total)}</span></div></div>
+      <div class="ord-where"><button class="reg-btn${r.toGo ? '' : ' on'}" data-where="here">EAT HERE</button><button class="reg-btn${r.toGo ? ' on' : ''}" data-where="togo">TO GO</button></div>
+      <div class="ord-pay"><button class="reg-btn go" data-pay="cash"${canCash ? '' : ' disabled'}>PAY CASH</button><button class="reg-btn go" data-pay="card"${canCard ? '' : ' disabled'}>PAY CARD</button><button class="reg-btn no" data-cancel="1">CANCEL</button></div>
+      <div class="reg-note">${r.note}</div></div></div>
+      <div class="reg-foot">↑↓ pick · ←→ fewer / more · Space eat here / to go · Enter pay · Esc cancel</div>`;
+    const el = $('order');
+    el.querySelectorAll('[data-sel]').forEach((b) => b.addEventListener('click', () => ((r.sel = Number(b.dataset.sel)), this.renderOrder())));
+    el.querySelectorAll('[data-plus]').forEach((b) => b.addEventListener('click', (e) => (e.stopPropagation(), this.ordQty(Number(b.dataset.plus), 1))));
+    el.querySelectorAll('[data-minus]').forEach((b) => b.addEventListener('click', (e) => (e.stopPropagation(), this.ordQty(Number(b.dataset.minus), -1))));
+    el.querySelectorAll('[data-where]').forEach((b) => b.addEventListener('click', () => ((r.toGo = b.dataset.where === 'togo'), this.audio.blip(false), this.renderOrder())));
+    el.querySelectorAll('[data-pay]').forEach((b) => b.addEventListener('click', () => this.ordPay(b.dataset.pay)));
+    el.querySelector('[data-cancel]').addEventListener('click', () => this.closeOrder());
+    el.querySelector('.ord-item.sel')?.scrollIntoView({ block: 'nearest' });
+  }
+  ordQty(i, d) {
+    const r = this.ord;
+    r.sel = i;
+    r.qty[i] = Math.max(0, Math.min(9, r.qty[i] + d));
+    r.note = '';
+    this.audio.tone(d > 0 ? 1320 : 880, 'square', 0.02, 0.05);
+    this.renderOrder();
+  }
+  ordPay(method) {
+    const r = this.ord;
+    const total = this.ordTotal();
+    if (!method) method = r.cash >= total ? 'cash' : 'card';
+    const lines = r.menu.map((item, i) => ({ item, qty: r.qty[i] })).filter((l) => l.qty);
+    const err = r.onPay({ lines, toGo: r.toGo, method, total });
+    if (err) {
+      r.note = err;
+      this.audio.tone(300, 'square', 0.03, 0.2);
+      return this.renderOrder();
+    }
+    this.closeOrder();
+  }
+  closeOrder() {
+    const r = this.ord;
+    this.ord = null;
+    this.modal = null;
+    $('order').classList.add('hidden');
+    document.body.classList.remove('in-menu');
+    if (r && r.onClose) r.onClose();
+  }
+
   // ---------------------------------------------------------------- dance / photos
   /** The dance game owns the keys while it runs: onKey(code) gets them, 'stop' to end. */
   openDance(onKey) {
@@ -617,6 +700,22 @@ export class UI {
       else if (r.stage === 'pay' && /^Digit[1-7]$/.test(k)) this.regCash([1000, 500, 100, 25, 10, 5, 1][Number(k.slice(5)) - 1]);
       else if (r.stage === 'pay' && k === 'Backspace') this.regCash(0);
       else if (r.stage === 'pay' && (k === 'Enter' || k === 'Space')) this.regDone();
+      return eat();
+    }
+    if (this.modal === 'order') {
+      const r = this.ord;
+      if (k === 'Escape') this.closeOrder();
+      else if (k === 'ArrowUp' || k === 'KeyW' || k === 'ArrowDown' || k === 'KeyS') {
+        r.sel = (r.sel + (k === 'ArrowUp' || k === 'KeyW' ? -1 : 1) + r.menu.length) % r.menu.length;
+        this.audio.blip(false);
+        this.renderOrder();
+      } else if (k === 'ArrowRight' || k === 'KeyD' || k === 'Equal' || k === 'NumpadAdd') this.ordQty(r.sel, 1);
+      else if (k === 'ArrowLeft' || k === 'KeyA' || k === 'Minus' || k === 'NumpadSubtract' || k === 'Backspace') this.ordQty(r.sel, -1);
+      else if (k === 'Space' || k === 'Tab') {
+        r.toGo = !r.toGo;
+        this.audio.blip(false);
+        this.renderOrder();
+      } else if (k === 'Enter' || k === 'KeyE') this.ordPay();
       return eat();
     }
     if (this.modal === 'dance') {

@@ -31,6 +31,12 @@ features, controls and the code map.
   `gaps`. The player's ground on stairs/balcony/fire escape/roof comes from
   `club.groundAt(x, z, playerY, base)` (outdoor and club spaces both use it). Phases 1 and 2
   are built; phase 3 is in the README roadmap.
+- GULLY'S (`world/gullys.js`, `world/gullyFigure.js`, `render/gullysTextures.js`,
+  `actors/diners.js`, `game/gullysMenu.js`, `game/gullysVisit.js`): the menu is plain data
+  in gullysMenu.js. Diners owns the crew, customers, orders and the tray/bag meshes (the
+  player's tray is a diners tray too); when the camera is far away people walk at 80 m/s
+  and new customers can spawn already seated or waiting, so the place is busy on arrival.
+  Seats carry a `route` from the aisle; crowd poses `c.tray` and `c.eat` came with it.
 - Secret cheat menu (money, warps, time) for testing: type `BLING` while walking around,
   or tap the money display five times. Code is in `main.js` (`openCheats`) and
   `ui/ui.js` (`openCheats`). Not listed in the in-game controls on purpose.

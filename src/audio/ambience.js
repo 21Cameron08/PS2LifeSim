@@ -132,6 +132,18 @@ export class Ambience {
     const humF = filter('lowpass', 420);
     hum.connect(humF).connect(this.humG).connect(this.master);
     hum.start();
+    // a fast-food kitchen: fryer sizzle and extractor fans
+    this.kitchenG = gain(0);
+    const sizzle = filter('bandpass', 5200, 0.8);
+    const crackle = ctx.createOscillator();
+    crackle.frequency.value = 7.3;
+    const crackleG = gain(900);
+    crackle.connect(crackleG).connect(sizzle.frequency);
+    crackle.start();
+    src(this.white).connect(sizzle).connect(this.kitchenG).connect(this.master);
+    const fan = filter('lowpass', 260);
+    const fanG = gain(0.6);
+    src(brown).connect(fan).connect(fanG).connect(this.kitchenG);
     this.chimeBus = gain(1);
     this.chimeBus.connect(this.amb);
     this.chimeBus.connect(delay);
@@ -152,6 +164,7 @@ export class Ambience {
     this.ambLP.frequency.setTargetAtTime(20000 - ind * 19300, t, 0.3);
     if (this.music) this.scheduleMusic();
     this.humG.gain.setTargetAtTime((s.store ?? 0) * 0.012, t, 0.3);
+    this.kitchenG.gain.setTargetAtTime((s.kitchen ?? 0) * 0.02, t, 0.4);
     this.cityG.gain.setTargetAtTime((0.34 - s.night * 0.16) * (1 - s.magic * 0.6), t, 0.5);
     this.windG.gain.setTargetAtTime(0.035 + s.night * 0.03 + s.magic * 0.03, t, 0.5);
     this.crickG.gain.setTargetAtTime(s.night * (0.012 + s.green * 0.05) * (1 - s.magic * 0.5), t, 0.8);
@@ -265,10 +278,10 @@ export class Ambience {
     if (style === 'club') return this.startClub(opts.beat ?? 0);
     const out = ctx.createGain();
     out.gain.value = 0.0001;
-    out.gain.setTargetAtTime(style === 'piano' ? 0.16 : style === 'muzak' ? 0.07 : 0.12, ctx.currentTime, 0.4);
+    out.gain.setTargetAtTime(style === 'piano' ? 0.16 : style === 'muzak' ? 0.07 : style === 'gullys' ? 0.075 : 0.12, ctx.currentTime, 0.4);
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = style === 'radio' ? 2400 : style === 'records' ? 4200 : style === 'muzak' ? 1800 : 9000;
+    lp.frequency.value = style === 'radio' ? 2400 : style === 'records' ? 4200 : style === 'muzak' ? 1800 : style === 'gullys' ? 2800 : 9000;
     out.connect(lp);
     let tail = lp;
     if (style === 'radio') {
@@ -280,7 +293,7 @@ export class Ambience {
     }
     tail.connect(this.master);
     const nodes = [];
-    if (style !== 'piano' && style !== 'muzak') {
+    if (style === 'radio' || style === 'records') {
       const crackle = ctx.createBufferSource();
       crackle.buffer = this.white;
       crackle.loop = true;
@@ -293,7 +306,7 @@ export class Ambience {
       crackle.start();
       nodes.push(crackle);
     }
-    this.music = { style, out, nodes, bar: 0, next: ctx.currentTime + 0.15, len: style === 'piano' ? 2.6 : style === 'muzak' ? 2.8 : 2.2 };
+    this.music = { style, out, nodes, bar: 0, next: ctx.currentTime + 0.15, len: style === 'piano' ? 2.6 : style === 'muzak' ? 2.8 : style === 'gullys' ? 2.0 : 2.2 };
   }
 
   // ---------------------------------------------------------------- club
@@ -494,6 +507,7 @@ export class Ambience {
 
   playBar(m, t) {
     if (m.style === 'club') return this.playClubBar(m, t);
+    if (m.style === 'gullys') return this.playGullysBar(m, t);
     const prog = [
       [62, 65, 69, 72],
       [55, 59, 62, 65],
@@ -526,6 +540,65 @@ export class Ambience {
     for (const b of [0.25, 0.75]) this.snare(m.out, t + b * L);
     for (let k = 0; k < 8; k++) this.hat(m.out, t + (k * L) / 8 + (k % 2 ? 0.03 : 0));
     for (let k = 0; k < 4; k++) if (Math.random() < 0.6) this.voice(m.out, hz(scale[Math.floor(Math.random() * scale.length)]), t + (k * L) / 4 + 0.05, 0.5, 'sine', 0.05, 0.005);
+  }
+
+  // GULLY'S in-store radio: bright, bouncy, a bit cheesy. C - G - Am - F, a
+  // walking bass, electric piano on the offbeats, and the jingle every 8 bars.
+  playGullysBar(m, t) {
+    const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const prog = [
+      [60, 64, 67],
+      [59, 62, 67],
+      [57, 60, 64],
+      [57, 60, 65],
+    ];
+    const roots = [48, 43, 45, 41];
+    const L = m.len;
+    const k = m.bar % 4;
+    const chord = prog[k];
+    const r = roots[k];
+    [r, r + 12, r + 7, r + 12].forEach((n, i) => this.voice(m.out, hz(n - 12), t + (i * L) / 4, L * 0.2, 'triangle', 0.11, 0.01));
+    for (const b of [0.125, 0.375, 0.625, 0.875]) chord.forEach((n) => this.voice(m.out, hz(n + 12), t + b * L, L * 0.09, 'square', 0.008, 0.005));
+    for (const b of [0, 0.5]) this.kick(m.out, t + b * L);
+    for (const b of [0.25, 0.75]) this.noiseAt(m.out, t + b * L, 2400, 0.05, 0.08);
+    for (let i = 0; i < 8; i++) this.hat(m.out, t + (i * L) / 8);
+    if (m.bar % 8 === 7) this.jingle(m.out, t, 0.05);
+    else {
+      const scale = [72, 74, 76, 79, 81, 84];
+      for (let i = 0; i < 4; i++) if (Math.random() < 0.45) this.voice(m.out, hz(scale[Math.floor(Math.random() * scale.length)]), t + (i * L) / 4 + 0.02, 0.35, 'sine', 0.035, 0.01);
+    }
+  }
+
+  /** The GULLY'S jingle: "Snatch-a-bite!" on a little bell. */
+  jingle(dest = this.master, t = this.ctx?.currentTime, vol = 0.06) {
+    if (!this.ctx) return;
+    const notes = [
+      [79, 0, 0.18],
+      [76, 0.18, 0.18],
+      [79, 0.36, 0.18],
+      [84, 0.6, 0.5],
+      [81, 1.2, 0.2],
+      [84, 1.4, 0.7],
+    ];
+    const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    for (const [n, at, d] of notes) {
+      this.voice(dest, hz(n), t + at, d + 0.3, 'triangle', vol, 0.005);
+      this.voice(dest, hz(n + 12), t + at, d * 0.6, 'sine', vol * 0.4, 0.005);
+    }
+  }
+
+  /** The order-up bell (a counter bell plus the screen's two-tone). */
+  ding(vol = 0.08) {
+    if (!this.ctx) return;
+    this.tone(1568, 'sine', vol, 1.0);
+    this.tone(3136, 'sine', vol * 0.3, 0.6);
+    setTimeout(() => this.tone(2093, 'sine', vol * 0.8, 1.1), 140);
+  }
+
+  /** The fryer timer going off. */
+  fryer() {
+    if (!this.ctx) return;
+    for (let i = 0; i < 3; i++) setTimeout(() => this.tone(1850, 'square', 0.012, 0.12), i * 180);
   }
 
   voice(dest, freq, t, dur, type, vol, attack) {

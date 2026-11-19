@@ -50,10 +50,12 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   $9 an hour. See below.
 - **A nightclub**: **SUBSTATION**, a converted power substation in Ember Row, across the
   road from the Lantern Quarter. Open 10 PM to 4 AM. See below.
+- **A burger joint**: **GULLY'S** in Greenway, a little harbour-town fast food chain
+  ("Snatch a bite!" since 1987). Open 6 AM to 2 AM. See below.
 - **Customization**: the wardrobe (C) edits skin, hair style/colour, top style
   (tee, long sleeve, jacket over a shirt), colours, bottoms, shoes, height, build.
 - **Save**: autosaves to localStorage ("memory card"): position, time, money,
-  looks, friendships, settings.
+  looks, friendships, Gull Box toys, settings.
 - **Sound**: all synthesised with WebAudio: city rumble, wind, crickets, footsteps,
   horns, distant sirens, UI blips, typewriter ticks.
 
@@ -161,6 +163,41 @@ baked light channels (house lights, two stage washes, the LED floor) whose colou
 every frame from the music, so the whole hall changes colour on the beat with no real-time
 lights on the walls. People get the shared pool of real point lights, recoloured the same way.
 
+## GULLY'S (fast food)
+
+A small, made-up harbour-town burger chain: a round seagull mascot called Gully in a teal
+sailor cap (winking), teal/orange/cream/navy everything, "Snatch a bite!", founded 1987 as
+a fish shack on Pier Road. The Greenway branch sits back from the street behind a patio
+with umbrella tables, a pole sign with a turning Gully on top and a lit roof sign.
+
+- **Inside**: window booths with pendant lamps, tables with swivel stools, a checkerboard
+  floor, the harbour mural, posters (the new Seafoam Shake, collect all six Gull Box toys,
+  the sunrise menu, Employee of the Month), the bins with tray stacks by the door, a drink
+  station with free refills, a kids' corner with a Gully statue, a kiddie ride and a crayon
+  table, and restrooms. The kitchen is in full view behind the counter: the grill and
+  hood, the assembly line under heat lamps, fryers with baskets that dip, the order screens.
+- **The menu** (lit boards over the counter): Gully Stack, Single Gull, Catch of the Day,
+  Harbor Dog, Squawk Strips, Chip Snatchers, Onion Lifebuoys, Seafoam and Sunset shakes,
+  the Gull Box (kids' meal + a toy) and the Full Flock meal. Before 11 AM the boards swap to
+  the **Sunrise menu** (Early Bird, Dawn Patrol pancakes, Hash Brown Raft, Harbor Coffee...).
+- **Ordering**: queue at a register (the second opens when it's busy), press E, pick your
+  food, eat here or to go, pay cash or card. You get a number; it goes up on the **NOW
+  SERVING** board with a ding when Marco puts your tray on the pass. Take it, find a seat
+  (booths, stools or the patio) and eat: every item has its own little line. Bin your tray
+  by the door after. Take a tray past the patio and Pip swaps it for a bag; a bag can be
+  eaten anywhere (E).
+- **Gull Box toys**: six to collect (Captain, Surfer, Astro, Chef, Disco, and the rare
+  glow-in-the-dark Ghost). They line up on top of your fridge at home.
+- **People**: Jo and Theo on the registers, three cooks, Marco the shift manager on the
+  pass, Pip clearing tables, and customers who walk in off the street, queue, wait for
+  their number, eat (or take a bag) and mostly bin their own trays. Breakfast, the lunch
+  rush, dinner and the after-bars crowd are the busy times. Talk to anyone; ask Marco
+  about work.
+- **The kiddie ride** (50¢), refills, crayons, the mural, the sinks.
+- **Sound**: the in-store radio (bouncy, a bit cheesy, with the "Snatch a bite!" jingle),
+  fryer sizzle and extractor hum, fryer timers, the order-up bell.
+- **2 AM**: closed. The lights dim, Pip mops and the grill gets scrubbed. Back at 6.
+
 ## How the PS2 look works
 
 It's mostly a rendering recipe, not expensive art (see `src/render/ps2pipeline.js`):
@@ -196,13 +233,16 @@ src/
   render/                 PS2 post pipeline, procedural textures, sky, time-of-day palette
   world/                  city generator, street props, Lantern Quarter, colliders, particles,
                           apartments (doors, markers, interiors), the HALCYON 24 store,
-                          the SUBSTATION club (club.js)
+                          the SUBSTATION club (club.js), GULLY'S (gullys.js, and the
+                          mascot figure in gullyFigure.js)
   world/interior/         room/wall builder, furniture kit, baked lighting, apartment layouts
   actors/                 crowd renderer (instanced puppets, walk/carry/dance/sit poses),
                           appearance model, player + camera, pedestrians AI, traffic,
-                          clubbers (the club's staff, queue and crowd)
+                          clubbers (the club's staff, queue and crowd), diners (GULLY'S
+                          crew, customers, orders and trays)
   game/                   clock + save system, NPC dialogue data, the store job, the club's
-                          dance game (dance.js) and photo booth (photobooth.js)
+                          dance game (dance.js) and photo booth (photobooth.js), GULLY'S
+                          menu data (gullysMenu.js) and your visit there (gullysVisit.js)
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls
   audio/                  procedural ambience, sound effects and music; clubTrack.js is the
                           club song's arrangement, shared with the lights
@@ -220,7 +260,14 @@ interior with the same detail, light and sound as the apartments and the store.
 
 1. **SUBSTATION phase 3**: theme nights (the posters: STATIC, CURRENT, OVERLOAD, LOW
    VOLTAGE), regulars (the people you befriend turn up on their nights and remember you),
-   a bartender job, and a door behind the transformer that opens at 3:33 AM.
+   a bartender job (same setup as the store: a shift, tasks, a pay slip), and a door behind
+   the big copper coil that opens at 3:33 AM into a small after-hours room where the fog
+   glows violet, the music turns slow and strange, and the Lantern Quarter bleeds through.
+   Smaller ideas: skip the queue once you're friends with Dmitri on the door, a DJ gig as a
+   job, and a use for the locked staff room (the green room) behind the DJ.
+   **GULLY'S crew job**: Marco's "come back when the forms are sorted". Early shifts on the
+   fryers, the grill or a register (cook to the ticket screen, call numbers, bag to-go
+   orders), entry-level pay plus a free meal, using the store's shift system.
 2. **Needs**: hunger/energy/fun/social bars that the fridge, bed, shower and TV refill.
 3. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
    noodle bar cook, courier, office temp. Promotions and raises at the store.

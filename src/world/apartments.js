@@ -8,6 +8,8 @@ import { makeInteriorUniforms } from './interior/bake.js';
 import { createInteriorTextures } from '../render/interiorTextures.js';
 import { makeCanvas, makeTex } from '../render/textures.js';
 import { additive } from '../render/materials.js';
+import { addGully } from './gullyFigure.js';
+import { TOYS } from '../game/gullysMenu.js';
 
 // Builds every apartment interior on its real floor inside its building (so the
 // windows show the live street), plus the street doors, floating markers and
@@ -104,6 +106,8 @@ export class Apartments {
         site,
         fans,
         photo,
+        toyTop: kit.fridgeTop ?? null,
+        toys: null,
         origin,
         floorY: site.floorY,
         lightsOn: true,
@@ -241,6 +245,28 @@ export class Apartments {
       a.photo.material.map = texture;
       a.photo.material.needsUpdate = true;
       a.photo.visible = a.photo.userData.magnet.visible = true;
+    }
+  }
+
+  /** Line up the Gull Box toys you've collected along the top of the fridge. */
+  setToys(ids) {
+    const have = TOYS.filter((t) => ids.includes(t.id));
+    for (const a of this.list) {
+      if (!a.toyTop) continue;
+      if (a.toys) {
+        a.group.remove(a.toys);
+        a.toys.geometry.dispose();
+        a.toys = null;
+      }
+      if (!have.length) continue;
+      const b = new GeoBuilder();
+      have.forEach((t) => {
+        const k = TOYS.indexOf(t);
+        const m = a.toyTop.clone().multiply(new THREE.Matrix4().makeTranslation(-0.28 + k * 0.112, 0, 0.02 * (k % 2))).multiply(new THREE.Matrix4().makeScale(0.11, 0.11, 0.11));
+        addGully(b, m, t);
+      });
+      a.toys = new THREE.Mesh(b.build(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: '#1a1a1a' }));
+      a.group.add(a.toys);
     }
   }
 

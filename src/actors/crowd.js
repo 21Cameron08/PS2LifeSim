@@ -256,9 +256,10 @@ export class Crowd {
         _A.multiplyMatrices(_M, _L);
         // carrying holds both arms out front; working makes them busy
         const tnow = performance.now();
-        let arm = c.carry ? -1.05 : c.work ? -0.75 + Math.sin(tnow * 0.011 + s * 2.2) * 0.35 : Math.sin(p) * A * 0.85;
-        let armRoll = side * (c.carry ? 0.1 : -0.07);
-        let elbow = c.carry ? -0.55 : c.work ? -0.7 : -(0.18 + 0.5 * run) * (0.4 + 0.6 * a) + (c.talk && s === 1 ? -0.6 : 0);
+        // a tray is held flat at waist height, forearms level
+        let arm = c.tray ? -0.3 : c.carry ? -1.05 : c.work ? -0.75 + Math.sin(tnow * 0.011 + s * 2.2) * 0.35 : Math.sin(p) * A * 0.85;
+        let armRoll = side * (c.carry || c.tray ? 0.1 : -0.07);
+        let elbow = c.tray ? -1.25 : c.carry ? -0.55 : c.work ? -0.7 : -(0.18 + 0.5 * run) * (0.4 + 0.6 * a) + (c.talk && s === 1 ? -0.6 : 0);
         if (c.sit) {
           arm = -0.55;
           elbow = -0.75;
@@ -284,7 +285,13 @@ export class Crowd {
           arm *= dn;
           elbow *= dn;
         }
-        const talkWave = !c.carry && !c.work && !dn && c.talk && s === 1 ? -0.5 + Math.sin(tnow * 0.006) * 0.15 : 0;
+        // eating: the right hand goes up to the mouth every few seconds
+        if (c.eat > 0 && s === 1 && !c.tray) {
+          const l = Math.pow(Math.max(0, Math.sin(tnow * 0.0016 + id * 1.3)), 2) * c.eat;
+          arm += (-0.95 - arm) * l;
+          elbow += (-1.9 - elbow) * l;
+        }
+        const talkWave = !c.carry && !c.tray && !c.work && !dn && !c.eat && c.talk && s === 1 ? -0.5 + Math.sin(tnow * 0.006) * 0.15 : 0;
         local(_L, side * 0.285, NECK_Y - HIP_Y - 0.04, 0, arm + talkWave, 0, armRoll);
         _A.multiply(_L);
         P.upperArm.setMatrixAt(k, _A);

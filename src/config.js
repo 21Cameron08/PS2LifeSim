@@ -63,7 +63,11 @@ export const STORE_SITE = { block: [2, 1], width: 14, depth: 13, floors: 3, styl
 // no flats above, so the club builds its own concrete shell instead of a city facade.
 export const CLUB_SITE = { block: [4, 3], width: 24, depth: 18, floorLift: 0.015 };
 
-const ALL_SITES = [...Object.entries(APARTMENT_SITES), ['store', STORE_SITE], ['club', CLUB_SITE]];
+// GULLY'S: a fast food restaurant (a small made-up harbour chain) in Greenway, just
+// south of the park. A low standalone building set back behind a patio (src/world/gullys.js).
+export const GULLYS_SITE = { block: [1, 3], width: 20, depth: 17, floorLift: 0.015 };
+
+const ALL_SITES = [...Object.entries(APARTMENT_SITES), ['store', STORE_SITE], ['club', CLUB_SITE], ['gullys', GULLYS_SITE]];
 export const siteForBlock = (i, j) => ALL_SITES.find(([, s]) => s.block[0] === i && s.block[1] === j);
 
 export const START = {

@@ -788,6 +788,7 @@ export const F = {
     if (onUse) P.interact(x, 1.2, onUse);
     // where a photo-booth strip gets stuck with a magnet (see apartments.js)
     P.k.fridgePhoto = P.m.clone().multiply(trs(x + 0.145, 0.61, 0.716));
+    P.k.fridgeTop = P.m.clone().multiply(trs(x, h, 0.36));
   },
   microwave(P, { x = 0, z = 0.1 } = {}) {
     P.box('solid', x - 0.25, 0.9, z, x + 0.25, 1.18, z + 0.36, C('#e0e0dc'));
