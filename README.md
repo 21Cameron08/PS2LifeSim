@@ -19,6 +19,7 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 | Wardrobe | C | STYLE |
 | Pause / settings | Esc (or P) | MENU |
 | Fast‑forward time | hold T | – |
+| Dance (on the club's floor) | E to start, ← ↑ → ↓ or WASD on the beat, Esc to stop | USE, then the arrow pad |
 | Mute | M | in the pause menu |
 
 ## What's in this first slice
@@ -115,12 +116,14 @@ store it's part of the street: no loading screen.
   steel canopy, and Ray's fries cart on the curb ($4, open 9 PM to 5 AM). Cover is $20 ($30 on
   Saturdays), cash only; the stamp on your hand lets you come and go until close. From down
   the street you only hear the kick drum; it opens up when the doors swing open.
+- **Dress code**: no shorts, ever; on Fridays and Saturdays no T-shirts (long sleeves or a
+  jacket). Turned away? Change in the wardrobe (C) and try again.
 - **Inside**: a lobby with a coat check (it really takes your jacket off you, $2), gig posters,
-  an ATM and a photo booth (out of film for now), a strip curtain into one tall concrete hall:
+  an ATM and a photo booth, a strip curtain into one tall concrete hall:
   an 8x8 LED dance floor under a mirror ball and a lighting truss, a DJ on an old transformer
   housing in front of a giant copper coil, ceramic insulator stacks, speaker stacks whose
   cones pump on the kick, a long backlit bar, red velvet booths, toilets covered in stickers,
-  and the VIP stairs (roped off: the balcony is "closed for a refit").
+  and the stairs up to the VIP balcony and the roof.
 - **The show**: an original synthesised house track at 124 BPM that loops through intro,
   groove, breakdown, build and drop. The lights follow it: washes pulse on the kick, the
   floor runs patterns per section, the mirror ball spots swirl in the breakdown, beams sweep
@@ -128,6 +131,26 @@ store it's part of the street: no loading screen.
 - **People**: up to ~40 clubbers depending on the night (Saturday is packed, Monday isn't),
   who walk in through the lobby, dance, prop up the bar, sit in the booths and leave. Staff:
   bouncer, security, DJ, two bartenders, coat check.
+- **Dance**: step onto the LED floor and press E. Arrows scroll to the line on the beat; hit
+  them in time for PERFECT / GOOD. Good timing fills your groove meter, which upgrades your
+  moves (side step, groove, fist pump, hands up); at full groove the dancers around you turn
+  and cheer. Timing is judged against what you hear, not the frame rate.
+- **The bar** (and the roof bar): water, soft drinks, beer and three house cocktails (the Live
+  Wire, the Brownout, the Spark). A drink or two loosens you up (the dance timing gets a bit
+  more forgiving); after four, the bartender cuts you off.
+- **People**: talk to anyone off the dance floor (bar, booths, balcony, roof). Everyone has a
+  name and a vibe; chatting once a night and buying them a drink builds a friendship that's
+  saved. Ask someone on the floor to dance and they'll partner you, copying your moves.
+- **Sit down** in the booths, on the balcony and on the roof sofas and bench.
+- **VIP balcony**: Celeste on the upper door sells wristbands ($150 on Fridays and Saturdays,
+  $100 other nights, card). Emerald booths over the glass rail, the best view of the floor,
+  and bottle service ($200) that arrives with a sparkler and wins over the whole balcony.
+- **The roof terrace**: from the stair landing, out the door and up the fire escape on the
+  front of the building. Decking, string lights, patio heaters, sofas, a bench at the parapet
+  facing the Lantern Quarter's glowing tree, a roof bar, and people out getting some air. The
+  music is a far-off thump up here; the lights show from the street.
+- **Photo booth**: $5 for four flashes and four poses. The strip pops up, it's saved (your last
+  three), and the newest one is stuck on the fridge at home with a magnet.
 - **4 AM: lights up.** House lights snap on, the music cuts, everyone files out. At 4:30
   security walks you out.
 - **Flashing lights** (pause menu): FULL adds strobes, REDUCED (default) keeps beat pulses
@@ -178,14 +201,15 @@ src/
   actors/                 crowd renderer (instanced puppets, walk/carry/dance/sit poses),
                           appearance model, player + camera, pedestrians AI, traffic,
                           clubbers (the club's staff, queue and crowd)
-  game/                   clock + save system, NPC dialogue data, the store job
+  game/                   clock + save system, NPC dialogue data, the store job, the club's
+                          dance game (dance.js) and photo booth (photobooth.js)
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls
   audio/                  procedural ambience, sound effects and music; clubTrack.js is the
                           club song's arrangement, shared with the lights
 ```
 
 Performance notes: static scenery is merged into one mesh per material and every
-person is drawn with ~12 instanced meshes total, so a frame is roughly 60–120 draw
+person is drawn with ~12 instanced meshes total, so a frame is roughly 60–140 draw
 calls. It should run well on integrated GPUs and phones.
 
 ## Roadmap (suggested order)
@@ -194,10 +218,9 @@ The big goal: **lots of cool places to hang out**. Every new space (diner, arcad
 rooftop, karaoke bar, record shop, a 2 AM laundromat, the pier) gets a real walk-in
 interior with the same detail, light and sound as the apartments and the store.
 
-1. **SUBSTATION phase 2**: a dance rhythm game, a proper drinks menu and buying drinks for
-   people, a dress code at the door, the VIP balcony and the roof terrace, a working photo
-   booth (keep the strip, hang it at home), club chat for NPCs. **Phase 3**: theme nights,
-   regulars, a bartender job, and a door behind the transformer that opens at 3:33 AM.
+1. **SUBSTATION phase 3**: theme nights (the posters: STATIC, CURRENT, OVERLOAD, LOW
+   VOLTAGE), regulars (the people you befriend turn up on their nights and remember you),
+   a bartender job, and a door behind the transformer that opens at 3:33 AM.
 2. **Needs**: hunger/energy/fun/social bars that the fridge, bed, shower and TV refill.
 3. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
    noodle bar cook, courier, office temp. Promotions and raises at the store.

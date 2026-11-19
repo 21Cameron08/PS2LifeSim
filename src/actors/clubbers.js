@@ -1,6 +1,7 @@
 import { CITY } from '../config.js';
 import { Rng, damp, smoothstep, angleLerp } from '../core/rng.js';
 import { randomAppearance } from './appearance.js';
+import { FIRST_NAMES } from '../game/dialogue.js';
 
 // Everyone at SUBSTATION: the staff, the queue on the pavement, and a pool of
 // clubbers who arrive through the lobby, dance, prop up the bar, sit in the
@@ -8,6 +9,9 @@ import { randomAppearance } from './appearance.js';
 // night of the week and the time.
 
 const BUSY = { MON: 12, TUE: 12, WED: 16, THU: 24, FRI: 34, SAT: 42, SUN: 18 };
+const VIP_BUSY = { MON: 2, TUE: 2, WED: 3, THU: 4, FRI: 6, SAT: 8, SUN: 3 };
+const ROOF_BUSY = { MON: 4, TUE: 3, WED: 4, THU: 6, FRI: 8, SAT: 10, SUN: 5 };
+const VIBES = ['hyped', 'chill', 'shy', 'chatty', 'raver', 'regular'];
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const POOL = 56;
 const QUEUE = 8;
@@ -44,8 +48,19 @@ export class Clubbers {
       vendor: { c: mk({ ...clubLook(rng), topStyle: 0, top: '#f2f0e8', jacket: '#c82a2a' }), name: 'Ray', spot: club.vendorSpot },
     };
     this.bartenders = [0, 1].map((k) => ({ c: mk({ ...clubLook(rng), topStyle: 1, top: k ? '#141418' : '#e8e4dc' }), spot: k, until: 0, work: 0 }));
+    // everyone has a name and a vibe, stable from night to night (friendships are saved by key)
+    const who = (group, k, vibe) => ({ key: `club:${group}:${k}`, name: FIRST_NAMES[(k * 7 + group.length * 5 + 3) % FIRST_NAMES.length], vibe: vibe ?? VIBES[(k * 5 + group.length) % VIBES.length] });
     this.pool = [];
-    for (let k = 0; k < POOL; k++) this.pool.push({ c: mk(clubLook(rng)), mode: 'off', path: [], spot: null, groove: rng.float(-0.06, 0.06), move: rng.int(0, 3), nextMove: 0, ox: 0, oz: 0 });
+    for (let k = 0; k < POOL; k++) this.pool.push({ c: mk(clubLook(rng)), mode: 'off', path: [], spot: null, groove: rng.float(-0.06, 0.06), move: rng.int(0, 3), nextMove: 0, ox: 0, oz: 0, ...who('floor', k) });
+    // VIPs on the balcony and smokers on the roof just stay put
+    const sharp = () => ({ ...clubLook(rng), topStyle: 2, jacket: rng.pick(['#141418', '#e8e4dc', '#7a2330', '#c9b48a']) });
+    this.vips = [];
+    for (let k = 0; k < 8; k++) this.vips.push({ c: mk(sharp()), mode: 'off', spot: null, group: 'vip', groove: rng.float(0, 6), ...who('vip', k, k % 2 ? 'flash' : 'regular') });
+    this.roofers = [];
+    for (let k = 0; k < 10; k++) this.roofers.push({ c: mk(clubLook(rng)), mode: 'off', spot: null, group: 'roof', groove: rng.float(0, 6), ...who('roof', k, k % 3 ? 'chill' : 'chatty') });
+    this.staff.host = { c: mk(black({ topStyle: 2, jacket: '#2a2a30', top: '#e8e4dc', hairStyle: 2 })), name: 'Celeste', spot: club.vipHostSpot };
+    this.staff.roofBar = { c: mk({ ...clubLook(rng), topStyle: 1, top: '#2a5ab0' }), name: 'Roof bar', spot: club.roofBartenderSpot };
+    this.partner = null; // a clubber dancing with the player
     this.queue = [];
     for (let k = 0; k < QUEUE; k++) this.queue.push({ c: mk(clubLook(rng)), mode: 'off', path: [], slot: -1 });
     this.taken = new Set();
@@ -140,12 +155,14 @@ export class Clubbers {
     const inside = s.playerInside;
 
     // ---------------------------------------------------------------- staff
-    for (const key of ['bouncer', 'security', 'dj', 'coat']) {
+    for (const key of ['bouncer', 'security', 'dj', 'coat', 'host', 'roofBar']) {
       const st = this.staff[key];
       const c = st.c;
-      c.visible = show && staffOn;
+      c.visible = show && staffOn && (key === 'roofBar' || key === 'bouncer' || s.playerInside || s.nearDoor || key === 'dj');
+      if (key === 'roofBar') c.visible = show && open;
       if (!c.visible) continue;
       this.place(c, st.spot.x, st.spot.z, undefined, st.spot.y ?? null);
+      if (st.spot.y != null) c.ground = st.spot.y;
       if (key === 'dj') {
         c.yaw = 0;
         c.work = open;
@@ -264,8 +281,15 @@ export class Clubbers {
           a.move = S?.name === 'drop' ? (r < 0.45 ? 1 : r < 0.75 ? 0 : 2) : S?.name === 'breakdown' ? (r < 0.6 ? 2 : 3) : r < 0.4 ? 2 : r < 0.7 ? 3 : 0;
           c.move = a.move;
         }
-        const want = open ? (S ? 0.45 + 0.55 * S.energy : 0.7) : 0;
+        let want = open ? (S ? 0.45 + 0.55 * S.energy : 0.7) : 0;
+        if (a.talking) want = 0.15;
+        if (this.partner === a) {
+          want = 1;
+          c.move = this.partnerMove ?? c.move;
+          a.nextMove = beat + 4;
+        }
         c.dance = damp(c.dance || 0, want, 2, dt);
+        c.talk = !!a.talking;
         // step aside when the player squeezes past
         let tx = 0;
         let tz = 0;
@@ -280,20 +304,49 @@ export class Clubbers {
         a.oz = damp(a.oz, tz, 6, dt);
         c.x = a.spot.x + a.ox;
         c.z = a.spot.z + a.oz;
-        c.yaw = angleLerp(c.yaw, a.spot.yaw, Math.min(1, dt * 2));
+        const face = a.talking || this.partner === a ? Math.atan2(s.playerPos.x - c.x, s.playerPos.z - c.z) : a.spot.yaw;
+        c.yaw = angleLerp(c.yaw, face, Math.min(1, dt * (a.talking ? 6 : 2)));
+        // cheer when the player's on fire nearby
+        if (s.hype > 0.5 && Math.hypot(s.playerPos.x - c.x, s.playerPos.z - c.z) < 3.2) {
+          c.yaw = angleLerp(c.yaw, Math.atan2(s.playerPos.x - c.x, s.playerPos.z - c.z), Math.min(1, dt * 3));
+          c.move = 1;
+        }
       } else if (a.mode === 'bar') {
         c.dance = 0;
         c.nod = 0.07 * hit;
-        c.talk = Math.sin(s.time * 0.3 + a.groove * 100) > 0.6;
-        c.yaw = angleLerp(c.yaw, a.spot.yaw, Math.min(1, dt * 4));
+        c.talk = a.talking || Math.sin(s.time * 0.3 + a.groove * 100) > 0.6;
+        c.yaw = angleLerp(c.yaw, a.talking ? Math.atan2(s.playerPos.x - c.x, s.playerPos.z - c.z) : a.spot.yaw, Math.min(1, dt * 4));
       } else if (a.mode === 'sit') {
         c.dance = 0;
         c.sit = true;
         c.nod = 0.05 * hit;
-        c.talk = Math.sin(s.time * 0.25 + a.groove * 80) > 0.3;
+        c.talk = a.talking || Math.sin(s.time * 0.25 + a.groove * 80) > 0.3;
         c.y = c.ground + 0.5 - 0.86 * c.app.height;
         c.yaw = a.spot.yaw;
       }
+    }
+
+    // ---------------------------------------------------------------- balcony and roof
+    const fillVip = open ? Math.round((VIP_BUSY[s.weekday] ?? 3) * Math.max(0.4, fill)) : 0;
+    const fillRoof = open ? Math.round((ROOF_BUSY[s.weekday] ?? 4) * Math.max(0.3, fill)) : 0;
+    this.settle(this.vips, fillVip, club.vipSeats, !inside);
+    this.settle(this.roofers, fillRoof, [...club.roofStand, ...club.roofSeats], !s.onRoof);
+    for (const a of [...this.vips, ...this.roofers]) {
+      const c = a.c;
+      c.visible = a.mode !== 'off' && (a.group === 'roof' ? show : show && (inside || s.nearDoor));
+      if (!c.visible) continue;
+      c.beat = beat;
+      this.idle(c, dt);
+      const sp = a.spot;
+      c.sit = !!(sp.vip || (sp.roof && sp.yaw !== undefined && club.roofSeats.includes(sp)));
+      c.x = sp.x;
+      c.z = sp.z;
+      c.ground = sp.y;
+      c.y = c.sit ? sp.y + 0.5 - 0.86 * c.app.height : sp.y;
+      if (!a.talking) c.yaw = angleLerp(c.yaw, sp.yaw, Math.min(1, dt * 3));
+      c.nod = (a.group === 'vip' ? 0.06 : 0.03) * hit;
+      c.talk = a.talking || Math.sin(s.time * 0.27 + a.groove) > 0.1;
+      c.dance = 0;
     }
 
     // ---------------------------------------------------------------- queue
@@ -350,6 +403,53 @@ export class Clubbers {
           }
       }
     }
+  }
+
+  /** Fill (or empty) a group of people who just sit or stand in fixed spots. */
+  settle(list, want, spots, instant) {
+    const on = list.filter((a) => a.mode !== 'off');
+    if (on.length === want) return;
+    // only change who's there when the player can't see it happen
+    if (!instant && !(on.length > want && this.rng.chance(0.002))) return;
+    while (on.length < want) {
+      const a = list.find((p) => p.mode === 'off');
+      const free = spots.filter((sp) => !this.taken.has(sp));
+      if (!a || !free.length) break;
+      a.spot = this.rng.pick(free);
+      this.taken.add(a.spot);
+      a.mode = 'stay';
+      a.c.yaw = a.spot.yaw;
+      on.push(a);
+    }
+    while (on.length > want) {
+      const a = on.pop();
+      this.taken.delete(a.spot);
+      a.mode = 'off';
+      a.c.visible = false;
+      a.c.sit = false;
+    }
+  }
+
+  /** The nearest clubber you could talk to (same floor, standing still). */
+  nearest(pos, r) {
+    let best = null;
+    let bd = r;
+    for (const a of [...this.pool, ...this.vips, ...this.roofers]) {
+      const c = a.c;
+      if (!c.visible || a.mode === 'off' || a.mode === 'walk' || a.mode === 'leave') continue;
+      if (Math.abs(c.ground - pos.y) > 0.7) continue;
+      const d = Math.hypot(c.x - pos.x, c.z - pos.z);
+      if (d < bd) {
+        bd = d;
+        best = a;
+      }
+    }
+    return best;
+  }
+
+  /** Seats nobody's sitting in (for the player). */
+  freeSeats() {
+    return [...this.club.seats, ...this.club.vipSeats, ...this.club.roofSeats].filter((sp) => !this.taken.has(sp));
   }
 
   // ==========================================================================

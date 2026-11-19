@@ -150,11 +150,12 @@ function neonSign() {
   );
   tube(
     () => {
-      g.font = `bold 62px ${STENCIL}`;
+      // sized to fit the 512px texture whatever the fallback font is
+      g.font = `bold 50px ${STENCIL}`;
       g.textAlign = 'left';
       g.textBaseline = 'middle';
-      if ('letterSpacing' in g) g.letterSpacing = '6px';
-      g.strokeText('SUBSTATION', 96, 66);
+      if ('letterSpacing' in g) g.letterSpacing = '3px';
+      g.strokeText('SUBSTATION', 96, 66, 400);
       if ('letterSpacing' in g) g.letterSpacing = '0px';
     },
     '#e8f4ff',

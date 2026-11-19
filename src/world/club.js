@@ -43,6 +43,11 @@ const PALETTES = [
   ['#8a2aff', '#2affd0'],
 ].map((p) => p.map((h) => new THREE.Color(h)));
 
+const ROOF_DECK = ROOF + 0.36; // the terrace decking
+const ROOF_DECK_Z = 8.6;
+const FE_RISE = (ROOF_DECK - 3.6) / 14; // fire escape: 14 steps from the landing to the roof
+const FE_RUN = (21.7 - 15.9) / 14;
+
 const OPEN_H = 22; // 10 PM
 const CLOSE_H = 4; // lights up
 const LOCK_H = 4.5; // everyone out, doors locked
@@ -109,7 +114,11 @@ export class Club {
 
   zoneAt(p) {
     const { x, z } = this.local(p);
+    const y = p.y - this.origin.y;
+    if (x < -0.3 || x > W + 0.3 || z < -0.3 || z > D + 0.3) return null;
+    if (y > ROOF - 0.5) return 'roof';
     if (x < 0 || x > W || z < 0 || z > D) return null;
+    if (z >= FRONT && y > 3.0) return x < 17.6 ? 'vip' : 'stairs';
     if (z >= FRONT) return x < 3.6 ? 'coat' : x < 17.6 ? 'lobby' : 'stairs';
     if (x > 18.4 && z < 5.4) return 'toilets';
     if (x < 5.0 && z < 4.2) return 'green';
@@ -118,8 +127,50 @@ export class Club {
 
   ceilingAt(p) {
     const z = this.zoneAt(p);
-    const h = z === 'coat' || z === 'lobby' ? LOBBY_H : z === 'stairs' ? 6.0 : z === 'toilets' ? 3.0 : H;
+    const h = z === 'coat' || z === 'lobby' ? LOBBY_H : z === 'stairs' ? 6.0 : z === 'toilets' ? 3.0 : z === 'roof' ? Infinity : H;
     return this.origin.y + h;
+  }
+
+  /**
+   * The club has floors at several heights: the stairs, the landing and walkway, the
+   * VIP balcony over the lobby, the fire escape and the roof. Given where the player's
+   * feet are now (yHint), pick the highest surface they could be standing on.
+   */
+  groundAt(wx, wz, yHint, base) {
+    const o = this.origin;
+    const x = wx - o.x;
+    const z = wz - o.z;
+    if (x < -0.4 || x > W + 0.4 || z < -0.4 || z > D + 1.6) return base;
+    const reach = yHint - o.y + 0.45;
+    let best = base - o.y;
+    const take = (h) => {
+      if (h <= reach && h > best) best = h;
+    };
+    const inR = (x0, x1, z0, z1) => x >= x0 && x <= x1 && z >= z0 && z <= z1;
+    // lobby stairs: 14 steps up to the landing
+    if (inR(17.9, 22.1, 15.9, D)) take(Math.min(14, Math.floor((x - 17.9) / 0.3) + 1) * (3.6 / 14));
+    if (inR(22.1, W, FRONT, D) || inR(22.35, 23.25, D, D + 0.3)) take(3.6); // landing and its street door
+    if (inR(17.5, 22.1, FRONT + 0.1, 15.6)) take(3.6); // walkway to the VIP door
+    if (inR(3.6, 17.6, FRONT + 0.12, D)) take(3.6); // VIP balcony
+    // fire escape on the facade, outside the street wall
+    const fz0 = D + 0.3;
+    if (inR(21.7, 23.6, fz0, fz0 + 1.15)) take(3.6);
+    if (inR(15.9, 21.7, fz0 + 0.05, fz0 + 1.1)) take(3.6 + Math.min(14, Math.floor((21.7 - x) / FE_RUN) + 1) * FE_RISE);
+    if (inR(14.9, 15.9, D - 0.1, fz0 + 1.1)) take(ROOF_DECK);
+    // the roof, and the terrace deck on its front half
+    if (inR(-0.3, W + 0.3, -0.3, D + 0.3)) take(inR(-0.05, W + 0.05, ROOF_DECK_Z, D + 0.05) ? ROOF_DECK : ROOF + 0.32);
+    return o.y + best;
+  }
+
+  /** Is p standing on the LED dance floor? */
+  onFloor(p) {
+    const { x, z } = this.local(p);
+    return p.y < this.origin.y + 1 && x > FLOOR.x0 - 0.2 && x < FLOOR.x0 + FLOOR.n * TILE + 0.2 && z > FLOOR.z0 - 0.2 && z < FLOOR.z0 + FLOOR.n * TILE + 0.2;
+  }
+
+  /** Is p up on the fire escape or the roof? */
+  aloft(p) {
+    return this.zoneAt(p) === 'roof' || (p.y > this.origin.y + 3 && Math.abs(p.z - (this.origin.z + D + 0.85)) < 0.9 && p.x > this.origin.x + 14.5 && p.x < this.origin.x + W + 0.3);
   }
 
   /** 'open' 10 PM - 4 AM, 'lightsup' 4 - 4:30 AM, otherwise 'closed' */
@@ -156,6 +207,20 @@ export class Club {
     kit.room('lobby', 3.6, FRONT, 17.6, D, lobbyF);
     kit.room('coat', 0, FRONT, 3.6, D, { floor: 'woodWorn', wall: 'plaster', wallColor: '#8a2a3e', ceil: '#2a1a20', base: '#2a1a1a', trim: '#5a3a2a', h: LOBBY_H });
     kit.room('stairs', 17.6, FRONT, W, D, { floor: 'concrete', floorColor: '#5a5a62', wall: 'solid', wallColor: '#4a161c', ceil: '#1a0a0c', ceilKey: 'solid', base: BLACK, trim: '#c8a02a', h: 6.0 });
+    // the VIP balcony over the lobby: its floor is the lobby's ceiling, it's open to the hall
+    kit.room('vip', 3.66, FRONT + 0.125, 17.54, D, {
+      y0: 3.6,
+      floor: 'herringbone',
+      floorColor: '#8a5a3e',
+      wall: 'plaster',
+      wallColor: '#3a2034',
+      wainscot: { key: 'wood', h: 1.05, color: '#4a2c1c', cap: '#c8a04a' },
+      ceil: '#120e14',
+      ceilKey: 'solid',
+      base: BLACK,
+      trim: '#c8a04a',
+      zone: 'hall',
+    });
     kit.room('toilets', 18.4, 0, W, 5.4, {
       floor: 'penny',
       floorColor: '#7a8a84',
@@ -170,11 +235,26 @@ export class Club {
     });
 
     // ---------------------------------------------------------------- walls
-    kit.wall('x', D, 0, W, { t: 0.3, ext: 1, open: [{ from: DOOR[0], to: DOOR[1], kind: 'opening', y1: 2.6, trim: '#2a2a2e' }] });
+    kit.wall('x', D, 0, W, {
+      t: 0.3,
+      ext: 1,
+      open: [
+        { from: DOOR[0], to: DOOR[1], kind: 'opening', y1: 2.6, trim: '#2a2a2e' },
+        { from: 22.35, to: 23.25, kind: 'opening', y0: 3.6, y1: 5.7, trim: '#c8a02a' }, // out to the fire escape
+      ],
+    });
     kit.wall('x', 0, 0, W, { t: 0.3, ext: -1 });
     kit.wall('z', 0, 0, D, { t: 0.3, ext: -1 });
     kit.wall('z', W, 0, D, { t: 0.3, ext: 1 });
-    kit.wall('x', FRONT, 0, W, { t: 0.25, open: [{ from: ARCH[0], to: ARCH[1], kind: 'opening', y1: 2.7, trim: '#c8a02a' }] });
+    // the hall's front wall: the arch from the lobby, and the balcony's big opening above it
+    kit.wall('x', FRONT, 0, W, {
+      t: 0.25,
+      open: [
+        { from: 4.0, to: ARCH[0], kind: 'opening', y0: 3.6, y1: 6.6, noTrim: true },
+        { from: ARCH[0], to: ARCH[1], gaps: [{ y0: 0, y1: 2.7, trim: '#c8a02a' }, { y0: 3.6, y1: 6.6, noTrim: true }] },
+        { from: ARCH[1], to: 17.2, kind: 'opening', y0: 3.6, y1: 6.6, noTrim: true },
+      ],
+    });
     kit.wall('z', 3.6, FRONT, D, { open: [{ from: 14.5, to: 16.9, kind: 'opening', y0: 0.98, y1: 2.2, trim: '#5a3a2a' }] });
     kit.wall('z', 17.6, FRONT, D, {
       open: [
@@ -233,6 +313,7 @@ export class Club {
     this.buildHall(kit, P, R90, PI, BLACK);
     this.buildFront(kit, P, R90, PI, BLACK);
     this.buildToilets(kit, P, R90, PI, BLACK);
+    this.buildVip(kit, P, R90, PI, BLACK);
   }
 
   buildHall(kit, P, R90, PI, BLACK) {
@@ -438,11 +519,13 @@ export class Club {
       Bo.geo('glass', new THREE.CylinderGeometry(0.04, 0.035, 0.14, 8), 1.3, 0.81, -0.15);
       Bo.collide(0, -1.25, 1.9, 1.25, 1.25);
       Bo.shadow(0, -1.25, 1.9, 1.25, 0.35);
+      const y = this.origin.y;
+      const out = xz(this.w(2.35, c));
       this.seats.push(
-        { ...xz(this.w(0.3, c - 0.4)), yaw: R90 },
-        { ...xz(this.w(0.3, c + 0.4)), yaw: R90 },
-        { ...xz(this.w(1.25, c - 0.95)), yaw: 0 },
-        { ...xz(this.w(1.25, c + 0.95)), yaw: PI },
+        { ...xz(this.w(0.3, c - 0.4)), y, yaw: R90, out },
+        { ...xz(this.w(0.3, c + 0.4)), y, yaw: R90, out },
+        { ...xz(this.w(1.25, c - 0.95)), y, yaw: 0, out },
+        { ...xz(this.w(1.25, c + 0.95)), y, yaw: PI, out },
       );
     }
     // posters over the booths
@@ -543,19 +626,86 @@ export class Club {
     for (let x = 17.9; x < 22.1; x += 0.6) ST.box('solid', x, 3.6, 15.5, x + 0.04, 4.6, 15.54, C('#c8a02a'));
     ST.box('solid', 17.6, 4.6, 15.48, 22.1, 4.65, 15.56, C('#c8a02a'), { bottom: true });
     ST.geo('solid', new THREE.BoxGeometry(5.53, 0.05, 0.05), 20.0, 2.75, 15.9, C('#c8a02a'), 0, 1, 1, 1, 0, Math.atan2(3.6, 4.2));
-    // the upper door to the balcony, and its sign
-    ST.box('solid', 17.6 + 0.07, 3.6, 14.25, 17.6 + 0.12, 5.65, 15.35, C('#2a0a0e'));
+    // the VIP door's sign; the stairs themselves are open to everyone (roof terrace)
     ST.box('glow', 17.6 + 0.121, 5.75, 14.45, 17.6 + 0.126, 5.9, 15.15, C('#ffd23a'));
+    P(17.6 + 0.07, 14.8, R90).panel('clubSigns', -0.55, 5.72, 0.55, 5.86, 0.06, signUV(9));
     P(17.6 - 0.07, 16.55, -R90).panel('clubSigns', -0.7, 2.45, 0.7, 2.6, 0, signUV(2));
-    for (const z of [15.95, 17.15]) {
-      const Sx = P(17.3, z);
-      Sx.geo('solid', new THREE.CylinderGeometry(0.15, 0.16, 0.03, 12), 0, 0.015, 0, C('#c8a04a'));
-      Sx.geo('solid', new THREE.CylinderGeometry(0.025, 0.025, 0.95, 8), 0, 0.48, 0, C('#c8a04a'));
-      Sx.geo('solid', new THREE.SphereGeometry(0.05, 8, 6), 0, 0.97, 0, C('#c8a04a'));
+    P(W - 0.01, 16.5, -R90).panel('clubSigns', -0.6, 5.85, 0.6, 5.97, 0, signUV(2));
+    // railings: walkway edge over the stairwell, and the open side of the stairs
+    P(0, 0).collide(17.6, 15.5, 22.1, 15.96, 4.65);
+    P(0, 0, 0, 0.25).collide(18.4, 15.86, 22.1, 15.96, 4.4);
+    for (let x = 18.5; x < 22.1; x += 0.6) {
+      const top = Math.min(14, Math.floor((x - 17.9) / 0.3) + 1) * (3.6 / 14);
+      ST.box('solid', x, top, 15.9, x + 0.035, top + 0.9, 15.935, C('#c8a02a'));
     }
-    P(17.3, 16.55).geo('fabric', new THREE.CylinderGeometry(0.03, 0.03, 1.2, 6), 0, 0.86, 0, C('#8a1a2a'), 0, 1, 1, 1, PI / 2);
-    P(0, 0).collide(17.2, 15.9, 17.65, 17.2, 1.0);
-    this.vipSpot = this.w(16.9, 16.55);
+    this.vipDoorSpot = this.w(18.1, 14.8, 3.6);
+  }
+
+  buildVip(kit, P, R90, PI, BLACK) {
+    const Y = 3.6;
+    const V = (x, z, r = 0) => kit.place(x, z, r, Y);
+    // glass balustrade in the big opening, brass posts and rail
+    const B = V(0, 0);
+    for (let x = 4.0; x < 17.19; x += 1.65) {
+      const x1 = Math.min(17.2, x + 1.65);
+      B.quad('glass', [x + 0.03, 0.02, FRONT], [x1 - 0.03, 0.02, FRONT], [x1 - 0.03, 1.0, FRONT], [x + 0.03, 1.0, FRONT], [0, 0, 1], [0, 0, 1, 1]);
+      B.box('solid', x - 0.025, 0, FRONT - 0.04, x + 0.025, 1.05, FRONT + 0.04, C('#c8a04a'));
+    }
+    B.box('solid', 17.175, 0, FRONT - 0.04, 17.225, 1.05, FRONT + 0.04, C('#c8a04a'));
+    B.box('solid', 4.0, 1.05, FRONT - 0.05, 17.2, 1.1, FRONT + 0.05, C('#c8a04a'), { bottom: true });
+    B.collide(4.0, FRONT - 0.13, 17.2, FRONT + 0.22, 1.1);
+
+    // three booths in emerald velvet against the street wall, looking down on the floor
+    this.vipSeats = [];
+    this.vipTables = [];
+    const velvet = C('#1a5a4a');
+    for (const bx of [6.2, 9.8, 13.4]) {
+      const Bo = V(bx, D, PI);
+      Bo.box('fabric', -1.25, 0, 0, 1.25, 0.45, 0.55, velvet);
+      Bo.box('fabric', -1.25, 0.45, 0, 1.25, 1.25, 0.2, velvet);
+      for (const sx of [-1, 1]) {
+        Bo.box('fabric', sx < 0 ? -1.25 : 0.7, 0, 0.55, sx < 0 ? -0.7 : 1.25, 0.45, 1.75, velvet);
+        Bo.box('fabric', sx < 0 ? -1.25 : 1.05, 0.45, 0.55, sx < 0 ? -1.05 : 1.25, 1.0, 1.75, velvet);
+      }
+      Bo.geo('solid', new THREE.CylinderGeometry(0.44, 0.44, 0.04, 18), 0, 0.5, 1.15, C('#1a1a1e'));
+      Bo.geo('solid', new THREE.CylinderGeometry(0.06, 0.08, 0.48, 8), 0, 0.24, 1.15, C('#c8a04a'));
+      Bo.geo('solid', new THREE.CylinderGeometry(0.11, 0.09, 0.22, 12), 0.12, 0.63, 1.1, C('#c8ccd0'));
+      Bo.geo('solid', new THREE.CylinderGeometry(0.04, 0.045, 0.3, 8), 0.12, 0.8, 1.1, C('#1a3a2a'));
+      for (const gx of [-0.2, -0.05]) Bo.geo('glass', new THREE.CylinderGeometry(0.035, 0.03, 0.12, 8), gx, 0.58, 1.25);
+      Bo.collide(-1.25, 0, 1.25, 1.75, 1.25);
+      Bo.shadow(-1.25, 0, 1.25, 1.75, 0.35);
+      const out = xz(Bo.point(0, 0, 2.25));
+      const seat = (lx, lz, a) => ({ ...xz(Bo.point(lx, 0, lz)), y: this.origin.y + Y, yaw: a + PI, vip: true, out });
+      this.vipSeats.push(seat(-0.42, 0.3, 0), seat(0.42, 0.3, 0), seat(-0.95, 1.2, PI / 2), seat(0.95, 1.2, -PI / 2));
+      this.vipTables.push(Bo.point(0.12, 0.95, 1.1));
+      // a low pendant over each table
+      const L = V(bx, D - 1.15);
+      L.box('solid', -0.008, 2.2, -0.008, 0.008, H - Y, 0.008, C('#1a1a1a'));
+      L.geo('solid', new THREE.SphereGeometry(0.2, 12, 6, 0, PI * 2, 0, PI / 2), 0, 2.0, 0, C('#c8a04a'));
+      L.box('glow', -0.08, 1.995, -0.08, 0.08, 2.0, 0.08, C('#ffc890'), { top: false, bottom: true });
+      L.light(0, 1.9, 0, '#ffb070', 0.5, true);
+    }
+    // host stand by the door, a bar cart and plants at the far end
+    const HS = V(16.6, 15.75);
+    HS.box('solid', -0.25, 0, -0.2, 0.25, 1.1, 0.2, C('#1a1a1e'));
+    HS.box('solid', -0.27, 1.1, -0.22, 0.27, 1.14, 0.22, C('#c8a04a'), { bottom: true });
+    HS.box('glow', -0.1, 1.14, -0.05, 0.1, 1.16, 0.05, C('#ffd890'));
+    HS.collide(-0.26, -0.21, 0.26, 0.21, 1.14);
+    this.vipHostSpot = { ...xz(this.w(16.95, 14.8)), y: this.origin.y + Y, yaw: PI / 2 };
+    F.barCart(V(4.6, D, PI));
+    F.plant(V(4.15, 14.7), { kind: 'tall', pot: '#2a2a30' });
+    F.plant(V(15.55, 16.9), { kind: 'tall', pot: '#2a2a30' });
+    // sconces and the balcony's UV mural above the booths
+    for (const [x, z, r] of [
+      [3.67, 15.8, R90],
+      [17.53, 16.6, -R90],
+    ]) {
+      const Sc = V(x, z, r);
+      Sc.box('solid', -0.12, 1.7, 0, 0.12, 2.1, 0.08, C('#c8a04a'));
+      Sc.box('glow', -0.09, 1.74, 0.081, 0.09, 2.06, 0.086, C('#ffd0a0'));
+      Sc.light(0, 1.9, 0.3, '#ffb878', 0.3);
+    }
+    this.uvPanels.push({ m: trs(this.origin.x + 9.8, this.origin.y + Y + 2.45, this.origin.z + D - 0.01, PI), w: 10.5, h: 1.3 });
   }
 
   buildToilets(kit, P, R90, PI, BLACK) {
@@ -719,6 +869,18 @@ export class Club {
     this.haze.renderOrder = 2;
     this.group.add(this.haze);
 
+    // a sparkler on a VIP bottle (bottle service)
+    const SPK = 80;
+    const spg = new THREE.BufferGeometry();
+    spg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(SPK * 3), 3));
+    this.sparkMat = additive({ map: glowTex, color: new THREE.Color('#ffe8a0'), size: 0.14, points: true, fog: false, opacity: 0 });
+    this.sparks = new THREE.Points(spg, this.sparkMat);
+    this.sparks.frustumCulled = false;
+    this.sparks.renderOrder = 5;
+    this.group.add(this.sparks);
+    this.sparkSeeds = Array.from({ length: SPK }, () => [rng.next(), rng.float(0, Math.PI * 2), rng.float(0.8, 1.6)]);
+    this.sparkT = 0;
+
     // lights for the people in here (the shared pool of 6 point lights picks the nearest)
     const F2 = (x, z, y, col, power, dist = 9) => ({ ...this.w(x, z, y), color: new THREE.Color(col), power, dist });
     this.fixtures = [
@@ -733,6 +895,8 @@ export class Club {
       F2(1.8, 15.7, 2.8, '#ffd8a0', 0.4, 5),
       F2(20.5, 15.8, 4.0, '#ff2a2a', 0.5, 6),
       F2(20.9, 2.7, 2.7, '#e8f6ff', 0.6, 6),
+      F2(7.0, 15.8, 5.8, '#ffb070', 0.55, 7),
+      F2(13.0, 15.8, 5.8, '#ffb070', 0.55, 7),
     ];
     this.stageFix = this.fixtures.slice(0, 5);
   }
@@ -776,7 +940,10 @@ export class Club {
         }
     };
     face(X0, Z1, lx(DOOR[0]), Z1, Yb, Yt, [0, 0, 1]);
-    face(lx(DOOR[1]), Z1, X1, Z1, Yb, Yt, [0, 0, 1]);
+    face(lx(DOOR[1]), Z1, lx(22.35), Z1, Yb, Yt, [0, 0, 1]);
+    face(lx(22.35), Z1, lx(23.25), Z1, Yb, ly(3.6), [0, 0, 1]);
+    face(lx(22.35), Z1, lx(23.25), Z1, ly(5.7), Yt, [0, 0, 1]);
+    face(lx(23.25), Z1, X1, Z1, Yb, Yt, [0, 0, 1]);
     face(lx(DOOR[0]), Z1, lx(DOOR[1]), Z1, ly(2.6), Yt, [0, 0, 1]);
     face(X1, Z0, X0, Z0, Yb, Yt, [0, 0, -1]);
     face(X0, Z0, X0, Z1, Yb, Yt, [-1, 0, 0]);
@@ -838,8 +1005,8 @@ export class Club {
         for (let k = 0; k < 4; k++) st.addGeometry(new THREE.CylinderGeometry(k % 2 ? 0.1 : 0.17, k % 2 ? 0.1 : 0.17, 0.12, 10), trs(rx + dx, Yt + 2.62 + k * 0.13, z), shade(k % 2 ? '#7a4a2a' : '#d8d2c4'));
       }
     }
-    box(X0 + 2, Yt + 0.32, Z0 + 11, X0 + 4.2, Yt + 1.5, Z0 + 13, shade('#9a9ca0'));
-    box(X1 - 3, Yt + 0.32, Z0 + 12, X1 - 2.4, Yt + 2.2, Z0 + 12.6, shade('#5a5a5e'));
+    box(X0 + 1.2, Yt + 0.32, Z0 + 4.6, X0 + 3.4, Yt + 1.5, Z0 + 6.6, shade('#9a9ca0'));
+    box(X1 - 3, Yt + 0.32, Z0 + 5.0, X1 - 2.4, Yt + 2.2, Z0 + 5.6, shade('#5a5a5e'));
     // the rope line: brass stanchions
     this.ropeZ = Z1 + 0.82;
     const posts = [0.0, 1.3, 2.6, 3.9, 5.2];
@@ -910,7 +1077,7 @@ export class Club {
     this.outside.add(stMesh);
 
     // --- things that glow at night
-    this.winMat = additive({ map: this.ct.frosted, color: new THREE.Color('#000000'), opacity: 1 });
+    this.winMat = additive({ map: null, color: new THREE.Color('#000000'), opacity: 1 });
     const wg = new GeoBuilder();
     for (const g of this.windowGlows) {
       const { a, b, n } = g;
@@ -956,6 +1123,200 @@ export class Club {
     this.vendorSpot = { x: cx, z: cz + 0.68, yaw: Math.PI };
     this.friesSpot = { x: cx, z: cz - 1.05 };
     this.outsideSpot = { x: lx(6.6), z: Z1 + 2.0, yaw: Math.PI };
+    this.buildRoof();
+  }
+
+  /** The fire escape up the facade and the roof terrace (outdoor, lit by sun and street). */
+  buildRoof() {
+    const o = this.origin;
+    const s = this.site;
+    const lx = (x) => o.x + x;
+    const ly = (y) => o.y + y;
+    const lz = (z) => o.z + z;
+    const Z1 = s.z1;
+    const Yt = o.y + ROOF;
+    const DK = ly(ROOF_DECK);
+    const col = this.city.colliders;
+    const st = new GeoBuilder();
+    const steel = shade('#30353a');
+    const box = (x0, y0, z0, x1, y1, z1, c = steel, op = {}) => st.box(x0, y0, z0, x1, y1, z1, { color: c, bottom: true, ...op });
+    const slope = (ax, ay, bx, by, z, h, t, c = steel) => {
+      const len = Math.hypot(bx - ax, by - ay);
+      st.addGeometry(new THREE.BoxGeometry(len, h, t), trs((ax + bx) / 2, (ay + by) / 2, z, 0, 1, 1, 1, 0, Math.atan2(by - ay, bx - ax)), c);
+    };
+
+    // --- fire escape: a landing outside the stair-room door, 14 steps up to the roof
+    const fz0 = Z1 + 0.05;
+    const fz1 = Z1 + 1.1;
+    box(lx(21.7), ly(3.52), Z1, lx(23.6), ly(3.6), Z1 + 1.15);
+    for (const x of [21.75, 22.6, 23.55]) box(lx(x) - 0.02, ly(3.6), Z1 + 1.11, lx(x) + 0.02, ly(4.65), Z1 + 1.15);
+    box(lx(21.7), ly(4.62), Z1 + 1.1, lx(23.6), ly(4.67), Z1 + 1.16);
+    box(lx(23.55), ly(4.62), Z1, lx(23.6), ly(4.67), Z1 + 1.15);
+    for (const x of [21.9, 23.4]) slope(lx(x), ly(2.6), lx(x), ly(3.5), Z1 + 0.6, 0.06, 1.0, shade('#25292d'));
+    col.add(lx(21.7), Z1 + 1.1, lx(23.65), Z1 + 1.22, ly(3.6), ly(4.7));
+    col.add(lx(23.55), Z1, lx(23.65), Z1 + 1.2, ly(3.6), ly(4.7));
+    for (let k = 0; k < 14; k++) {
+      const xb = 21.7 - k * FE_RUN;
+      const top = 3.6 + (k + 1) * FE_RISE;
+      box(lx(xb - FE_RUN), ly(top - 0.035), fz0, lx(xb), ly(top), fz1, steel);
+    }
+    for (const z of [fz0 - 0.02, fz1 + 0.02]) slope(lx(21.7), ly(3.45), lx(15.9), ly(ROOF_DECK - 0.15), z, 0.22, 0.04);
+    slope(lx(21.7), ly(4.55), lx(15.9), ly(ROOF_DECK + 0.95), fz1 + 0.04, 0.05, 0.05);
+    for (let k = 1; k < 14; k += 2) {
+      const x = 21.7 - (k + 0.5) * FE_RUN;
+      const top = 3.6 + (k + 1) * FE_RISE;
+      box(lx(x) - 0.015, ly(top), fz1 + 0.02, lx(x) + 0.015, ly(top + 0.95), fz1 + 0.06);
+    }
+    col.add(lx(15.9), fz1 + 0.01, lx(21.7), fz1 + 0.12, ly(3.4), ly(ROOF_DECK + 1.1));
+    // top landing, bridging the parapet gap onto the roof
+    box(lx(14.9), DK - 0.08, Z1 - 0.25, lx(15.9), DK, Z1 + 1.1); // meets the deck edge, no overlap
+    box(lx(14.85), DK, Z1, lx(14.9), DK + 1.05, Z1 + 1.15);
+    box(lx(14.9), DK + 1.0, Z1 + 1.1, lx(15.9), DK + 1.05, Z1 + 1.15);
+    col.add(lx(14.8), Z1, lx(14.92), Z1 + 1.2, DK, DK + 1.1);
+    col.add(lx(14.9), Z1 + 1.08, lx(15.9), Z1 + 1.2, DK, DK + 1.1);
+
+    // --- parapet around the roof, a steel rail along the street side, the terrace deck
+    const pb = new GeoBuilder();
+    const py0 = Yt + 0.32;
+    const py1 = Yt + 1.2;
+    const S4 = { sx: 4, sy: 4, topScale: 4, bottom: false };
+    for (const [x0, z0, x1, z1] of [
+      [s.x0, Z1 - 0.25, lx(14.9), Z1],
+      [lx(15.9), Z1 - 0.25, s.x1, Z1],
+      [s.x0, s.z0, s.x1, s.z0 + 0.25],
+      [s.x0, s.z0 + 0.25, s.x0 + 0.25, Z1 - 0.25],
+      [s.x1 - 0.25, s.z0 + 0.25, s.x1, Z1 - 0.25],
+    ]) {
+      pb.box(x0, py0, z0, x1, py1, z1, S4);
+      box(x0 - 0.02, py1, z0 - 0.02, x1 + 0.02, py1 + 0.05, z1 + 0.02, shade('#5a5a5e'));
+      col.add(x0, z0, x1, z1, Yt, py1 + 0.5);
+    }
+    this.outside.add(new THREE.Mesh(pb.build(), new THREE.MeshLambertMaterial({ map: this.ct.concrete })));
+    for (const x of [0.3, 3.0, 6.0, 9.0, 12.0, 14.85, 15.95, 19.0, 22.0, 23.35]) box(lx(x) - 0.02, py1 + 0.05, Z1 - 0.14, lx(x) + 0.02, py1 + 0.45, Z1 - 0.1);
+    box(s.x0, py1 + 0.42, Z1 - 0.15, lx(14.9), py1 + 0.47, Z1 - 0.09);
+    box(lx(15.9), py1 + 0.42, Z1 - 0.15, s.x1, py1 + 0.47, Z1 - 0.09);
+    const deck = new GeoBuilder();
+    deck.box(s.x0 + 0.25, py0, lz(ROOF_DECK_Z), s.x1 - 0.25, DK, Z1 - 0.25, { sx: 1.6, sy: 1.6, topScale: 1.6, bottom: false });
+    this.outside.add(new THREE.Mesh(deck.build(), new THREE.MeshLambertMaterial({ map: this.tex.woodWorn.map, color: '#8a8278' })));
+    col.add(s.x0 + 1.2, s.z0 + 4.6, s.x0 + 3.4, s.z0 + 6.6, Yt, Yt + 1.5);
+    col.add(s.x1 - 3, s.z0 + 5.0, s.x1 - 2.4, s.z0 + 5.6, Yt, Yt + 2.2);
+    for (const z of [3, 8]) for (const x of [-4, 3.8]) col.add((o.x + s.x1) / 2 + x, s.z0 + z - 0.1, (o.x + s.x1) / 2 + x + 0.2, s.z0 + z + 0.1, Yt, Yt + 3.4);
+
+    // --- terrace furniture: two sofas round a table, a bench at the parapet, high tables, a bar
+    const wood = shade('#6a4a32');
+    const cushion = shade('#c8b89a');
+    this.roofSeats = [];
+    const sofa = (cx, cz, face) => {
+      // face: +1 looks south (+z), -1 looks north
+      const zb = cz - face * 0.35;
+      box(lx(cx - 1.0), DK, lz(cz - 0.4), lx(cx + 1.0), DK + 0.38, lz(cz + 0.4), wood);
+      box(lx(cx - 0.95), DK + 0.38, lz(cz - 0.35), lx(cx + 0.95), DK + 0.48, lz(cz + 0.35), cushion);
+      box(lx(cx - 1.0), DK + 0.38, lz(zb - 0.05), lx(cx + 1.0), DK + 0.9, lz(zb + 0.05), wood);
+      for (const sx of [-1, 1]) box(lx(cx + sx * 0.97) - 0.04, DK + 0.38, lz(cz - 0.4), lx(cx + sx * 0.97) + 0.04, DK + 0.65, lz(cz + 0.4), wood);
+      col.add(lx(cx - 1.0), lz(cz - 0.4), lx(cx + 1.0), lz(cz + 0.4), DK, DK + 0.9);
+      for (const sx of [-0.45, 0.45]) this.roofSeats.push({ x: lx(cx + sx), z: lz(cz + face * 0.05), y: DK, yaw: face > 0 ? 0 : Math.PI, roof: true, out: { x: lx(cx + sx * 2.9), z: lz(cz) } });
+    };
+    sofa(4.0, 12.0, 1);
+    sofa(4.0, 14.6, -1);
+    box(lx(3.4), DK, lz(13.0), lx(4.6), DK + 0.4, lz(13.6), wood);
+    col.add(lx(3.4), lz(13.0), lx(4.6), lz(13.6), DK, DK + 0.4);
+    // bench facing over the parapet, toward the Lantern Quarter
+    box(lx(8.0), DK, lz(16.6), lx(10.8), DK + 0.42, lz(17.1), wood);
+    col.add(lx(8.0), lz(16.6), lx(10.8), lz(17.1), DK, DK + 0.45);
+    for (const x of [8.7, 10.1]) this.roofSeats.push({ x: lx(x), z: lz(16.85), y: DK, yaw: 0, roof: true, out: { x: lx(x), z: lz(16.1) } });
+    for (const [x, z] of [
+      [10.4, 13.6],
+      [13.4, 14.8],
+    ]) {
+      st.addGeometry(new THREE.CylinderGeometry(0.3, 0.3, 0.04, 14), trs(lx(x), DK + 1.06, lz(z)), shade('#2a2a2e'));
+      st.addGeometry(new THREE.CylinderGeometry(0.035, 0.035, 1.04, 8), trs(lx(x), DK + 0.52, lz(z)), shade('#8a8c90'));
+      col.add(lx(x) - 0.28, lz(z) - 0.28, lx(x) + 0.28, lz(z) + 0.28, DK, DK + 1.08);
+    }
+    // roof bar: a steel counter with a cooler, facing the terrace
+    box(lx(18.6), DK, lz(10.4), lx(21.4), DK + 1.05, lz(11.0), shade('#3a3e44'));
+    box(lx(18.55), DK + 1.05, lz(10.35), lx(21.45), DK + 1.1, lz(11.08), shade('#8a8c90'));
+    box(lx(18.9), DK, lz(9.2), lx(20.1), DK + 0.8, lz(9.7), shade('#2a6ae0'));
+    col.add(lx(18.55), lz(10.35), lx(21.45), lz(11.08), DK, DK + 1.1);
+    col.add(lx(18.9), lz(9.2), lx(20.1), lz(9.7), DK, DK + 0.8);
+    this.roofBarSpot = { x: lx(20.0), z: lz(11.55) };
+    this.roofBartenderSpot = { x: lx(20.0), z: lz(9.95), y: DK, yaw: 0 };
+    // planters along the east parapet
+    for (const z of [10.0, 12.5, 15.0]) {
+      box(lx(22.75), DK, lz(z - 0.5), lx(23.4), DK + 0.55, lz(z + 0.5), shade('#4a4a50'));
+      for (const [dx, dz, r] of [
+        [0, -0.2, 0.35],
+        [0.05, 0.25, 0.3],
+        [-0.05, 0, 0.28],
+      ])
+        st.addGeometry(new THREE.IcosahedronGeometry(r, 0), trs(lx(23.07 + dx), DK + 0.8 + r * 0.4, lz(z + dz)), shade(['#3f6b2e', '#4f8a3a', '#2f5a2a'][Math.round(r * 10) % 3]));
+      col.add(lx(22.75), lz(z - 0.5), lx(23.4), lz(z + 0.5), DK, DK + 1.2);
+    }
+    // patio heaters
+    this.heaters = [];
+    for (const [x, z] of [
+      [6.9, 13.3],
+      [16.4, 13.2],
+    ]) {
+      st.addGeometry(new THREE.CylinderGeometry(0.25, 0.3, 0.08, 12), trs(lx(x), DK + 0.04, lz(z)), steel);
+      st.addGeometry(new THREE.CylinderGeometry(0.05, 0.05, 2.1, 8), trs(lx(x), DK + 1.1, lz(z)), shade('#8a8c90'));
+      st.addGeometry(new THREE.ConeGeometry(0.45, 0.22, 14, 1, true), trs(lx(x), DK + 2.3, lz(z)), shade('#a8acb0'));
+      col.add(lx(x) - 0.3, lz(z) - 0.3, lx(x) + 0.3, lz(z) + 0.3, DK, DK + 2.4);
+      this.heaters.push(new THREE.Vector3(lx(x), DK + 2.0, lz(z)));
+    }
+    // poles for the string lights
+    const poleX = [0.6, 6.35, 11.7, 17.05, 22.8];
+    for (const x of poleX)
+      for (const z of [ROOF_DECK_Z + 0.4, D + 0.15]) {
+        box(lx(x) - 0.03, DK, lz(z) - 0.03, lx(x) + 0.03, DK + 3.1, lz(z) + 0.03, shade('#2a2a2e'));
+        col.add(lx(x) - 0.06, lz(z) - 0.06, lx(x) + 0.06, lz(z) + 0.06, DK, DK + 3.1);
+      }
+    const roofMesh = new THREE.Mesh(st.build(), new THREE.MeshLambertMaterial({ vertexColors: true }));
+    roofMesh.name = 'club:roof';
+    this.outside.add(roofMesh);
+
+    // --- string lights: two zig-zag strands of warm bulbs across the terrace
+    const wires = new GeoBuilder();
+    const bulbs = [];
+    const back = lz(ROOF_DECK_Z + 0.4);
+    const front = lz(D + 0.15);
+    for (const flip of [0, 1]) {
+      for (let k = 0; k < poleX.length - 1; k++) {
+        const za = (k + flip) % 2 ? front : back;
+        const zb = (k + flip) % 2 ? back : front;
+        const a = new THREE.Vector3(lx(poleX[k]), DK + 3.0, za);
+        const b = new THREE.Vector3(lx(poleX[k + 1]), DK + 3.0, zb);
+        const curve = new THREE.QuadraticBezierCurve3(a, a.clone().lerp(b, 0.5).add(new THREE.Vector3(0, -0.9, 0)), b);
+        wires.addGeometry(new THREE.TubeGeometry(curve, 12, 0.01, 3), trs(0, 0, 0), shade('#1a1a1a'));
+        const n = Math.round(a.distanceTo(b) / 0.7);
+        for (let j = 1; j < n; j++) bulbs.push(curve.getPoint(j / n));
+      }
+    }
+    this.outside.add(new THREE.Mesh(wires.build(), new THREE.MeshLambertMaterial({ vertexColors: true })));
+    const bg = new THREE.BufferGeometry().setFromPoints(bulbs);
+    this.bulbMat = additive({ map: this.cityTex.glow, color: new THREE.Color('#ffd08a'), size: 0.55, points: true, opacity: 0 });
+    const bp = new THREE.Points(bg, this.bulbMat);
+    bp.renderOrder = 3;
+    this.outside.add(bp);
+    this.heaterMat = additive({ map: this.cityTex.glow, color: new THREE.Color('#ff7a2a'), size: 1.4, points: true, opacity: 0 });
+    const hg = new THREE.BufferGeometry().setFromPoints(this.heaters.map((h) => h.clone().add(new THREE.Vector3(0, 0.15, 0))));
+    const hp = new THREE.Points(hg, this.heaterMat);
+    hp.renderOrder = 3;
+    this.outside.add(hp);
+
+    // people up here, and their lights
+    const DKy = DK;
+    this.roofStand = [
+      [9.9, 13.6, Math.PI / 2],
+      [10.9, 13.6, -Math.PI / 2],
+      [10.4, 14.15, Math.PI],
+      [12.9, 14.8, Math.PI / 2],
+      [13.9, 14.8, -Math.PI / 2],
+      [5.9, 17.05, 0],
+      [6.5, 17.05, 0],
+      [19.4, 11.6, Math.PI],
+    ].map(([x, z, yaw]) => ({ x: lx(x), z: lz(z), y: DKy, yaw }));
+    const F3 = (x, y, z, c, power, dist) => ({ x: lx(x), y: DK + y, z: lz(z), color: new THREE.Color(c), power, dist });
+    this.roofFixtures = [F3(6.9, 2.2, 13.3, '#ff9a4a', 0.9, 8), F3(16.4, 2.2, 13.2, '#ff9a4a', 0.9, 8), F3(4.0, 2.8, 13.3, '#ffd08a', 0.6, 9), F3(11.7, 2.8, 13.0, '#ffd08a', 0.6, 9), F3(20.0, 2.0, 10.7, '#ffd08a', 0.6, 7), F3(9.4, 2.4, 16.6, '#ffd08a', 0.5, 7)];
   }
 
   buildDoors() {
@@ -984,6 +1345,16 @@ export class Club {
     this.city.colliders.add(o.x + DOOR[0], o.z + D - 0.05, o.x + DOOR[1], o.z + D + 0.32, o.y, o.y + 2.6);
     this.gate = this.city.colliders.boxes[this.city.colliders.boxes.length - 1];
     this.gateTop = this.gate.y1;
+    // the VIP balcony door: wristbands only
+    this.city.colliders.add(o.x + 17.45, o.z + 14.2, o.x + 17.75, o.z + 15.4, o.y + 3.6, o.y + 5.7);
+    this.vipGate = this.city.colliders.boxes[this.city.colliders.boxes.length - 1];
+    this.vipGateTop = this.vipGate.y1;
+  }
+
+  /** Bottle service: a sparkler fizzing on the bottle at `pos` for a few seconds. */
+  sparkle(pos) {
+    this.sparkAt = pos.clone();
+    this.sparkT = 9;
   }
 
   // ==========================================================================
@@ -1009,6 +1380,7 @@ export class Club {
     // gate
     this.allowPlayer = !!s.allow;
     this.gate.y1 = this.allowPlayer ? -10 : this.gateTop;
+    this.vipGate.y1 = s.vip ? -10 : this.vipGateTop;
     let want = 0;
     for (const p of s.people) if (Math.hypot(p.x - this.doorCenter.x, p.z - this.doorCenter.z) < 1.9) want = 1;
     this.doorOpen = damp(this.doorOpen, want, want ? 5 : 3, dt);
@@ -1160,6 +1532,20 @@ export class Club {
       this.laserMat.color.set(Math.abs(Math.floor(bar / 4)) % 2 ? '#3aff6a' : '#3ac8ff');
     }
 
+    // sparkler
+    if (this.sparkT > 0) {
+      this.sparkT -= dt;
+      const sp = this.sparks.geometry.attributes.position;
+      const a = this.sparkAt;
+      this.sparkSeeds.forEach(([ph, ang, v], k) => {
+        const life = (time * v + ph) % 1;
+        const r = life * 0.32;
+        sp.setXYZ(k, a.x + Math.cos(ang + life * 2) * r, a.y + 0.12 + life * 0.55 - life * life * 0.7, a.z + Math.sin(ang + life * 2) * r);
+      });
+      sp.needsUpdate = true;
+      this.sparkMat.opacity = Math.min(1, this.sparkT) * (0.7 + 0.3 * Math.sin(time * 40));
+    } else this.sparkMat.opacity = 0;
+
     // haze drifts and picks up the wash colours
     const hp = this.haze.geometry.attributes.position;
     this.hazeSeeds.forEach(([x, y, z, ph], k) => hp.setXYZ(k, o.x + x + Math.sin(time * 0.05 + ph) * 1.5, o.y + y + Math.sin(time * 0.07 + ph * 2) * 0.4, o.z + z + Math.cos(time * 0.04 + ph) * 1.2));
@@ -1190,6 +1576,10 @@ export class Club {
     this.cartMat.opacity = cartOpen * night * 0.5;
     this.cartLamp.material.color.setRGB(cartOpen * 1.3, cartOpen * 1.0, cartOpen * 0.55);
     this.signMat.emissiveIntensity = 0.12 + night * 0.25 * this.neonOn;
+    const roofOn = status === 'open' ? 1 : 0;
+    this.roofOn = damp(this.roofOn ?? 0, roofOn, 2, dt);
+    this.bulbMat.opacity = this.roofOn * (0.35 + 0.65 * night) * (0.92 + 0.08 * Math.sin(time * 1.7));
+    this.heaterMat.opacity = this.roofOn * (0.5 + 0.5 * night) * (0.85 + 0.15 * Math.sin(time * 9.0));
   }
 }
 

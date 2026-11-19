@@ -78,3 +78,35 @@ export function chatLine(rel, rng) {
 export function cityLine(rng) {
   return rng.chance(0.45) ? rng.pick(LANTERN_TALK) : rng.pick(CITY_TALK);
 }
+
+// ---------------------------------------------------------------- SUBSTATION
+// Shouted over the music. Keyed by where they are, then by how well you know them.
+export const CLUB_GREET = {
+  floor: ['WHAT? Oh! Hi!', 'This DJ is UNREAL.', 'Are you dancing or just standing there?', 'Hey! Love that you came out!'],
+  bar: ['They take forever here. Worth it.', "Hi! I've been trying to get served for ten minutes.", 'Evening! Escaping the floor for a bit?', 'Cash only. Who carries cash anymore?'],
+  booth: ['Come sit, we saved nobody a seat.', 'My feet are DONE. Hi.', 'Good spot this, you can see everyone.', 'Hey! Pull up some velvet.'],
+  vip: ['Oh, another wristband. Hello.', "The view's better from up here. So are the chairs.", 'Darling, have you met the DJ? No? Neither have I.', 'Welcome to the balcony. Mind the glass.'],
+  roof: ['Finally, I can hear myself think.', 'Look at that tree glowing over there. Every night.', 'Nice up here, right? The lanterns are going up.', 'Getting some air. You?'],
+};
+export const CLUB_CHAT = {
+  stranger: [
+    "I come here most Saturdays. Well. Most Saturdays I remember.",
+    'Someone told me this place used to power half of Ember Row. Now it powers my bad decisions.',
+    "Have you tried the Live Wire? Don't. Actually, do.",
+    'The bouncer looked at my shoes for a full ten seconds. A full ten.',
+    'They play the same track every night and I lose it every time the drop hits.',
+  ],
+  friendly: [
+    "Oh hey, it's you again! The usual crowd's here.",
+    'You dance better than you think you do. Trust me.',
+    "We should get fries from Ray's cart after. It's the law.",
+    'The DJ winked at me. Or had something in their eye. Both count.',
+  ],
+  close: [
+    "Honestly, it's not a proper night until you show up.",
+    'You, me, the floor, the drop. That is the plan. That has always been the plan.',
+    "If they ever open that door behind the big coil, we're going in together.",
+    "Some nights I think the music down here and the lanterns over the road are the same song.",
+  ],
+};
+export const DRINK_THANKS = ['You legend!', "Aw, you didn't have to! Cheers!", 'Okay, you are officially my favourite person here.', 'Next one is on me. Probably.'];

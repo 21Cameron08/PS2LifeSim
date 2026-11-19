@@ -86,10 +86,15 @@ export class InteriorKit {
       dayAmb: 0,
       // rooms in the same zone share their lights (one big space split into rectangles)
       zone: f.zone,
+      // rooms can be stacked: a floor at y0 (f.y0) and a ceiling at y1 (f.h)
+      y0: f.y0 ?? 0,
+      y1: f.h ?? this.H,
     };
+    R.wy0 = this.o.y + R.y0;
+    R.wy1 = this.o.y + R.y1;
     this.rooms.push(R);
     const fs = this.scale(R.f.floor);
-    this.grid(R.f.floor, [x0, 0, z1], [x1 - x0, 0, 0], [0, 0, -(z1 - z0)], [0, 1, 0], (p) => [p[0] / fs, -p[2] / fs], R.f.floorColor ? C(R.f.floorColor) : WHITE, 0.5);
+    if (!R.f.noFloor) this.grid(R.f.floor, [x0, R.y0, z1], [x1 - x0, 0, 0], [0, 0, -(z1 - z0)], [0, 1, 0], (p) => [p[0] / fs, -p[2] / fs], R.f.floorColor ? C(R.f.floorColor) : WHITE, 0.5);
     const ck = R.f.ceilKey ?? 'plaster';
     const cs = this.scale(ck);
     // f.h: a lower ceiling than the kit's H (the walls still run full height above it)
@@ -98,8 +103,8 @@ export class InteriorKit {
     return R;
   }
 
-  roomAtLocal(x, z) {
-    for (const R of this.rooms) if (x >= R.lx0 && x <= R.lx1 && z >= R.lz0 && z <= R.lz1) return R;
+  roomAtLocal(x, z, y = null) {
+    for (const R of this.rooms) if (x >= R.lx0 && x <= R.lx1 && z >= R.lz0 && z <= R.lz1 && (y === null || (y >= R.y0 - 0.05 && y <= R.y1 + 0.05))) return R;
     return null;
   }
 
@@ -123,13 +128,22 @@ export class InteriorKit {
     const pieces = [];
     for (const o of ops) {
       if (o.from > cur) pieces.push([cur, o.from, 0, H]);
-      if (o.y0 > 0) pieces.push([o.from, o.to, 0, o.y0]);
-      if (o.y1 < H) pieces.push([o.from, o.to, o.y1, H]);
+      // gaps: several holes stacked in one span, e.g. an arch with a balcony opening above it
+      const gaps = o.gaps ? [...o.gaps].sort((g, k) => g.y0 - k.y0) : [o];
+      let y = 0;
+      for (const g of gaps) {
+        if (g.y0 > y) pieces.push([o.from, o.to, y, g.y0]);
+        y = g.y1;
+      }
+      if (y < H) pieces.push([o.from, o.to, y, H]);
       cur = o.to;
     }
     if (cur < a1) pieces.push([cur, a1, 0, H]);
     for (const [p0, p1, q0, q1] of pieces) this.wallPiece(axis, lo, hi, p0, p1, q0, q1, p0 > a0 + 1e-4, p1 < a1 - 1e-4);
-    for (const o of ops) this.opening(axis, lo, hi, o, ext);
+    for (const o of ops) {
+      if (o.gaps) for (const g of o.gaps) this.opening(axis, lo, hi, { ...o, kind: 'opening', ...g, gaps: null }, ext);
+      else this.opening(axis, lo, hi, o, ext);
+    }
     this._outside = null;
   }
 
@@ -140,7 +154,7 @@ export class InteriorKit {
 
   faceRoom(axis, a, y, d, dn) {
     const p = this.wp(axis, a, y, d + dn * 0.1);
-    return this.roomAtLocal(p[0], p[2]);
+    return this.roomAtLocal(p[0], p[2], y);
   }
 
   wallPiece(axis, lo, hi, p0, p1, q0, q1, endLo, endHi) {
@@ -156,8 +170,11 @@ export class InteriorKit {
         if (!inside) continue;
         const s0 = Math.max(p0, axis === 'x' ? R.lx0 : R.lz0);
         const s1 = Math.min(p1, axis === 'x' ? R.lx1 : R.lz1);
-        if (s1 - s0 > 0.001) {
-          this.wallFace(axis, side, d, s0, s1, q0, q1, R);
+        // only the part of the wall between this room's floor and ceiling
+        const t0 = Math.max(q0, R.y0);
+        const t1 = Math.min(q1, R.y1);
+        if (s1 - s0 > 0.001 && t1 - t0 > 0.001) {
+          this.wallFace(axis, side, d, s0, s1, t0, t1, R);
           covered += s1 - s0;
         }
       }
@@ -172,9 +189,11 @@ export class InteriorKit {
     {
       const bands = [];
       const wc = R.f.wainscot;
-      if (wc && q0 < wc.h) {
-        bands.push([q0, Math.min(q1, wc.h), wc.key, wc.color ?? '#ffffff']);
-        if (q1 > wc.h) bands.push([wc.h, q1, R.f.wall, R.f.wallColor]);
+      const fy = R.y0 ?? 0;
+      const wh = wc ? fy + wc.h : 0;
+      if (wc && q0 < wh) {
+        bands.push([q0, Math.min(q1, wh), wc.key, wc.color ?? '#ffffff']);
+        if (q1 > wh) bands.push([wh, q1, R.f.wall, R.f.wallColor]);
       } else bands.push([q0, q1, R.f.wall, R.f.wallColor]);
       for (const [y0, y1, key, col] of bands) {
         const s = ws(key);
@@ -189,20 +208,20 @@ export class InteriorKit {
         else [a, du, n, uv] = [[d, y0, p0], [0, 0, p1 - p0], [-1, 0, 0], (p) => [p[2] / s, p[1] / s]];
         this.grid(key, a, du, [0, y1 - y0, 0], n, uv, C(col));
       }
-      if (q0 === 0 && R.f.base) {
+      if (Math.abs(q0 - fy) < 1e-4 && R.f.base) {
         const bd = d + side * 0.014;
         const [x0, , z0] = this.wp(axis, p0, 0, Math.min(d, bd));
         const [x1, , z1] = this.wp(axis, p1, 0, Math.max(d, bd));
         const g = new GeoBuilder();
-        g.box(x0, 0, z0, x1, 0.09, z1, { color: C(R.f.base) });
+        g.box(x0, fy, z0, x1, fy + 0.09, z1, { color: C(R.f.base) });
         this.b('solid').addGeometry(g.build(), trs(this.o.x, this.o.y, this.o.z));
       }
-      if (wc && wc.cap && q0 < wc.h && q1 > wc.h) {
+      if (wc && wc.cap && q0 < wh && q1 > wh) {
         const bd = d + side * 0.018;
         const [x0, , z0] = this.wp(axis, p0, 0, Math.min(d, bd));
         const [x1, , z1] = this.wp(axis, p1, 0, Math.max(d, bd));
         const g = new GeoBuilder();
-        g.box(x0, wc.h - 0.02, z0, x1, wc.h + 0.03, z1, { color: C(wc.cap), bottom: true });
+        g.box(x0, wh - 0.02, z0, x1, wh + 0.03, z1, { color: C(wc.cap), bottom: true });
         this.b('solid').addGeometry(g.build(), trs(this.o.x, this.o.y, this.o.z));
       }
     }
@@ -249,7 +268,7 @@ export class InteriorKit {
       [1, hi, this.faceRoom(axis, mid, ym, hi, 1) || outer],
     ].filter((s) => s[2]);
     const cw = 0.07;
-    for (const [side, d, R] of sides) {
+    for (const [side, d, R] of o.noTrim ? [] : sides) {
       const col = C(o.trim ?? R.f.trim);
       const d0 = d;
       const d1 = d + side * 0.018;
@@ -259,8 +278,9 @@ export class InteriorKit {
         trimBox(o.from - cw, o.to + cw, o.y1, o.y1 + cw, d0, d1, col);
         trimBox(o.from - 0.09, o.to + 0.09, o.y0 - 0.04, o.y0, d, d + side * 0.09, col);
       } else {
-        trimBox(o.from - cw, o.from, 0, o.y1 + cw, d0, d1, col);
-        trimBox(o.to, o.to + cw, 0, o.y1 + cw, d0, d1, col);
+        const yb = o.y0 ?? 0;
+        trimBox(o.from - cw, o.from, yb, o.y1 + cw, d0, d1, col);
+        trimBox(o.to, o.to + cw, yb, o.y1 + cw, d0, d1, col);
         trimBox(o.from - cw, o.to + cw, o.y1, o.y1 + cw, d0, d1, col);
       }
     }
@@ -368,15 +388,15 @@ export class InteriorKit {
     }
     const zone = (k) => (k < 0 ? -1 : (this.rooms[k].zone ?? `#${k}`));
     for (const L of this.lights) {
-      L.room = roomAt(this.rooms, L.x, L.z);
+      L.room = roomAt(this.rooms, L.x, L.z, L.y);
       if (L.room < 0) continue;
       const z = zone(L.room);
       const amb = L.color.clone().multiplyScalar(L.power * 0.07);
       this.rooms.forEach((R, k) => zone(k) === z && R.lampAmb.add(amb));
     }
-    for (const L of this.fxLights) L.room = roomAt(this.rooms, L.x, L.z);
+    for (const L of this.fxLights) L.room = roomAt(this.rooms, L.x, L.z, L.y);
     for (const Wn of this.windows) {
-      Wn.room = roomAt(this.rooms, Wn.x + Wn.nx * 0.3, Wn.z + Wn.nz * 0.3);
+      Wn.room = roomAt(this.rooms, Wn.x + Wn.nx * 0.3, Wn.z + Wn.nz * 0.3, Wn.y);
       const R = this.rooms[Wn.room];
       if (R) R.dayAmb += (Wn.area / ((R.x1 - R.x0) * (R.z1 - R.z0))) * 0.45;
     }
@@ -766,6 +786,8 @@ export const F = {
     }
     P.collide(x - w / 2, 0, x + w / 2, 0.7, h).shadow(x - w / 2, 0, x + w / 2, 0.7, 0.5);
     if (onUse) P.interact(x, 1.2, onUse);
+    // where a photo-booth strip gets stuck with a magnet (see apartments.js)
+    P.k.fridgePhoto = P.m.clone().multiply(trs(x + 0.145, 0.61, 0.716));
   },
   microwave(P, { x = 0, z = 0.1 } = {}) {
     P.box('solid', x - 0.25, 0.9, z, x + 0.25, 1.18, z + 0.36, C('#e0e0dc'));

@@ -142,8 +142,13 @@ export class CameraRig {
         );
       } else if (this.mode === 'talk') {
         this.focus.set(player.pos.x, player.pos.y + 1.5, player.pos.z);
+      } else if (this.mode === 'dance') {
+        // a slow orbit, like a music video
+        this.yaw += dt * 0.16;
+        this.pitch = damp(this.pitch, 0.55, 2, dt); // up above the heads of the crowd
+        this.focus.set(player.pos.x, player.pos.y + 1.1, player.pos.z);
       }
-      const want = this.mode === 'wardrobe' ? 3.0 : this.mode === 'talk' ? Math.min(this.dist, 4.2) : this.dist;
+      const want = this.mode === 'wardrobe' ? 3.0 : this.mode === 'talk' ? Math.min(this.dist, 4.2) : this.mode === 'dance' ? 3.1 : this.dist;
       const cp = Math.cos(this.pitch);
       pos.set(
         this.focus.x - Math.sin(this.yaw) * want * cp,

@@ -335,10 +335,17 @@ export class Ambience {
     };
   }
 
-  /** Where the club's song is, in beats (null when it isn't playing). */
+  /**
+   * Where the club's song is, in beats (null when it isn't playing). This is the beat
+   * you HEAR: the sound card's output delay is taken off, so the lights and the dance
+   * game line up with the speakers, not with the scheduler.
+   */
   musicBeat() {
     const m = this.music;
-    return m?.style === 'club' ? (this.ctx.currentTime - m.t0) / SPB : null;
+    if (m?.style !== 'club') return null;
+    const ctx = this.ctx;
+    const lag = ctx.outputLatency || ctx.baseLatency || 0;
+    return (ctx.currentTime - lag - m.t0) / SPB;
   }
 
   /** Muffle the music by where you're standing: the street gets the thump only. */

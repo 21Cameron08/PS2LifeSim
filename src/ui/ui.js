@@ -561,6 +561,41 @@ export class UI {
     m.onClose?.(m.kind === 'wardrobe' ? m.app : m.s);
   }
 
+  // ---------------------------------------------------------------- dance / photos
+  /** The dance game owns the keys while it runs: onKey(code) gets them, 'stop' to end. */
+  openDance(onKey) {
+    this.modal = 'dance';
+    this.danceKey = onKey;
+    this.setPrompt(null);
+    this.clearHint();
+    document.body.classList.add('in-menu');
+  }
+  closeDance() {
+    if (this.modal === 'dance') this.modal = null;
+    document.body.classList.remove('in-menu');
+  }
+  /** A white camera flash, with an optional countdown number. */
+  flash(text = '', on = true) {
+    $('flash-count').textContent = text;
+    $('flash').classList.toggle('on', on);
+  }
+  openPhoto(url, onClose) {
+    this.modal = 'photo';
+    $('photo-img').src = url;
+    $('photo').classList.remove('hidden');
+    document.body.classList.add('in-menu');
+    this.photoClose = onClose;
+    $('photo-close').onclick = () => this.closePhoto();
+  }
+  closePhoto() {
+    if (this.modal !== 'photo') return;
+    this.modal = null;
+    $('photo').classList.add('hidden');
+    document.body.classList.remove('in-menu');
+    this.audio.blip(false);
+    this.photoClose?.();
+  }
+
   // ---------------------------------------------------------------- keys
   onKey(e) {
     if (!this.modal) return;
@@ -584,6 +619,15 @@ export class UI {
       else if (r.stage === 'pay' && (k === 'Enter' || k === 'Space')) this.regDone();
       return eat();
     }
+    if (this.modal === 'dance') {
+      if (!e.repeat) this.danceKey?.(k === 'Escape' || k === 'KeyE' || k === 'KeyP' ? 'stop' : k);
+      return eat();
+    }
+    if (this.modal === 'photo') {
+      if (k === 'Escape' || k === 'Enter' || k === 'Space' || k === 'KeyE') this.closePhoto();
+      return eat();
+    }
+    if (this.modal === 'busy') return eat();
     if (this.modal === 'dialog') {
       if (/^Digit[1-9]$/.test(k)) this.choose(Number(k.slice(5)) - 1);
       else if (k === 'ArrowLeft' || k === 'ArrowUp' || k === 'KeyA' || k === 'KeyW') this.moveSel(-1);

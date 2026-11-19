@@ -82,7 +82,7 @@ export function bake(geo, ctx) {
     const nx = nrm.getX(i);
     const ny = nrm.getY(i);
     const nz = nrm.getZ(i);
-    const room = roomAt(rooms, px + nx * 0.12, pz + nz * 0.12);
+    const room = roomAt(rooms, px + nx * 0.12, pz + nz * 0.12, py + ny * 0.12);
     const z = zone(room);
     let r = 0;
     let g = 0;
@@ -165,10 +165,13 @@ export function bake(geo, ctx) {
   if (fx) geo.setAttribute('aFx', new THREE.BufferAttribute(fx, 4));
 }
 
-export function roomAt(rooms, x, z) {
+export function roomAt(rooms, x, z, y = null) {
   for (let k = 0; k < rooms.length; k++) {
     const R = rooms[k];
-    if (x >= R.x0 && x <= R.x1 && z >= R.z0 && z <= R.z1) return k;
+    if (x < R.x0 || x > R.x1 || z < R.z0 || z > R.z1) continue;
+    // stacked rooms: also inside the room's floor-to-ceiling range (with a little slack)
+    if (y !== null && R.wy0 !== undefined && (y < R.wy0 - 0.15 || y > R.wy1 + 0.15)) continue;
+    return k;
   }
   return -1;
 }

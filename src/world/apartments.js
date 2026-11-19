@@ -78,6 +78,22 @@ export class Apartments {
         return m;
       });
 
+      // the latest photo-booth strip, stuck on the fridge (hidden until you have one)
+      let photo = null;
+      if (kit.fridgePhoto) {
+        photo = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.52), new THREE.MeshBasicMaterial({ color: '#c8c0b8', fog: false }));
+        photo.applyMatrix4(kit.fridgePhoto);
+        photo.visible = false;
+        group.add(photo);
+        const magnet = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.012), new THREE.MeshLambertMaterial({ color: '#e8c03a' }));
+        magnet.applyMatrix4(kit.fridgePhoto);
+        magnet.translateY(0.24);
+        magnet.translateZ(0.006);
+        magnet.visible = false;
+        group.add(magnet);
+        photo.userData.magnet = magnet;
+      }
+
       const doorX = site.x0 + 1.4;
       const doorZ = site.z1;
       const apt = {
@@ -87,6 +103,7 @@ export class Apartments {
         group,
         site,
         fans,
+        photo,
         origin,
         floorY: site.floorY,
         lightsOn: true,
@@ -217,6 +234,16 @@ export class Apartments {
   }
 
   /** Nearest street door within reach. */
+  /** Stick a photo-booth strip (a texture) on the fridge in every apartment. */
+  setPhoto(texture) {
+    for (const a of this.list) {
+      if (!a.photo) continue;
+      a.photo.material.map = texture;
+      a.photo.material.needsUpdate = true;
+      a.photo.visible = a.photo.userData.magnet.visible = true;
+    }
+  }
+
   doorNear(p) {
     for (const a of this.list) if (Math.hypot(p.x - a.door.x, p.z - a.door.z) < a.door.r) return a;
     return null;
