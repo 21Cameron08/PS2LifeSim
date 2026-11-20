@@ -38,6 +38,29 @@ export const BREAKFAST = [
   { id: 'flock_am', name: 'Full Flock Sunrise', desc: 'Early Bird + raft + coffee', price: 5.49, icon: 'meal', main: true, eat: 'Breakfast like a gull: all of it, fast.' },
 ];
 
+// what each item does for your needs (see game/needs.js)
+export const FEED = {
+  stack: { hunger: 50 },
+  single: { hunger: 35 },
+  catch: { hunger: 40 },
+  dog: { hunger: 30 },
+  strips: { hunger: 38 },
+  fries: { hunger: 15, fun: 2 },
+  rings: { hunger: 14, fun: 2 },
+  seafoam: { hunger: 10, fun: 6 },
+  sunset: { hunger: 10, fun: 6 },
+  soda: { hunger: 3, energy: 6 },
+  gullbox: { hunger: 30, fun: 4 },
+  flock: { hunger: 72, energy: 6, fun: 4 },
+  earlybird: { hunger: 34, energy: 4 },
+  dawn: { hunger: 40, fun: 3 },
+  raft: { hunger: 14 },
+  coffee: { energy: 18 },
+  oj: { hunger: 4, energy: 8 },
+  gullbox_am: { hunger: 28, fun: 4 },
+  flock_am: { hunger: 60, energy: 18 },
+};
+
 export const BREAKFAST_UNTIL = 11;
 export const menuAt = (hour) => (hour >= 6 && hour < BREAKFAST_UNTIL ? BREAKFAST : LUNCH);
 

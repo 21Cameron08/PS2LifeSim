@@ -37,6 +37,11 @@ features, controls and the code map.
   player's tray is a diners tray too); when the camera is far away people walk at 80 m/s
   and new customers can spawn already seated or waiting, so the place is busy on arrival.
   Seats carry a `route` from the aisle; crowd poses `c.tray` and `c.eat` came with it.
+- Needs (`game/needs.js`, `updateNeeds`/`passOut` in main.js, HUD in `ui.setNeeds`): decay
+  comes from game time each frame (`needs.tick`); jumps of 30+ minutes are skipped there, so
+  anything that skips time on purpose (sleep, shower, fridge, passing out) applies its own
+  effect and resets `needsLast`. Activities call `needs.give({...})`; conversations call
+  `needs.chat(key, minutes)`. New things to do should feed at least one need.
 - Secret cheat menu (money, warps, time) for testing: type `BLING` while walking around,
   or tap the money display five times. Code is in `main.js` (`openCheats`) and
   `ui/ui.js` (`openCheats`). Not listed in the in-game controls on purpose.

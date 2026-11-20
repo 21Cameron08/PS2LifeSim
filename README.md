@@ -52,10 +52,12 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   road from the Lantern Quarter. Open 10 PM to 4 AM. See below.
 - **A burger joint**: **GULLY'S** in Greenway, a little harbour-town fast food chain
   ("Snatch a bite!" since 1987). Open 6 AM to 2 AM. See below.
+- **Needs**: hunger, energy, hygiene, fun and social, shown under your money with your
+  mood. Eat, sleep, shower, have fun and talk to people to keep them up. See below.
 - **Customization**: the wardrobe (C) edits skin, hair style/colour, top style
   (tee, long sleeve, jacket over a shirt), colours, bottoms, shoes, height, build.
 - **Save**: autosaves to localStorage ("memory card"): position, time, money,
-  looks, friendships, Gull Box toys, settings.
+  looks, friendships, needs, what's in your fridge, Gull Box toys, settings.
 - **Sound**: all synthesised with WebAudio: city rumble, wind, crickets, footsteps,
   horns, distant sirens, UI blips, typewriter ticks.
 
@@ -163,6 +165,28 @@ baked light channels (house lights, two stage washes, the LED floor) whose colou
 every frame from the music, so the whole hall changes colour on the beat with no real-time
 lights on the walls. People get the shared pool of real point lights, recoloured the same way.
 
+## Needs
+
+Five bars under your money, 0 to 100, and a mood that's mostly their average (the worst
+one drags it down). They drain with game time: a game hour is a real minute, so a waking
+day is about 16 minutes, which is about two meals, one sleep and one shower.
+
+| Need | Drains | Fills from |
+| --- | --- | --- |
+| Hunger | ~5.5 an hour | the fridge at home (one meal per portion; groceries at HALCYON 24, $18 for 5), GULLY'S (every item has its own value, filled bite by bite), hot dogs and candy at HALCYON 24, fries outside SUBSTATION, vending machines |
+| Energy | ~4.5 an hour, faster on a shift and when hungry | sleeping (until 7 AM, or a two-hour nap), coffee (GULLY'S, HALCYON 24), sodas |
+| Hygiene | ~3.5 an hour, faster on a shift and dancing | a shower (or the penthouse bath), washing up at GULLY'S |
+| Fun | ~4.5 an hour, faster on a shift | TV and music at home, dancing, the club, drinks, the photo booth, the kiddie ride, Gull Box toys, lanterns, fortunes and just being in the Lantern Quarter |
+| Social | ~3 an hour | talking to anyone (a first chat in a while counts most), dancing with someone, the club and GULLY'S crowds |
+
+When they run low: a warning tells you what would help. Below 15 energy you can't run,
+below 6 you walk slower, and at 0 you pass out: a cab takes you home ($20) and you wake
+up six hours later. A hungry body tires faster, and a starving one burns out fast. Low
+hygiene gets you a little green stink cloud, halves how much people warm to you, and
+Dmitri won't let you into SUBSTATION. Your mood sets how fast friendships grow.
+
+The cheat menu has a Needs row (fill, drain, starving, exhausted, smelly) for testing.
+
 ## GULLY'S (fast food)
 
 A small, made-up harbour-town burger chain: a round seagull mascot called Gully in a teal
@@ -240,9 +264,10 @@ src/
                           appearance model, player + camera, pedestrians AI, traffic,
                           clubbers (the club's staff, queue and crowd), diners (GULLY'S
                           crew, customers, orders and trays)
-  game/                   clock + save system, NPC dialogue data, the store job, the club's
-                          dance game (dance.js) and photo booth (photobooth.js), GULLY'S
-                          menu data (gullysMenu.js) and your visit there (gullysVisit.js)
+  game/                   clock + save system, needs (needs.js), NPC dialogue data, the
+                          store job, the club's dance game (dance.js) and photo booth
+                          (photobooth.js), GULLY'S menu data (gullysMenu.js) and your
+                          visit there (gullysVisit.js)
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls
   audio/                  procedural ambience, sound effects and music; clubTrack.js is the
                           club song's arrangement, shared with the lights
@@ -268,18 +293,17 @@ interior with the same detail, light and sound as the apartments and the store.
    **GULLY'S crew job**: Marco's "come back when the forms are sorted". Early shifts on the
    fryers, the grill or a register (cook to the ticket screen, call numbers, bag to-go
    orders), entry-level pay plus a free meal, using the store's shift system.
-2. **Needs**: hunger/energy/fun/social bars that the fridge, bed, shower and TV refill.
-3. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
+2. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
    noodle bar cook, courier, office temp. Promotions and raises at the store.
-4. **Economy**: rent and bills, a bank screen with transactions, shop inventories.
-5. **Clothes shops**: buy items that unlock in the wardrobe; outfits as data.
-6. **Furniture**: buy and place furniture in your apartment (the kit already has the
+3. **Economy**: rent and bills, a bank screen with transactions, shop inventories.
+4. **Clothes shops**: buy items that unlock in the wardrobe; outfits as data.
+5. **Furniture**: buy and place furniture in your apartment (the kit already has the
    pieces; this needs a placement mode and saving the layout).
-7. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
-8. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
-9. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
-10. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
-11. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
+6. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
+7. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
+8. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
+9. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
+10. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
     streets, chat and visiting apartments; the bank must move server‑side then.
 
 All names, shops and brands in the game are made up.

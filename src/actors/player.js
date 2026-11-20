@@ -40,14 +40,15 @@ export class Player {
 
   update(dt, input, camYaw, extraPush) {
     const mv = this.locked ? { x: 0, y: 0 } : input.move();
-    const running = !this.locked && (input.down('ShiftLeft', 'ShiftRight') || input.autoRun);
+    // too tired to run (see needs): noRun; exhausted: weary < 1 slows the walk too
+    const running = !this.locked && !this.noRun && (input.down('ShiftLeft', 'ShiftRight') || input.autoRun);
     const fx = Math.sin(camYaw);
     const fz = Math.cos(camYaw);
     const dx = fx * mv.y - fz * mv.x;
     const dz = fz * mv.y + fx * mv.x;
     const mag = Math.min(1, Math.hypot(dx, dz));
     const indoor = this.space.indoor;
-    const target = mag * (running ? (indoor ? 4.4 : 7.2) : indoor ? 2.5 : 3.6) * (this.slow ?? 1);
+    const target = mag * (running ? (indoor ? 4.4 : 7.2) : indoor ? 2.5 : 3.6) * (this.slow ?? 1) * (this.weary ?? 1);
     this.speed = damp(this.speed, target, target > this.speed ? 8 : 12, dt);
     if (mag > 0.05) {
       this.moveDir.set(dx / mag, dz / mag);

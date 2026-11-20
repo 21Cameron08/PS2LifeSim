@@ -1,4 +1,14 @@
 import { SKIN, HAIR_COLORS, CLOTH, SHOES, HAIR_STYLES, TOP_STYLES, BOTTOM_STYLES } from '../actors/appearance.js';
+import { NEEDS } from '../game/needs.js';
+
+// little icons for the needs bars (16x16, drawn in currentColor)
+const NEED_ICONS = {
+  hunger: '<path d="M2 7.2a6 4.2 0 0 1 12 0z"/><rect x="1.4" y="8.2" width="13.2" height="2" rx="1"/><path d="M2 11.2h12v.8a2.2 2.2 0 0 1-2.2 2.2H4.2A2.2 2.2 0 0 1 2 12z"/>',
+  energy: '<path d="M9.5 1 3 9.2h4.2L6.3 15 13 6.6H8.8z"/>',
+  hygiene: '<path d="M8 1.2S3.2 7 3.2 10.1a4.8 4.8 0 0 0 9.6 0C12.8 7 8 1.2 8 1.2z"/>',
+  fun: '<path d="M8 1l2.1 4.5 4.9.6-3.6 3.4.9 4.9L8 12 3.7 14.4l.9-4.9L1 6.1l4.9-.6z"/>',
+  social: '<path d="M2.2 2.5h11.6a1.2 1.2 0 0 1 1.2 1.2v6.6a1.2 1.2 0 0 1-1.2 1.2H7.2L4 14.4v-2.9H2.2A1.2 1.2 0 0 1 1 10.3V3.7a1.2 1.2 0 0 1 1.2-1.2z"/>',
+};
 
 const $ = (id) => document.getElementById(id);
 // whole dollars, unless there are cents (fries cost $2.29)
@@ -98,6 +108,54 @@ export class UI {
       $('bank').classList.toggle('neg', bank < 0);
     }
   }
+  /** The needs bars under the money (needs: a Needs). */
+  setNeeds(needs) {
+    const el = $('needs');
+    if (!this.needRows) {
+      el.innerHTML =
+        `<div class="need-mood"><span>MOOD</span><b id="need-mood">OKAY</b></div>` +
+        NEEDS.map(
+          (n) =>
+            `<div class="need" id="need-${n.key}" title="${n.name}"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">${NEED_ICONS[n.key]}</svg><span class="need-name">${n.name}</span><div class="need-bar"><i></i></div></div>`,
+        ).join('') +
+        `<div class="need-flags" id="need-flags"></div>`;
+      this.needRows = NEEDS.map((n) => {
+        const row = $(`need-${n.key}`);
+        return { key: n.key, row, fill: row.querySelector('i'), shown: -1, low: null };
+      });
+    }
+    for (const r of this.needRows) {
+      const v = needs.v[r.key];
+      const w = Math.round(v);
+      if (w !== r.shown) {
+        r.shown = w;
+        r.fill.style.width = `${w}%`;
+        r.fill.style.background = `hsl(${Math.round(v * 1.15)}, 78%, 52%)`;
+      }
+      const low = v < 10 ? 'crit' : v < 25 ? 'low' : '';
+      if (low !== r.low) {
+        r.low = low;
+        r.row.classList.toggle('low', low === 'low');
+        r.row.classList.toggle('crit', low === 'crit');
+      }
+      if (needs.pulse[r.key]) {
+        needs.pulse[r.key] = 0;
+        r.row.classList.remove('up');
+        void r.row.offsetWidth; // restart the flash
+        r.row.classList.add('up');
+      }
+    }
+    const mood = needs.moodName();
+    if (mood !== this._mood) {
+      this._mood = mood;
+      const m = $('need-mood');
+      m.textContent = mood;
+      m.className = `mood-${mood.toLowerCase()}`;
+    }
+    const flags = needs.flags().join(' · ');
+    if (flags !== this._flags) $('need-flags').textContent = this._flags = flags;
+  }
+
   showLocation(name, sub = '') {
     const el = $('location');
     el.innerHTML = `${name}${sub ? `<small>${sub}</small>` : ''}`;
@@ -498,6 +556,7 @@ export class UI {
       { label: 'Bank', button: `+ ${amt} BANK`, act: () => c.give('bank', m.amount) },
       { label: 'Warp to', value: c.places[m.place].label, change: (d) => (m.place = wrap(m.place + d, c.places.length)), button: 'GO', act: () => this.cheatAndClose(() => c.places[m.place].go()) },
       { label: 'Time', value: c.times[m.time].label, change: (d) => (m.time = wrap(m.time + d, c.times.length)), button: 'SET', act: () => this.cheatAndClose(() => c.setTime(c.times[m.time].hour)) },
+      { label: 'Needs', value: ['Fill all', 'Drain all', 'Starving', 'Exhausted', 'Smelly'][m.need ?? 0], change: (d) => (m.need = wrap((m.need ?? 0) + d, 5)), button: 'DO IT', act: () => c.setNeeds(m.need ?? 0) },
     ];
   }
   cheatAndClose(fn) {

@@ -19,6 +19,8 @@ import { Clubbers } from './actors/clubbers.js';
 import { Gullys } from './world/gullys.js';
 import { Diners } from './actors/diners.js';
 import { GullysVisit } from './game/gullysVisit.js';
+import { Needs, NEEDS } from './game/needs.js';
+import { additive } from './render/materials.js';
 import { StoreJob } from './game/job.js';
 import { Pedestrians } from './actors/pedestrians.js';
 import { Traffic } from './actors/traffic.js';
@@ -66,7 +68,9 @@ const state = {
   gullMeals: save?.gullMeals ?? 0,
   gullOrders: save?.gullOrders ?? 0,
   lastMeal: save?.lastMeal,
+  fridge: save?.fridge ?? 4, // home-cooked meals left in the fridge
 };
+const needs = new Needs(save?.needs);
 const SAVE_VERSION = 2;
 // saves from before apartments existed keep money/looks but start you at home
 const freshStart = !save || save.v !== SAVE_VERSION;
@@ -124,7 +128,7 @@ const gullys = new Gullys(scene, city, tex, apts.tex);
 const gullysSpace = { ...outdoor, indoor: true, ceiling: gullys.origin.y + gullys.H };
 let inGullys = false;
 const diners = new Diners(crowd, gullys, city, scene);
-const visit = new GullysVisit({ gullys, diners, ui, audio, state, clock, player, input, apts, saveNow: () => saveNow() });
+const visit = new GullysVisit({ gullys, diners, ui, audio, state, clock, player, input, apts, needs, saveNow: () => saveNow() });
 if (state.gullToys.length) apts.setToys(state.gullToys);
 let gullysKick = 0;
 let lightsUpNight = -1;
@@ -226,6 +230,8 @@ function saveNow(showToast = false) {
     gullMeals: state.gullMeals,
     gullOrders: state.gullOrders,
     lastMeal: state.lastMeal,
+    fridge: state.fridge,
+    needs: needs.save(),
     job: state.job,
     inside: place && !touring ? place.id : null,
     cash: state.cash,
@@ -268,10 +274,17 @@ function talkTo(npc) {
   if (npc.role === 'keeper') {
     let line = 0;
     const menu = () => [
-      { label: 'Listen', fn: () => say(KEEPER_LINES[(line = (line + 1) % KEEPER_LINES.length)], menu()) },
+      {
+        label: 'Listen',
+        fn: () => {
+          needs.give({ fun: 3, social: 3 });
+          say(KEEPER_LINES[(line = (line + 1) % KEEPER_LINES.length)], menu());
+        },
+      },
       {
         label: 'Touch the tree',
         fn: () => {
+          needs.give({ fun: 8, energy: 5 });
           say('The bark is warm, like something asleep. For a moment the whole city goes quiet... and then breathes out.', [bye]);
           audio.tone(523, 'sine', 0.06, 3);
         },
@@ -289,6 +302,7 @@ function talkTo(npc) {
           state.cash -= 5;
           audio.coin();
           lantern.release(player.pos);
+          needs.add('fun', 10);
           say('Light it, let go, don\'t look back. That\'s the trick. ...You looked back, didn\'t you.', menu());
         },
       },
@@ -311,6 +325,7 @@ function talkTo(npc) {
           if (state.cash < 3) return say('The spirits work for tips, love. Come back with three dollars.', menu());
           state.cash -= 3;
           audio.coin();
+          needs.give({ fun: 6, social: 3 });
           say(talkRng.pick(FORTUNES), menu());
         },
       },
@@ -330,17 +345,26 @@ function talkTo(npc) {
       fn: () => {
         const rel = state.rel[npc.id] ?? 0;
         let extra = '';
+        needs.chat(`ped:${npc.id}`, clock.minutes, 10);
         if (state.lastChat[npc.id] !== clock.day) {
           state.lastChat[npc.id] = clock.day;
           const before = relTier(rel);
-          state.rel[npc.id] = Math.min(100, rel + 8);
+          // how it goes depends on your mood (and whether you've showered)
+          const gain = Math.max(1, Math.round(8 * needs.charm));
+          state.rel[npc.id] = Math.min(100, rel + gain);
           extra = before !== relTier(state.rel[npc.id]) ? ' ★' : '';
-          ui.toast(`Friendship with ${first} +8${extra}`);
+          ui.toast(`Friendship with ${first} +${gain}${extra}${needs.get('hygiene') < 25 ? ` · ${first} leans back a little.` : ''}`);
         }
         say(chatLine(state.rel[npc.id] ?? 0, talkRng), menu());
       },
     },
-    { label: 'Ask about the city', fn: () => say(cityLine(talkRng), menu()) },
+    {
+      label: 'Ask about the city',
+      fn: () => {
+        needs.add('social', 1);
+        say(cityLine(talkRng), menu());
+      },
+    },
     bye,
   ];
   say(intro, menu());
@@ -380,8 +404,42 @@ function useThing(it) {
     state.cash -= 2;
     audio.coin();
     const drinks = ['Fizzy Peach', 'Cold Barley Tea', 'Melon Cream Soda', 'Volt Cola', 'Yuzu Water'];
+    needs.give({ hunger: 4, energy: 8 });
     ui.toast(`*clunk* ${talkRng.pick(drinks)}. Refreshing.`);
   }
+}
+
+/** HALCYON 24's counter: groceries for the fridge and a few snacks. Mrs. Varga serves you. */
+function storeCounter() {
+  player.locked = true;
+  const close = () => ui.closeDialog();
+  const staff = job.J.hired;
+  const say = (text) =>
+    ui.openDialog({
+      name: 'MRS. VARGA',
+      text,
+      choices: [
+        { label: `Groceries for the week ($18 · 5 meals)${state.fridge ? ` · ${state.fridge} at home` : ''}`, fn: () => buy(18, () => (state.fridge = Math.min(12, state.fridge + 5)), 'Two paper bags. Noodles, eggs, bread, a sad lettuce. "Cook something real."') },
+        { label: staff ? 'Day-old hot dog (staff: free)' : 'Day-old hot dog ($2)', fn: () => buy(staff ? 0 : 2, () => needs.give({ hunger: 18 }), 'It has been rotating since this morning. It tastes like it.') },
+        { label: 'Coffee ($1.50)', fn: () => buy(1.5, () => needs.give({ energy: 14 }), 'Burnt, strong, perfect. Your eyes open a little wider.') },
+        { label: 'Candy bar ($1.25)', fn: () => buy(1.25, () => needs.give({ hunger: 6, fun: 3 }), 'Chocolate, peanuts, gone in four bites.') },
+        { label: 'Nothing, thanks', fn: close },
+      ],
+      onClose: () => (player.locked = false),
+    });
+  const buy = (price, fn, line) => {
+    if (price > 0) {
+      if (state.cash >= price) state.cash = Math.round((state.cash - price) * 100) / 100;
+      else if (state.bank >= price) state.bank = Math.round((state.bank - price) * 100) / 100;
+      else return say("Card's declined, cash is short. Come back when you're flush.");
+      audio.beep();
+    }
+    fn();
+    close();
+    ui.toast(line);
+    saveNow();
+  };
+  say(talkRng.pick(['What do you need?', 'Yes? Quickly, my show is on.', 'Make it quick.']));
 }
 
 // ----------------------------------------------------------------------------
@@ -475,7 +533,49 @@ function leaseOffer(apt, inside) {
   });
 }
 
-const SNACKS = ['Cold noodles. Still good.', 'Half a sandwich of uncertain age.', 'A yoghurt and some grapes.', 'Leftover dumplings. Perfect.', 'Just condiments. And hope.'];
+const HOME_MEALS = [
+  'Noodles with an egg dropped in. Classic.',
+  'A cheese toastie, slightly burnt on one side. Perfect.',
+  'Rice, kimchi and a fried egg.',
+  'Pasta with whatever was in the fridge. It works.',
+  'Leftover dumplings, pan-fried until crispy.',
+  'Soup from a can, upgraded with pepper. Chef.',
+];
+
+/** The bed: sleep until morning, or a nap. */
+function sleepMenu() {
+  player.locked = true;
+  const close = () => ui.closeDialog();
+  const e = needs.get('energy');
+  const cur = clock.minutes;
+  let wake = Math.floor(cur / 1440) * 1440 + 7 * 60;
+  if (wake <= cur) wake += 1440;
+  let hours = (wake - cur) / 60;
+  const morning = hours >= 4 && hours <= 15;
+  if (!morning) hours = 8;
+  const sleepFor = (h) => {
+    close();
+    ui.fade(() => {
+      needs.sleep(h);
+      clock.minutes += h * 60;
+      needsLast = clock.minutes;
+      const hungry = needs.get('hunger') < 25 ? ' Your stomach is growling.' : '';
+      const rested = needs.get('energy') >= 95 ? 'Fully rested.' : needs.get('energy') >= 60 ? 'Better.' : 'Still groggy.';
+      ui.toast(`You slept ${Math.round(h)} hours. ${rested}${hungry}`);
+      saveNow();
+    }, 'SLEEPING');
+  };
+  ui.openDialog({
+    name: 'BED',
+    text: e > 85 ? "You're not tired. You could lie here and stare at the ceiling, though." : e < 25 ? 'Your eyes are closing on their own.' : 'Bed. Warm, soft, right there.',
+    choices: [
+      { label: morning ? `Sleep until 7 AM (${Math.round(hours)}h)` : 'Sleep 8 hours', fn: () => sleepFor(hours) },
+      { label: 'Nap for 2 hours', fn: () => sleepFor(2) },
+      { label: 'Not yet', fn: close },
+    ],
+    onClose: () => (player.locked = false),
+  });
+}
 
 function useApt(it) {
   const home = !touring;
@@ -495,26 +595,33 @@ function useApt(it) {
       return audio.startMusic(place.L.music);
     case 'sleep':
       if (!home) return nope('Comfy. You would need to live here to sleep here.');
-      return ui.fade(() => {
-        const cur = clock.minutes;
-        let wake = Math.floor(cur / 1440) * 1440 + 7 * 60;
-        if (cur > wake - 30) wake += 1440;
-        clock.minutes = wake;
-        ui.toast('You slept until 7:00 AM. Good morning!');
-      }, 'SLEEPING');
+      return sleepMenu();
     case 'dress':
       if (!home) return nope('Plenty of closet space.');
       return openWardrobe();
     case 'fridge':
       if (!home) return nope('Empty. It smells brand new.');
-      return ui.toast(talkRng.pick(SNACKS));
-    case 'shower':
-      if (!home) return nope('Great water pressure, according to the listing.');
+      if (!state.fridge) return ui.toast('Empty. Just condiments and hope. Groceries are at HALCYON 24.');
+      if (needs.get('hunger') > 90) return ui.toast("You open the fridge, stare into it, and close it again. You're not hungry.");
       return ui.fade(() => {
+        state.fridge--;
         clock.minutes += 20;
-        ui.toast('Fresh and clean.');
-      }, 'SHOWERING');
+        needsLast = clock.minutes;
+        needs.give({ hunger: 40, fun: 2 });
+        ui.toast(`${talkRng.pick(HOME_MEALS)} (${state.fridge ? `${state.fridge} more in the fridge` : 'that was the last of the food'})`);
+      }, 'COOKING');
+    case 'shower': {
+      if (!home) return nope('Great water pressure, according to the listing.');
+      const bath = it.label.includes('bath');
+      return ui.fade(() => {
+        clock.minutes += bath ? 45 : 20;
+        needsLast = clock.minutes;
+        needs.give(bath ? { hygiene: 100, fun: 10, energy: 4 } : { hygiene: 100, energy: 3 });
+        ui.toast(bath ? 'A long, hot bath. You emerge a new person.' : 'Fresh and clean.');
+      }, bath ? 'BATHING' : 'SHOWERING');
+    }
     case 'fire':
+      needs.add('fun', 2);
       return ui.toast('The fire crackles. It is gas, but it tries its best.');
     default:
       return null;
@@ -541,6 +648,8 @@ function findInteraction() {
     }
     return best ? { label: aptLabel(best), act: () => useApt(best) } : visit.anywhere();
   }
+  if (!job.J.shift && near(player.pos, store.customerSpot, 1.0) && job.manager.home === 'counter' && !job.manager.path.length)
+    return { label: 'Buy something at the counter', act: storeCounter };
   const work = job.findInteraction(player.pos);
   if (work) return work;
   const food = visit.find();
@@ -621,6 +730,7 @@ function clubInteraction() {
 /** Why the bouncer won't let you in dressed like that (or null). */
 function dressCode() {
   const a = state.appearance;
+  if (needs.get('hygiene') < 20) return 'Whoa. No. You smell like the bottom of a gym bag. Go home and shower, then we can talk.';
   if (a.bottomStyle === 1) return "Shorts? No. It's a club, not a barbecue. Go and change.";
   if (weekend() && a.topStyle === 0) return `It's ${clubNight() === 'SAT' ? 'Saturday' : 'Friday'}. Long sleeves or a jacket. T-shirts are for Thursdays.`;
   return null;
@@ -674,6 +784,7 @@ function vipHost() {
           if (state.bank < price) return say("Card's declined, love. Happens to the best of us.", [bye]);
           state.bank -= price;
           state.vipNight = tonight;
+          needs.add('fun', 10);
           audio.coin();
           say('She snaps a gold wristband on you and unhooks the rope. "Enjoy the view."', [bye]);
           saveNow();
@@ -692,6 +803,7 @@ function vipHost() {
         audio.coin();
         const t = club.vipTables.reduce((m, q) => (q.distanceTo(player.pos) < m.distanceTo(player.pos) ? q : m), club.vipTables[0]);
         club.sparkle(t);
+        needs.give({ fun: 15, social: 12 });
         // everyone up here is suddenly your friend
         for (const v of clubbers.vips) if (v.mode !== 'off') state.clubRel[v.key] = Math.min(100, (state.clubRel[v.key] ?? 0) + 6);
         say('A bottle of Volta arrives at your booth with a sparkler fizzing on top. The whole balcony cheers.', [bye]);
@@ -763,6 +875,7 @@ function barOrder(where, forWhom = null) {
           d.alc = Math.max(0, d.alc);
           d.at = clock.minutes;
           if (dr.alc) d.count++;
+          needs.give(dr.alc ? { fun: 6, energy: -3 } : dr.price ? { hunger: 2, energy: 4 } : {});
           ui.toast(dr.line + (dr.alc && buzz() >= 2 ? ' The floor looks very inviting.' : ''));
         },
       })),
@@ -776,6 +889,7 @@ function buyFries() {
   if (state.cash < 4) return ui.toast('Four dollars, cash. Card reader died in 2003.');
   state.cash -= 4;
   audio.coin();
+  needs.give({ hunger: 22, fun: 2 });
   ui.toast(talkRng.pick(['Hot, salty, too many. Exactly right.', 'Ray adds extra salt without asking. Legend.', 'Paper cone of fries, burning your fingers.']));
 }
 
@@ -803,9 +917,10 @@ function clubTalk(a) {
       {
         label: 'Chat',
         fn: () => {
+          needs.chat(`club:${a.key}`, clock.minutes, 10);
           if (state.clubChat[a.key] !== tonight) {
             state.clubChat[a.key] = tonight;
-            bump(4);
+            bump(Math.max(1, Math.round(4 * needs.charm)));
           }
           say(talkRng.pick(CLUB_CHAT[relTier(rel())]), menu());
         },
@@ -915,6 +1030,7 @@ function endDance(r) {
   state.danceBest = Math.max(state.danceBest ?? 0, r.best);
   if (!r.total) return;
   const rate = (r.perfects + r.goods * 0.6) / r.total;
+  needs.give({ fun: Math.round(rate * 10), social: r.partner ? 12 : 3 });
   const verdict = rate > 0.85 ? 'The crowd loved it.' : rate > 0.6 ? 'Solid moves.' : rate > 0.35 ? 'You found the beat. Mostly.' : 'Bold. Very bold.';
   if (r.partner) {
     const gain = Math.round(rate * 12);
@@ -951,6 +1067,7 @@ function photoBooth() {
   };
   const done = () => {
     const url = booth.finish();
+    needs.give({ fun: 14, social: 3 });
     state.photos = [url, ...(state.photos ?? [])].slice(0, 3);
     stripTexture(url, (t) => apts.setPhoto(t));
     saveNow();
@@ -1072,6 +1189,109 @@ function updateGullys(dt) {
 }
 
 // ----------------------------------------------------------------------------
+// Needs: time drains them, places and activities fill them, and running on
+// empty has consequences (see game/needs.js)
+let needsLast = clock.minutes;
+let passingOut = false;
+const warnQueue = [];
+let warnT = 0;
+// a little green stink cloud when your hygiene gets low
+const STINK = 10;
+const stinkGeo = new THREE.BufferGeometry();
+stinkGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(STINK * 3), 3));
+const stinkMat = additive({ map: tex.glow, color: new THREE.Color('#a8e060'), size: 0.34, points: true, opacity: 0 });
+const stink = new THREE.Points(stinkGeo, stinkMat);
+stink.frustumCulled = false;
+stink.visible = false;
+scene.add(stink);
+
+function updateNeeds(dt) {
+  if (!playing) {
+    needsLast = clock.minutes;
+    return;
+  }
+  // game time drains them; skips longer than half an hour (cheats, sleeping) are handled where they happen
+  const dm = clock.minutes - needsLast;
+  needsLast = clock.minutes;
+  const mult = {};
+  if (job.J.shift) Object.assign(mult, { energy: 1.6, hygiene: 1.4, fun: 1.4 });
+  if (dm > 0 && dm < 30) needs.tick(dm, mult);
+
+  // things that fill them while you're doing them (per real second)
+  const home = place && !touring;
+  if (home && place.tvOn) needs.add('fun', 0.25 * dt);
+  if (home && audio.music) needs.add('fun', 0.08 * dt);
+  if (env.magic > 0.1) needs.add('fun', 0.12 * env.magic * dt);
+  if (inClub && club.status === 'open') needs.give({ fun: 0.04 * dt, social: 0.05 * dt });
+  if (inGullys && gullys.open) needs.add('social', 0.015 * dt);
+  if (dance.active) needs.give({ fun: 0.45 * dt, energy: -0.2 * dt, hygiene: -0.15 * dt, social: clubbers.partner ? 0.1 * dt : 0 });
+
+  // running on empty
+  const e = needs.get('energy');
+  player.noRun = e < 15;
+  player.weary = e < 6 ? 0.8 : 1;
+  if (e <= 0 && !passingOut && !ui.fading && (!ui.modal || ui.modal === 'dance')) passOut();
+
+  // warnings when something gets low
+  for (const w of needs.warnings()) warnQueue.push(w);
+  if (warnQueue.length && (warnT -= dt) <= 0 && !ui.modal) {
+    const { need, level } = warnQueue.shift();
+    warnT = 4;
+    if (level === 2) ui.hint(`<b>${need.empty}!</b> ${need.fix}`, 9);
+    else ui.toast(`${need.low}. ${need.fix}`);
+  }
+
+  // the stink cloud
+  const amt = clamp((25 - needs.get('hygiene')) / 20, 0, 1);
+  stink.visible = amt > 0 && player.char.visible;
+  if (stink.visible) {
+    stinkMat.opacity = 0.7 * amt;
+    const c = player.char;
+    const sp = stinkGeo.attributes.position;
+    for (let k = 0; k < STINK; k++) {
+      const life = (time * 0.35 + k / STINK) % 1;
+      const a = k * 2.4 + time * 0.7;
+      const r = 0.22 + 0.12 * Math.sin(time * 1.3 + k);
+      sp.setXYZ(k, c.x + Math.cos(a) * r, c.y + (0.5 + life * 1.5) * c.app.height, c.z + Math.sin(a) * r);
+    }
+    sp.needsUpdate = true;
+  }
+  ui.setNeeds(needs);
+}
+
+/** Energy hit zero: you drop, and wake up at home six hours later. */
+function passOut() {
+  passingOut = true;
+  if (dance.active) dance.stop();
+  if (ui.modal === 'dance') ui.closeDance();
+  ui.fade(() => {
+    if (seat) standUp();
+    visit.interrupt();
+    if (job.J.shift) job.clockOut();
+    const home = apts.byId[state.home];
+    const atHome = place === home && !touring;
+    const fare = 20;
+    if (!atHome) {
+      if (state.cash >= fare) state.cash -= fare;
+      else state.bank -= fare;
+      leaveInterior();
+      moveIntoApartment(home, false);
+    }
+    needs.sleep(6);
+    clock.minutes += 6 * 60;
+    needsLast = clock.minutes;
+    passingOut = false;
+    player.locked = false;
+    ui.toast(
+      atHome
+        ? 'You fell asleep where you stood. Six hours later you wake up with carpet on your face.'
+        : `You passed out. A cab brought you home (-$${fare}), and you slept it off on the sofa. Get some proper sleep.`,
+    );
+    saveNow();
+  }, 'PASSED OUT');
+}
+
+// ----------------------------------------------------------------------------
 // Secret cheat menu. Type B-L-I-N-G while walking around (none of those keys do
 // anything else), or tap the money display five times on a touch screen.
 const CHEAT_CODE = ['KeyB', 'KeyL', 'KeyI', 'KeyN', 'KeyG'];
@@ -1173,6 +1393,16 @@ function openCheats() {
     },
     places: cheatPlaces(),
     times: CHEAT_TIMES,
+    setNeeds(mode) {
+      const v = needs.v;
+      if (mode === 0) for (const n of NEEDS) v[n.key] = 100;
+      else if (mode === 1) for (const n of NEEDS) v[n.key] = 12;
+      else if (mode === 2) v.hunger = 3;
+      else if (mode === 3) v.energy = 2;
+      else v.hygiene = 8;
+      for (const n of NEEDS) needs.pulse[n.key] = 1;
+      ui.toast(['All needs full.', 'Everything is low. Good luck.', 'Starving.', 'Exhausted. You have about a minute.', 'You smell. Badly.'][mode]);
+    },
     setTime(hour) {
       ui.fade(() => {
         let t = Math.floor(clock.minutes / 1440) * 1440 + hour * 60;
@@ -1204,9 +1434,17 @@ ui.showTitle(save ? `slot 1 · day ${Math.floor((save.minutes ?? 0) / 1440) + 1}
     ui.fade(() => Object.assign(rig, { mode: 'follow', blend: 1 }));
     ui.showLocation(place.L.name.toUpperCase(), 'home');
   } else rig.setMode('follow');
-  if (place && !state.seen.homeHint) {
+  const newLife = place && !state.seen.homeHint;
+  if (newLife) {
     state.seen.homeHint = true;
     setTimeout(() => ui.hint('This is your apartment. Explore the rooms, then use the front door (<b>E</b>) to head out into the city.', 9), 10500);
+  }
+  if (!state.seen.needs) {
+    state.seen.needs = true;
+    setTimeout(
+      () => ui.hint('Your <b>needs</b> are under your money: hunger, energy, hygiene, fun and social. Eat, sleep, shower, have fun and talk to people to keep them up.', 11),
+      newLife ? 21000 : 11000,
+    );
   }
   ui.hint(
     input.isTouch
@@ -1354,6 +1592,7 @@ function frame(now) {
   if (!place && (inGullys || gullys.onPatio(player.pos))) diners.push(player.pos, player.radius);
   updateClub(dt);
   updateGullys(dt);
+  updateNeeds(dt);
   peds.update(dt, player.pos, env.night);
   traffic.update(dt, player.pos, peds.list, env.night);
   if (traffic.honk && playing) {
@@ -1441,6 +1680,7 @@ window.game = {
   gullys,
   diners,
   visit,
+  needs,
   crowd,
   audio,
   dance,

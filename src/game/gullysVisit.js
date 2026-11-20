@@ -1,5 +1,5 @@
 import { Rng, clamp } from '../core/rng.js';
-import { menuAt, pickToy, TOYS, BREAKFAST_UNTIL } from './gullysMenu.js';
+import { menuAt, pickToy, TOYS, BREAKFAST_UNTIL, FEED } from './gullysMenu.js';
 
 // Your side of GULLY'S: ordering at a register, waiting for your number, taking
 // your tray to a seat and eating, Gull Box toys, binning your tray, refills, the
@@ -54,8 +54,8 @@ const CRAYONS = [
 ];
 
 export class GullysVisit {
-  constructor({ gullys, diners, ui, audio, state, clock, player, input, apts, saveNow }) {
-    Object.assign(this, { G: gullys, D: diners, ui, audio, state, clock, player, input, apts, saveNow });
+  constructor({ gullys, diners, ui, audio, state, clock, player, input, apts, saveNow, needs }) {
+    Object.assign(this, { G: gullys, D: diners, ui, audio, state, clock, player, input, apts, saveNow, needs });
     this.rng = new Rng(Date.now() & 0xfff);
     this.order = null; // the order you're waiting on (a diners order)
     this.items = []; // what's in it
@@ -109,12 +109,33 @@ export class GullysVisit {
       }
       if (near(p, G.drinkSpot, 1.1)) return { label: this.cup ? 'Refill your drink' : 'Drink station', act: () => this.drinkStation() };
       if (near(p, G.rideStand, 0.9)) return { label: 'Ride Gully (50¢)', act: () => this.startRide() };
-      if (near(p, G.crayonSpot, 0.9)) return { label: 'Colour in a placemat', act: () => this.ui.toast(this.rng.pick(CRAYONS)) };
-      if (G.sinkSpots.some((q) => near(p, q, 0.8))) return { label: 'Wash your hands', act: () => this.ui.toast('You wash your hands. The dryer roars like a jet engine for eleven seconds.') };
+      if (near(p, G.crayonSpot, 0.9))
+        return {
+          label: 'Colour in a placemat',
+          act: () => {
+            this.needs.add('fun', 4);
+            this.ui.toast(this.rng.pick(CRAYONS));
+          },
+        };
+      if (G.sinkSpots.some((q) => near(p, q, 0.8)))
+        return {
+          label: 'Wash your hands',
+          act: () => {
+            this.needs.add('hygiene', 5);
+            this.ui.toast(
+              this.needs.get('hygiene') < 30
+                ? "You wash your hands, then your face, then your neck. It's a start. A shower would be better."
+                : 'You wash your hands. The dryer roars like a jet engine for eleven seconds.',
+            );
+          },
+        };
       if (near(p, G.muralLook, 1.5))
         return {
           label: 'Look at the mural',
-          act: () => this.ui.toast("Pier Road, 1987: the first Gully's, a fish shack. Gulls everywhere. One wears a tiny sailor cap."),
+          act: () => {
+            this.needs.add('fun', 2);
+            this.ui.toast("Pier Road, 1987: the first Gully's, a fish shack. Gulls everywhere. One wears a tiny sailor cap.");
+          },
         };
     }
     // talk or sit: whichever is nearer
@@ -252,7 +273,10 @@ export class GullysVisit {
       return;
     }
     const items = this.items.length ? this.items : [];
-    this.meal = { items, t: 0, dur: clamp(8 + items.length * 3, 10, 24), next: 0, line: 0, toys: items.filter((i) => i.toy).length };
+    // what the whole meal does for your needs; it goes in bite by bite
+    const feed = {};
+    for (const it of items) for (const [k, n] of Object.entries(FEED[it.id] ?? { hunger: 10 })) feed[k] = (feed[k] ?? 0) + n;
+    this.meal = { items, t: 0, dur: clamp(8 + items.length * 3, 10, 24), next: 0, line: 0, toys: items.filter((i) => i.toy).length, feed, fed: 0 };
   }
 
   eatStanding() {
@@ -266,6 +290,9 @@ export class GullysVisit {
     const m = this.meal;
     if (!m || m.paused) return;
     m.t += dt;
+    const done = Math.min(1, m.t / m.dur);
+    for (const [k, n] of Object.entries(m.feed)) this.needs.add(k, n * (done - m.fed));
+    m.fed = done;
     const lines = m.items.filter((it, i, all) => all.indexOf(it) === i);
     if (m.line < lines.length && m.t >= m.next) {
       this.ui.toast(lines[m.line].eat);
@@ -300,6 +327,7 @@ export class GullysVisit {
     st.gullToys = st.gullToys ?? [];
     const isNew = !st.gullToys.includes(toy.id);
     if (isNew) st.gullToys = [...st.gullToys, toy.id];
+    this.needs.add('fun', isNew ? 10 : 3);
     const n = st.gullToys.length;
     this.apts.setToys(st.gullToys);
     this.audio.blip(true);
@@ -319,6 +347,7 @@ export class GullysVisit {
   drinkStation() {
     if (!this.cup) return this.ui.toast('Free refills, but you need a cup. Cups come with a drink.');
     this.audio.noiseHit?.(0.05, 1400, 0.7);
+    this.needs.give({ hunger: 2, energy: 4 });
     this.ui.toast(this.rng.pick(['Refill. Mostly ice. Some drink. Perfect ratio.', 'You mix three sodas together like a kid. Nobody stops you.', 'Fizz all the way up to the lid. Then over it.']));
   }
 
@@ -327,6 +356,7 @@ export class GullysVisit {
     this.state.cash = cents(this.state.cash - 0.5);
     this.audio.coin();
     this.riding = 14;
+    this.needs.add('fun', 12);
     this.player.locked = true;
     this.audio.jingle?.();
     this.jingleT = 3.2;
@@ -347,6 +377,7 @@ export class GullysVisit {
     const night = this.clock.hour >= 21 || this.clock.hour < 4;
     const lines = a.name ? LINES[a.name] : night ? LINES.night : LINES.day;
     this.talking = a;
+    this.needs.chat(`gullys:${a.name ?? a.k}`, this.clock.minutes, 8);
     this.player.locked = true;
     const close = () => this.ui.closeDialog();
     const choices = [];

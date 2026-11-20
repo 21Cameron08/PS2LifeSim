@@ -172,7 +172,7 @@ body.touch #hint {
 
 #toast {
   position: absolute;
-  top: 82px;
+  top: 214px; /* below the money and the needs bars */
   right: 16px;
   font-size: 15px;
   padding: 6px 12px;
@@ -847,6 +847,7 @@ body.touch #cheats .menu-foot {
   }
   #location {
     font-size: 24px;
+    top: 34%; /* clear of the needs bars and toasts */
   }
   #dialog-text {
     font-size: 18px;
@@ -857,6 +858,133 @@ body.touch #cheats .menu-foot {
     right: 50%;
     transform: translateX(50%);
     max-height: 55%;
+  }
+}
+
+/* ------------------------------------------------------------------ needs */
+#hud-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+#needs {
+  width: 150px;
+  padding: 6px 9px 7px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+}
+.need-mood {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  margin-bottom: 3px;
+}
+.need-mood b {
+  font-size: 13px;
+  letter-spacing: 0.15em;
+}
+.mood-great {
+  color: #7aff9a;
+}
+.mood-good {
+  color: #b8ff7a;
+}
+.mood-okay {
+  color: #ffe08a;
+}
+.mood-low {
+  color: #ffaa5a;
+}
+.mood-awful {
+  color: #ff6a5a;
+}
+.need {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 15px;
+  color: #cfe0ff;
+}
+.need svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  filter: drop-shadow(0 0 3px rgba(120, 180, 255, 0.6));
+}
+.need-name {
+  display: none;
+}
+.need-bar {
+  flex: 1;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(190, 215, 255, 0.35);
+  overflow: hidden;
+}
+.need-bar i {
+  display: block;
+  height: 100%;
+  width: 50%;
+  border-radius: 3px;
+  transition: width 0.4s;
+  box-shadow: 0 0 6px currentColor;
+}
+.need.low {
+  color: #ffc06a;
+}
+.need.crit {
+  color: #ff6a5a;
+  animation: need-blink 0.9s steps(2, start) infinite;
+}
+.need.up .need-bar {
+  animation: need-up 0.9s ease-out;
+}
+@keyframes need-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes need-up {
+  0% {
+    box-shadow: 0 0 0 rgba(140, 255, 160, 0);
+    border-color: rgba(190, 215, 255, 0.35);
+  }
+  25% {
+    box-shadow: 0 0 10px rgba(140, 255, 160, 0.9);
+    border-color: #8dff9a;
+  }
+  100% {
+    box-shadow: 0 0 0 rgba(140, 255, 160, 0);
+  }
+}
+.need-flags {
+  margin-top: 3px;
+  min-height: 0;
+  font-size: 11px;
+  color: #ffc06a;
+  letter-spacing: 0.1em;
+  text-align: right;
+}
+.need-flags:empty {
+  display: none;
+}
+@media (max-width: 600px) {
+  #needs {
+    width: 118px;
+    padding: 5px 7px 6px;
+  }
+  #toast {
+    top: 186px;
+    left: 16px;
+    text-align: right;
+  }
+  .need {
+    height: 13px;
   }
 }
 
