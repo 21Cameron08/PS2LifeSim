@@ -118,7 +118,7 @@ export class Shopping {
     if (!G.open) return null;
     // tills
     for (const [shop, t] of Object.entries(G.tills)) {
-      if (!near(p, { ...t.stand, y: shop === 'mv' ? G.origin.y + UP : G.origin.y }, 0.9)) continue;
+      if (!near(p, { ...t.stand, y: shop === 'mv' ? G.origin.y + UP : G.origin.y }, 1.7)) continue;
       const st = this.S.staff[SHOPS[shop].staff];
       if (!st.c.visible) continue;
       const mine = this.cart.length && this.cartShop === shop;
@@ -179,8 +179,23 @@ export class Shopping {
       onTry: (it) => this.tryOn(it, d.shop),
       onBag: (it) => this.toggleBag(it, d.shop),
       onWish: (it) => this.toggleWish(it),
+      payText: () => (this.unpaid(d.shop) ? `Pay now · ${money(this.total(d.shop))}` : ''),
+      onPay: () => setTimeout(() => this.checkout(d.shop), 0),
       onClose: () => (this.player.locked = false),
     });
+  }
+
+  /** How many things from this shop you haven't paid for (in your bag or on you). */
+  unpaid(shop) {
+    return (this.cartShop === shop ? this.cart.length : 0) + (this.tryShop === shop ? Object.keys(this.trying).length : 0);
+  }
+
+  /** The HUD line: what you're carrying round unpaid. */
+  unpaidText() {
+    const shop = this.cartShop ?? (this.busy ? this.tryShop : null);
+    if (!shop) return '';
+    const n = this.unpaid(shop);
+    return n ? `UNPAID · ${n} item${n > 1 ? 's' : ''} · ${money(this.total(shop))}` : '';
   }
 
   /** Put it on (or take it off). Returns a note to show, or null. */
@@ -202,7 +217,8 @@ export class Shopping {
     this.tryShop = shop;
     this.redress();
     this.audio.tone(900, 'triangle', 0.02, 0.08);
-    return `Trying on: ${it.name}. Find a mirror. Pay at the till to keep it.`;
+    this.payHint(shop);
+    return `Trying on: ${it.name}. Find a mirror, or press P to pay now and keep it.`;
   }
 
   toggleBag(it, shop) {
@@ -220,7 +236,13 @@ export class Shopping {
     this.cart.push(it.id);
     this.cartShop = shop;
     this.audio.tone(1320, 'square', 0.02, 0.05);
-    return `In your bag: ${it.name}. Pay at the till.`;
+    this.payHint(shop);
+    return `In your bag: ${it.name}. Press P to pay now (or pay at the till).`;
+  }
+
+  payHint(shop) {
+    const st = this.S.staff[SHOPS[shop].staff];
+    this.ui.hint(`To buy it: <b>Pay now</b> (P) in any display here, or pay ${st.name} at the till. Walking out without paying sets off the alarm.`, 8);
   }
 
   toggleWish(it) {
@@ -244,7 +266,8 @@ export class Shopping {
   }
 
   // ---------------------------------------------------------------- the till
-  checkout(shop) {
+  /** caught: the alarm went off on your way out (pay now, or hand it back). */
+  checkout(shop, caught = false) {
     const sh = SHOPS[shop];
     const worn = this.tryShop === shop ? Object.keys(this.trying).map((s) => this.state.appearance.wear[s]).filter(Boolean) : [];
     const bag = this.cartShop === shop ? [...this.cart] : [];
@@ -252,12 +275,17 @@ export class Shopping {
     const total = cents(ids.reduce((s, id) => s + ITEM[id].price, 0));
     const st = this.S.staff[sh.staff];
     const line = (a, b) => `${a.length > 22 ? `${a.slice(0, 21)}…` : a.padEnd(22, '.')} ${b}`;
+    if (!ids.length) return;
     const text = [`${sh.name} · ${this.clock.format()}`, '', ...ids.map((id) => line(ITEM[id].name, priceText(ITEM[id]))), '', line('TOTAL', money(total)), worn.length ? `(${worn.length} you're wearing)` : ''].join('\n');
+    const caughtLine = { rr: 'Dot: "Sweetie! You forgot to pay!"', sg: 'BEEP BEEP BEEP. Kez: "Nah nah nah. Pay or put it back, fam."', mv: 'A soft, expensive chime. Anton steps in front of you. "I believe these are ours."' }[shop];
     this.player.locked = true;
     st.serving = true;
+    let settled = false;
     const done = () => {
       st.serving = false;
       this.player.locked = false;
+      // caught at the door and didn't pay: it all goes back
+      if (caught && !settled) this.handBack(shop, true);
     };
     const pay = (method) => {
       const S = this.state;
@@ -268,20 +296,37 @@ export class Shopping {
         S.bank = cents(S.bank - total);
         this.ledger(sh.name, -total);
       }
+      settled = true;
       this.ui.closeDialog();
       this.paid(shop, ids, total, worn);
     };
     this.ui.openDialog({
-      name: `${sh.name} · ${st.name}`,
-      text,
+      name: caught ? `${sh.name} · THE ALARM` : `${sh.name} · ${st.name}`,
+      text: caught ? `${caughtLine}\n\n${text}` : text,
       mono: true,
+      instant: true,
       choices: [
-        { label: `Pay cash (${money(this.state.cash)})`, fn: () => pay('cash') },
-        { label: 'Pay by card', fn: () => pay('card') },
-        { label: 'Not yet', fn: () => this.ui.closeDialog() },
+        { label: `Pay cash (you have ${money(this.state.cash)})`, fn: () => pay('cash') },
+        { label: `Pay by card (bank ${money(this.state.bank)})`, fn: () => pay('card') },
+        { label: caught ? 'Hand it back' : 'Not yet', fn: () => this.ui.closeDialog() },
       ],
       onClose: done,
     });
+  }
+
+  /** Everything unpaid from this shop goes back on the rails. */
+  handBack(shop, toast = false) {
+    if (this.cartShop === shop) {
+      this.cart = [];
+      this.cartShop = null;
+    }
+    if (this.tryShop === shop) {
+      Object.assign(this.state.appearance.wear, this.trying);
+      this.trying = {};
+      this.tryShop = null;
+      this.redress();
+    }
+    if (toast) this.ui.toast(`You hand it back. ${this.S.staff[SHOPS[shop].staff].name} puts it back where it was.`);
   }
 
   paid(shop, ids, total, worn) {
@@ -330,24 +375,13 @@ export class Shopping {
 
   /** Walked out of a shop without paying: the gate shrieks, everything goes back. */
   alarm(shop) {
-    const sh = SHOPS[shop];
-    const st = this.S.staff[sh.staff];
-    let n = this.cartShop === shop ? this.cart.length : 0;
-    if (this.cartShop === shop) {
-      this.cart = [];
-      this.cartShop = null;
-    }
-    if (this.tryShop === shop) {
-      n += Object.keys(this.trying).length;
-      Object.assign(this.state.appearance.wear, this.trying);
-      this.trying = {};
-      this.tryShop = null;
-      this.redress();
-    }
-    if (!n) return;
+    if (!this.unpaid(shop)) return;
     for (let k = 0; k < 6; k++) setTimeout(() => this.audio.tone(k % 2 ? 1400 : 1900, 'square', 0.035, 0.12), k * 140);
-    const lines = { rr: 'Dot: "Sweetie! You forgot to pay! Here, I\'ll take those back."', sg: 'BEEP BEEP BEEP. Kez: "Nah nah nah. Pay or put it back, fam."', mv: 'A soft, expensive chime. Anton steps in front of you. "I believe these are ours."' };
-    this.ui.toast(lines[shop] ?? `${st.name} takes the things back.`);
+    // still at the door: you can pay right there; warped or carried off: it just goes back
+    const p = this.player.pos;
+    if (!this.ui.modal && !this.ui.fading && (this.G.contains(p) || this.G.onPlaza(p))) return this.checkout(shop, true);
+    this.handBack(shop);
+    this.ui.toast(`The ${SHOPS[shop].name} things you hadn't paid for went back on the rails.`);
   }
 
   // ---------------------------------------------------------------- the drop line

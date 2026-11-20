@@ -22,7 +22,7 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 | Dance (on the club's floor) | E to start, ← ↑ → ↓ or WASD on the beat, Esc to stop | USE, then the arrow pad |
 | Bartending (SUBSTATION) | ingredients 1-0, Q, W · Enter finish the glass · Backspace tip it out · S serve | the panel's buttons |
 | DJ set (SUBSTATION) | 1-4 pick what plays next · Space cue on the one · Esc end the set | the panel's buttons |
-| Shopping (Galleria) | ↑ ↓ pick · T try on · Enter bag it · Space "I want this" · Esc done | the panel's buttons |
+| Shopping (Galleria) | ↑ ↓ pick · T try on · Enter bag it · P pay now · Space "I want this" · Esc done | the panel's buttons |
 | Register 2 (GULLY'S crew) | items 1-0, Q, W, R, T · Space eat here / to go · Backspace void last · Enter send · Esc step away | the panel's buttons |
 | City map, routes | M (↑↓ pick a place, Enter set a route) | MAP |
 | Sound on/off | pause menu (Sound) | in the pause menu |
@@ -356,9 +356,11 @@ ten the guard, Pruitt, walks the last shoppers out.
   for refit, a wall of TVs still on behind the shutter).
 - **Shopping**: browse any rack, wall, table or case (E). Each piece shows its price and
   how much status it gives. **Try it on** (you really wear it round the shop; the
-  mirrors turn the camera on you) or **bag it**, then pay at the till, cash or card:
-  a receipt, a ka-ching, and the shop's bag in your hand. Walk out without paying and the
-  gate shrieks and it all goes back. **"I want this"** pins a piece under your money with
+  mirrors turn the camera on you) or **bag it**, then **Pay now** (P, or the button in any
+  display of that shop), at the till, or by talking to the shop's staff: cash or card, a
+  receipt, a ka-ching, and the shop's bag in your hand. Anything unpaid shows as
+  **UNPAID** under your money; walk out with it and the alarm goes off: pay right there
+  or hand it back. **"I want this"** pins a piece under your money with
   a bar that fills as you save. Buying something new is a fun boost.
 - **The staff notice you**: Dot loves everyone; Kez only looks up if your fit is good;
   Céleste asks a Nobody if they're lost and brings champagne to the salon for anyone

@@ -126,7 +126,11 @@ export class UI {
     }
   }
   /** Your status under the money: st = statusOf(); wish = { name, have, price } or null. */
-  setStatus(st, wish) {
+  setStatus(st, wish, unpaid = '') {
+    if (unpaid !== this._unpaid) {
+      $('unpaid').textContent = this._unpaid = unpaid;
+      $('unpaid').classList.toggle('hidden', !unpaid);
+    }
     const pips = Array.from({ length: 7 }, (_, i) => `<i class="${i < st.tier ? 'on' : ''}"></i>`).join('');
     const html = `<span class="pips">${pips}</span>${st.name.toUpperCase()}`;
     if (html !== this._status) {
@@ -275,7 +279,7 @@ export class UI {
 
   // ---------------------------------------------------------------- dialogue
   /** choices: [{ label, fn }]. fn() can open another dialog or call closeDialog(). */
-  openDialog({ name, text, choices, onClose, mono = false }) {
+  openDialog({ name, text, choices, onClose, mono = false, instant = false }) {
     this.modal = 'dialog';
     this.dialog = { name, text, choices: choices?.length ? choices : [{ label: 'OK', fn: () => this.closeDialog() }], onClose, shown: 0, typing: true, sel: 0 };
     $('dialog').classList.remove('hidden');
@@ -285,6 +289,12 @@ export class UI {
     $('dialog-choices').innerHTML = '';
     this.clearHint();
     this.setPrompt(null);
+    if (!this._dialogTap) {
+      // tap the text to see it all at once
+      this._dialogTap = true;
+      $('dialog-text').addEventListener('click', () => this.dialog?.typing && this.finishTyping());
+    }
+    if (instant) this.finishTyping();
   }
   finishTyping() {
     const d = this.dialog;
@@ -309,7 +319,8 @@ export class UI {
   }
   choose(i) {
     const d = this.dialog;
-    if (!d || d.typing || !d.choices[i]) return;
+    if (d?.typing) this.finishTyping();
+    if (!d || !d.choices[i]) return;
     this.audio.blip(true);
     d.choices[i].fn();
   }
@@ -821,9 +832,11 @@ export class UI {
     $('shop').innerHTML = `<div class="reg-head"><span>${r.title}</span><span>${money(r.cash())} cash · ${money(r.bank())} bank</span></div>
       <div class="shop-list">${html || `<div class="shop-empty">${r.empty}</div>`}</div>
       <div class="reg-note">${r.note || r.cartText()}</div>
-      <div class="reg-foot">↑↓ pick · T try on · Enter bag it · Space I want this · Esc done</div>`;
+      ${r.payText?.() ? `<div class="reg-btns shop-pay"><button class="reg-btn go" data-pay="1"><span>P</span>${r.payText()}</button></div>` : ''}
+      <div class="reg-foot">↑↓ pick · T try on · Enter bag it · Space I want this · P pay now · Esc done</div>`;
     const el = $('shop');
     el.querySelectorAll('[data-sel]').forEach((b) => b.addEventListener('click', () => ((r.sel = Number(b.dataset.sel)), this.renderShop())));
+    el.querySelector('[data-pay]')?.addEventListener('click', () => this.shopPay());
     el.querySelectorAll('[data-act]').forEach((b) =>
       b.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -841,6 +854,12 @@ export class UI {
     r.note = fn(row.it) ?? '';
     this.audio.blip(kind !== 'wish');
     this.renderShop();
+  }
+  shopPay() {
+    const r = this.shopS;
+    if (!r?.payText?.()) return;
+    this.closeShop();
+    r.onPay();
   }
   closeShop() {
     const r = this.shopS;
@@ -1147,6 +1166,7 @@ export class UI {
       } else if (k === 'KeyT') this.shopAct('try');
       else if (k === 'Enter' || k === 'KeyE' || k === 'NumpadEnter') this.shopAct('bag');
       else if (k === 'Space') this.shopAct('wish');
+      else if (k === 'KeyP') this.shopPay();
       return eat();
     }
     if (this.modal === 'pos') {

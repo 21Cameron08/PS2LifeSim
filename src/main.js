@@ -1799,6 +1799,8 @@ function mallTalk(a) {
   if (key === 'anton') text = st.tier >= 5 ? talkRng.pick(['A pleasure to see you again.', 'He opens the door before you reach it, with a small bow.']) : st.tier <= 1 ? 'He looks at your shoes for a long second. "...Welcome."' : talkRng.pick(MALL_LINES.anton);
   if (key === 'celeste' && st.tier <= 2) text = 'She keeps folding the scarf. "If you need anything, I\'ll be... here."';
   const choices = [];
+  const shopOf = { dot: 'rr', kez: 'sg', celeste: 'mv' }[key];
+  if (shopOf && shopping.unpaid(shopOf)) choices.push({ label: 'I\'d like to pay for these', fn: () => (close(), setTimeout(() => shopping.checkout(shopOf), 0)) });
   if (key === 'pretzel') choices.push({ label: 'A pretzel ($4.50)', fn: () => (close(), shopping.pretzel()) });
   if (key === 'kez') choices.push({ label: 'When is the next drop?', fn: () => ui.openDialog({ name: 'Kez', text: `Saturday, ten AM. Grain Runner 9 'Harbour'. ${state.drop?.stock ?? 12} pairs. The line starts on the plaza before nine. Bring a chair.`, choices: [{ label: 'Okay', fn: close }], onClose: done }) });
   choices.push({ label: 'Bye', fn: close });
@@ -2225,7 +2227,7 @@ function updateStatus() {
     }
   }
   const it = state.wish && ITEM[state.wish];
-  ui.setStatus(st, it && !state.owned.includes(it.id) ? { name: it.name, have: state.cash + Math.max(0, state.bank), price: it.price } : null);
+  ui.setStatus(st, it && !state.owned.includes(it.id) ? { name: it.name, have: state.cash + Math.max(0, state.bank), price: it.price } : null, shopping.unpaidText());
   // (the climb only counts once you've paid: trying things on just previews it)
   const wear = state.appearance.wear;
   const paid = Object.values(wear).every((id) => !id || ITEM[id]?.basic || state.owned.includes(id));

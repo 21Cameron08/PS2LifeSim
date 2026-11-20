@@ -769,6 +769,26 @@ body.touch #cheats .menu-foot {
   color: #ffd36a;
   text-shadow: 0 0 8px rgba(255, 200, 90, 0.6);
 }
+#unpaid {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #ffb08a;
+  text-align: right;
+  animation: unpaid-pulse 1.4s ease-in-out infinite;
+}
+@keyframes unpaid-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+.shop-pay {
+  margin-top: 4px;
+}
+.shop-pay .reg-btn {
+  width: 100%;
+  font-size: 17px;
+}
 #wish {
   max-width: 220px;
   font-size: 11px;
