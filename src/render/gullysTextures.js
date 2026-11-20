@@ -328,6 +328,60 @@ export class ServingBoard {
   }
 }
 
+const SHORT = {
+  stack: 'STACK', single: 'SINGLE', catch: 'CATCH', dog: 'DOG', strips: 'STRIPS', fries: 'FRIES', rings: 'RINGS',
+  seafoam: 'SEAFOAM', sunset: 'SUNSET', soda: 'SODA', gullbox: 'G-BOX', flock: 'FLOCK', earlybird: 'E.BIRD',
+  dawn: 'DAWN', raft: 'RAFT', coffee: 'COFFEE', oj: 'OJ', gullbox_am: 'AM BOX', flock_am: 'AM FLOCK',
+};
+
+/** The live kitchen screen when you're on the crew: tickets, how old they are, the holding bins. */
+export class KitchenScreen {
+  constructor() {
+    const [c, g] = makeCanvas(256, 138);
+    this.c = c;
+    this.g = g;
+    this.tex = makeTex(c, { repeat: false });
+    this.key = null;
+  }
+  /** tickets: [{ num, items, age, state, toGo }], bins: { fry, grill, short } */
+  draw(tickets, bins) {
+    const key = JSON.stringify([tickets.map((t) => [t.num, t.state, Math.floor(t.age / 5)]), bins]);
+    if (key === this.key) return;
+    this.key = key;
+    const g = this.g;
+    g.fillStyle = '#081018';
+    g.fillRect(0, 0, 256, 138);
+    // the bins along the top
+    g.fillStyle = '#10202c';
+    g.fillRect(0, 0, 256, 16);
+    text(g, 'LINE', 6, 9, 11, '#7ae8c0', { align: 'left' });
+    const bin = (label, n, x, short) => text(g, `${label} ${n}`, x, 9, 11, n <= 0 || short ? '#ff5a4a' : n < 4 ? '#ffc04a' : '#e8f0f8', { align: 'left' });
+    bin('FRY', bins.fry, 60, bins.short === 'fry');
+    bin('GRILL', bins.grill, 130, bins.short === 'grill');
+    text(g, tickets.length > 3 ? `+${tickets.length - 3}` : '', 250, 9, 11, '#ffc04a', { align: 'right' });
+    // the three oldest tickets
+    tickets.slice(0, 3).forEach((t, k) => {
+      const x = 3 + k * 84;
+      const late = t.age > 60 ? '#e83a3a' : t.age > 30 ? '#ff8a2a' : '#2a8a8a';
+      g.fillStyle = '#e8ecf0';
+      g.fillRect(x, 20, 80, 114);
+      g.fillStyle = t.state === 'bag' ? '#ffd23a' : t.state === 'plating' ? '#5ac85a' : late;
+      g.fillRect(x, 20, 80, 18);
+      text(g, `#${t.num}`, x + 4, 30, 14, t.state === 'bag' ? '#1d2c4c' : '#ffffff', { align: 'left' });
+      text(g, t.state === 'bag' ? 'BAG' : t.state === 'plating' ? 'UP' : t.toGo ? 'TO GO' : 'HERE', x + 77, 30, 10, t.state === 'bag' ? '#1d2c4c' : '#ffffff', { align: 'right' });
+      const counts = {};
+      for (const id of t.items) counts[id] = (counts[id] ?? 0) + 1;
+      Object.entries(counts)
+        .slice(0, 5)
+        .forEach(([id, n], l) => text(g, `${n > 1 ? `${n} ` : ''}${SHORT[id] ?? id}`, x + 5, 49 + l * 15, 12, '#1a1a22', { align: 'left', max: 72 }));
+      const m = Math.floor(t.age / 60);
+      text(g, `${m}:${String(Math.floor(t.age % 60)).padStart(2, '0')}`, x + 40, 126, 12, t.age > 60 ? '#e83a3a' : '#3a4a5a');
+    });
+    if (!tickets.length) text(g, 'ALL CLEAR', 128, 78, 16, '#2a6a6a');
+    this.tex.needsUpdate = true;
+  }
+}
+
 /** The harbour mural on the dining room wall. */
 function mural() {
   const rng = new Rng(1987);

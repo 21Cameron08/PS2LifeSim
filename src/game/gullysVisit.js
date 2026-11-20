@@ -1,5 +1,5 @@
 import { Rng, clamp } from '../core/rng.js';
-import { menuAt, pickToy, TOYS, BREAKFAST_UNTIL, FEED } from './gullysMenu.js';
+import { menuAt, pickToy, TOYS, BREAKFAST_UNTIL, FEED, LUNCH, BREAKFAST } from './gullysMenu.js';
 
 // Your side of GULLY'S: ordering at a register, waiting for your number, taking
 // your tray to a seat and eating, Gull Box toys, binning your tray, refills, the
@@ -381,19 +381,22 @@ export class GullysVisit {
     this.player.locked = true;
     const close = () => this.ui.closeDialog();
     const choices = [];
-    if (a.name === 'Marco')
-      choices.push({
-        label: 'Are you hiring?',
-        fn: () =>
-          this.ui.openDialog({
-            name: 'Marco',
-            text: "Always. Fry station, early shifts, you'll smell like Chip Snatchers forever. Entry-level pay, free meal per shift. Let me get the forms sorted and come back.",
-            choices: [{ label: 'Okay', fn: close }],
-            onClose: () => this.endTalk(),
-          }),
-      });
-    choices.push({ label: 'Bye', fn: close });
-    this.ui.openDialog({ name: a.name ?? 'Customer', text: this.rng.pick(lines), choices, onClose: () => this.endTalk() });
+    // Marco hires you and runs your shifts (see crewJob.js)
+    if (a.name === 'Marco' && this.crew) choices.push(...this.crew.marcoChoices(() => this.endTalk()));
+    choices.push({ label: this.crew?.onShift && a.role ? 'Back to work' : 'Bye', fn: close });
+    const text = a.name === 'Marco' && this.crew?.onShift ? this.crew.marcoLine() : this.rng.pick(lines);
+    this.ui.openDialog({ name: a.name ?? 'Customer', text, choices, onClose: () => this.endTalk() });
+  }
+
+  /** Marco's crew meal after a shift: it goes on the screen like any other order. */
+  crewMeal(ids, toGo) {
+    if (this.order || this.tray) return this.ui.toast('Your hands are already full. Marco shrugs: "Next time, then."');
+    const items = ids.map((id) => [...LUNCH, ...BREAKFAST].find((m) => m.id === id)).filter(Boolean);
+    const o = this.D.placeOrder('player', toGo, 7, ids);
+    this.order = o;
+    this.items = items;
+    if (items.some((i) => i.drink)) this.cup = true;
+    this.ui.toast(`Marco punches it in himself. "Number ${o.num}. On the house. You earned it."`);
   }
 
   endTalk() {

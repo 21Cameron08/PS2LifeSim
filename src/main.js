@@ -19,6 +19,7 @@ import { Clubbers } from './actors/clubbers.js';
 import { Gullys } from './world/gullys.js';
 import { Diners } from './actors/diners.js';
 import { GullysVisit } from './game/gullysVisit.js';
+import { CrewJob } from './game/crewJob.js';
 import { Needs, NEEDS } from './game/needs.js';
 import { additive } from './render/materials.js';
 import { buildPlaces } from './game/places.js';
@@ -74,6 +75,7 @@ const state = {
   photos: save?.photos ?? [], // photo-booth strips (data URLs), newest first
   clubMem: save?.clubMem ?? {}, // what you last did with each regular: { night, did }
   barJob: save?.barJob, // bartending at SUBSTATION: { hired, earned, shifts }
+  crewJob: save?.crewJob, // crew at GULLY'S: { hired, earned, shifts }
   djGig: save?.djGig, // a booked DJ set: { night, slot }
   djRep: save?.djRep ?? 0, // good sets played
   djSets: save?.djSets ?? 0,
@@ -119,7 +121,7 @@ const peds = new Pedestrians(crowd, city, 72);
 const traffic = new Traffic(scene, tex, 24);
 const clock = new Clock(save?.minutes ?? START.hour * 60);
 const job = new StoreJob({ store, crowd, ui, audio, state, clock, player });
-job.blocked = () => barJob.onShift;
+job.blocked = () => (barJob.onShift ? 'SUBSTATION' : crew.onShift ? "GULLY'S" : null);
 if (state.job.hired) store.helpWanted.visible = false;
 store.onChime = () => camera.position.distanceTo(store.doorCenter) < 35 && audio.chime();
 const storeSpace = { ...outdoor, indoor: true, ceiling: store.origin.y + store.H };
@@ -150,6 +152,11 @@ const gullysSpace = { ...outdoor, indoor: true, ceiling: gullys.origin.y + gully
 let inGullys = false;
 const diners = new Diners(crowd, gullys, city, scene);
 const visit = new GullysVisit({ gullys, diners, ui, audio, state, clock, player, input, apts, needs, saveNow: () => saveNow() });
+const crew = new CrewJob({ gullys, diners, visit, ui, audio, state, clock, player, crowd, needs });
+crew.blocked = () => !!job.J.shift || barJob.onShift;
+visit.crew = crew;
+/** On the clock at any job. */
+const onClock = () => !!job.J.shift || barJob.onShift || crew.onShift;
 if (state.gullToys.length) apts.setToys(state.gullToys);
 let gullysKick = 0;
 let lightsUpNight = -1;
@@ -249,6 +256,7 @@ function saveNow(showToast = false) {
     photos: state.photos,
     clubMem: state.clubMem,
     barJob: state.barJob,
+    crewJob: state.crewJob,
     djGig: state.djGig,
     djRep: state.djRep,
     djSets: state.djSets,
@@ -682,6 +690,8 @@ function findInteraction() {
   if (inUnder) return underInteraction();
   const work = job.findInteraction(player.pos);
   if (work) return work;
+  const crewWork = crew.find(player.pos);
+  if (crewWork) return crewWork;
   const food = visit.find();
   if (food) return food;
   const nightlife = clubInteraction();
@@ -1292,7 +1302,7 @@ function barOrder(where, forWhom = null) {
     text: forWhom ? `What's ${forWhom.name} having?` : talkRng.pick(['What can I get you?', "What'll it be?", 'Yeah? What are you having?']),
     choices: [
       ...(where === 'BAR' && !forWhom && !barJob.J.hired ? [{ label: 'Are you hiring?', fn: () => (close(), (player.locked = true), hireTalk()) }] : []),
-      ...(where === 'BAR' && !forWhom && barJob.J.hired && !barJob.onShift && !job.J.shift ? [{ label: 'Start a bar shift', fn: () => (close(), barJob.clockIn(nightOf(clock.minutes))) }] : []),
+      ...(where === 'BAR' && !forWhom && barJob.J.hired && !onClock() ? [{ label: 'Start a bar shift', fn: () => (close(), barJob.clockIn(nightOf(clock.minutes))) }] : []),
       ...DRINKS.map((dr) => ({
         label: dr.price ? `${dr.name} ($${dr.price})` : dr.name,
         fn: () => {
@@ -1637,6 +1647,7 @@ function updateGullys(dt) {
     talking: visit.talking,
   });
   visit.update(dt, inGullys);
+  crew.update(dt);
   if (!playing) return;
   // the in-store radio, and the kitchen
   const want = inGullys && gullys.open;
@@ -1687,7 +1698,7 @@ function updateNeeds(dt) {
   const dm = clock.minutes - needsLast;
   needsLast = clock.minutes;
   const mult = {};
-  if (job.J.shift || barJob.onShift) Object.assign(mult, { energy: 1.6, hygiene: 1.4, fun: 1.4 });
+  if (onClock()) Object.assign(mult, { energy: 1.6, hygiene: 1.4, fun: 1.4 });
   if (dm > 0 && dm < 30) needs.tick(dm, mult);
 
   // things that fill them while you're doing them (per real second)
@@ -1745,6 +1756,7 @@ function passOut() {
     visit.interrupt();
     if (job.J.shift) job.clockOut();
     if (barJob.onShift) barJob.clockOut();
+    if (crew.onShift) crew.clockOut('passout');
     if (dj.active) dj.end(true);
     const home = apts.byId[state.home];
     const atHome = place === home && !touring;
@@ -1948,7 +1960,7 @@ const park = city.blocks.find((b) => b.kind === 'park');
 
 // ----------------------------------------------------------------------------
 // The map (M) and routes
-const places = buildPlaces({ city, apts, state, store, job, gullys, club, lantern, park, clubNight, clubTheme: tonightTheme, clubFriends });
+const places = buildPlaces({ city, apts, state, store, job, crew, gullys, club, lantern, park, clubNight, clubTheme: tonightTheme, clubFriends });
 
 /** Friends whose usual night it is tonight (for the map). */
 function clubFriends() {
@@ -2010,7 +2022,7 @@ function updateRoute(dt) {
 }
 
 function openWardrobe() {
-  if (job.J.shift || barJob.onShift) return ui.toast("You're in uniform. Clock out first.");
+  if (onClock()) return ui.toast("You're in uniform. Clock out first.");
   player.locked = true;
   rig.setMode('wardrobe');
   ui.openWardrobe(
@@ -2070,7 +2082,7 @@ function frame(now) {
   const free = playing && !ui.modal && !ui.fading;
   input.enabled = free;
   if (free) handleKeys();
-  if (!inUnder) clock.update(dt, free && input.keys.has('KeyT') && !job.J.shift && !barJob.onShift);
+  if (!inUnder) clock.update(dt, free && input.keys.has('KeyT') && !onClock());
   if (playing) payRent();
 
   player.update(dt, input, rig.yaw, (p, r) => {
@@ -2227,6 +2239,7 @@ window.game = {
   visit,
   needs,
   barJob,
+  crew,
   dj,
   under,
   places,

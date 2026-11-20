@@ -43,6 +43,14 @@ features, controls and the code map.
   player's tray is a diners tray too); when the camera is far away people walk at 80 m/s
   and new customers can spawn already seated or waiting, so the place is busy on arrival.
   Seats carry a `route` from the aisle; crowd poses `c.tray` and `c.eat` came with it.
+- GULLY'S crew job (`game/crewJob.js`): Marco hires you through `gullysVisit.talk`
+  (`crew.marcoChoices`). On a shift `diners.shift = { stock: { fry, grill }, short }`: register 2
+  waits for you (customers carry a `wish`, `diners.ringUp` sends your ticket), Marco only
+  plates orders whose `items` the bins can cover (`KITCHEN` in gullysMenu.js), to-go orders
+  wait in state `bag` for you, and `diners.onCrew` reports 'lost'/'wrong'. The kitchen side
+  is reached through the staff gate (`gullys.staffGate` collider, opened while
+  `gullys.crewKitchen` is set or you're still `behindCounter`); the live ticket screen is
+  `KitchenScreen` swapped onto `gullys.kitchenMat`. One job at a time: `onClock()` in main.js.
 - Needs (`game/needs.js`, `updateNeeds`/`passOut` in main.js, HUD in `ui.setNeeds`): decay
   comes from game time each frame (`needs.tick`); jumps of 30+ minutes are skipped there, so
   anything that skips time on purpose (sleep, shower, fridge, passing out) applies its own

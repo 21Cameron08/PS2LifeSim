@@ -1365,6 +1365,61 @@ body.touch #map .map-foot {
   text-align: right;
 }
 
+/* ------------------------------------------------------------------ GULLY'S register 2 (crew job) */
+#pos {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(860px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  background: linear-gradient(180deg, #0f2a30, #08161a);
+  border: 2px solid #17a2a8;
+  border-radius: 10px;
+  box-shadow: 0 0 30px rgba(23, 162, 168, 0.35);
+  pointer-events: auto;
+  padding: 14px 16px;
+}
+#pos .reg-head {
+  color: #7ae8e0;
+  border-bottom-color: rgba(122, 232, 224, 0.3);
+}
+.pos-says {
+  margin: 8px 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f6f2e6;
+  color: #1d2c4c;
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.pos-pat {
+  display: block;
+  height: 4px;
+  margin-bottom: 6px;
+  border-radius: 2px;
+  background: rgba(29, 44, 76, 0.15);
+  overflow: hidden;
+}
+.pos-pat i {
+  display: block;
+  height: 100%;
+  background: #ff8a2a;
+}
+.pos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.pos-grid .reg-btn {
+  margin: 0;
+  font-size: 13px;
+  text-align: left;
+}
+
 /* ------------------------------------------------------------------ the DJ set */
 #dj {
   position: absolute;

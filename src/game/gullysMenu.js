@@ -61,6 +61,78 @@ export const FEED = {
   flock_am: { hunger: 60, energy: 18 },
 };
 
+// what each item takes from the kitchen's holding bins (fryer portions, grill items)
+export const KITCHEN = {
+  stack: { grill: 2 },
+  single: { grill: 1 },
+  catch: { fry: 1 },
+  dog: { grill: 1 },
+  strips: { fry: 1 },
+  fries: { fry: 1 },
+  rings: { fry: 1 },
+  gullbox: { grill: 1, fry: 1 },
+  flock: { grill: 2, fry: 1 },
+  earlybird: { grill: 1 },
+  dawn: { grill: 1 },
+  raft: { fry: 1 },
+  gullbox_am: { grill: 1 },
+  flock_am: { grill: 1, fry: 1 },
+};
+
+/** What a list of items needs from the kitchen. */
+export function kitchenNeeds(items = []) {
+  const n = { fry: 0, grill: 0 };
+  for (const id of items) for (const [k, v] of Object.entries(KITCHEN[id] ?? {})) n[k] += v;
+  return n;
+}
+
+const OPENERS = ["Hi! Can I get", "Um... I'll have", 'Yeah, lemme get', 'Could I please have', 'Okay, so.', 'Hey. Just', "I'd like"];
+const article = (name) => (/s$/.test(name) ? '' : /^[AEIOU]/.test(name) ? 'an ' : 'a ');
+const NUM = ['', '', 'two', 'three'];
+
+/** Say a list of item ids the way a customer would. */
+export function sayItems(items, menu) {
+  const counts = {};
+  for (const id of items) counts[id] = (counts[id] ?? 0) + 1;
+  const parts = Object.entries(counts).map(([id, n]) => {
+    const name = menu.find((m) => m.id === id)?.name ?? id;
+    return n > 1 ? `${NUM[n] ?? n} ${/s$/.test(name) ? name : `${name}s`}` : `${article(name)}${name}`;
+  });
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
+}
+
+/** What a customer at the register asks for: { items, toGo, text } (sometimes they change their mind). */
+export function makeWish(menu, rng) {
+  const mains = menu.filter((m) => m.main);
+  const sides = menu.filter((m) => !m.main && !m.drink);
+  const drinks = menu.filter((m) => m.drink);
+  const items = [rng.pick(mains).id];
+  if (rng.chance(0.55)) items.push(rng.pick(sides).id);
+  if (rng.chance(0.6)) items.push(rng.pick(drinks).id);
+  if (rng.chance(0.15)) items.push(rng.pick(mains).id);
+  const toGo = rng.chance(0.3);
+  let text = `${rng.pick(OPENERS)} ${sayItems(items, menu)}? ${toGo ? rng.pick(['To go, please.', 'To take away.', "It's to go."]) : rng.pick(['For here.', 'Eating in.', "We'll eat here."])}`;
+  // ...and sometimes they change their mind halfway
+  if (rng.chance(0.14)) {
+    const k = rng.int(0, items.length - 1);
+    const pool = (menu.find((m) => m.id === items[k])?.drink ? drinks : menu.find((m) => m.id === items[k])?.main ? mains : sides).filter((m) => m.id !== items[k]);
+    if (pool.length) {
+      const swap = rng.pick(pool);
+      const old = menu.find((m) => m.id === items[k]).name;
+      items[k] = swap.id;
+      text += ` Actually, no, make the ${old} ${article(swap.name)}${swap.name}.`;
+    }
+  }
+  return { items: items.sort(), toGo, text };
+}
+
+/** Did the ticket match what they asked for? */
+export function sameOrder(a, b) {
+  const x = [...a.items].sort();
+  const y = [...b.items].sort();
+  return a.toGo === b.toGo && x.length === y.length && x.every((id, i) => id === y[i]);
+}
+
 export const BREAKFAST_UNTIL = 11;
 export const menuAt = (hour) => (hour >= 6 && hour < BREAKFAST_UNTIL ? BREAKFAST : LUNCH);
 

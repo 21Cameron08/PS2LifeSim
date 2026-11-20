@@ -22,6 +22,7 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 | Dance (on the club's floor) | E to start, ← ↑ → ↓ or WASD on the beat, Esc to stop | USE, then the arrow pad |
 | Bartending (SUBSTATION) | ingredients 1-0, Q, W · Enter finish the glass · Backspace tip it out · S serve | the panel's buttons |
 | DJ set (SUBSTATION) | 1-4 pick what plays next · Space cue on the one · Esc end the set | the panel's buttons |
+| Register 2 (GULLY'S crew) | items 1-0, Q, W, R, T · Space eat here / to go · Backspace void last · Enter send · Esc step away | the panel's buttons |
 | City map, routes | M (↑↓ pick a place, Enter set a route) | MAP |
 | Sound on/off | pause menu (Sound) | in the pause menu |
 
@@ -49,8 +50,9 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   Old Market. Two better homes are up for lease (follow the blue diamonds):
   **Loft 4** at The Kiln Works in Kiln Heights, and the **Meridian Tower Penthouse**
   Downtown. See below.
-- **A job**: night clerk at **HALCYON 24**, the convenience store next door to Unit 3B.
-  $9 an hour. See below.
+- **Jobs**: night clerk at **HALCYON 24**, the convenience store next door to Unit 3B
+  ($9 an hour), crew at **GULLY'S** ($9.50 and a meal) and the bar at **SUBSTATION** ($11
+  plus tips). One shift at a time. See below.
 - **A nightclub**: **SUBSTATION**, a converted power substation in Ember Row, across the
   road from the Lantern Quarter. Open 10 PM to 4 AM. See below.
 - **A burger joint**: **GULLY'S** in Greenway, a little harbour-town fast food chain
@@ -283,11 +285,40 @@ with umbrella tables, a pole sign with a turning Gully on top and a lit roof sig
   pass, Pip clearing tables, and customers who walk in off the street, queue, wait for
   their number, eat (or take a bag) and mostly bin their own trays. Breakfast, the lunch
   rush, dinner and the after-bars crowd are the busy times. Talk to anyone; ask Marco
-  about work.
+  about work (see the crew job below).
 - **The kiddie ride** (50¢), refills, crayons, the mural, the sinks.
 - **Sound**: the in-store radio (bouncy, a bit cheesy, with the "Snatch a bite!" jingle),
   fryer sizzle and extractor hum, fryer timers, the order-up bell.
 - **2 AM**: closed. The lights dim, Pip mops and the grill gets scrubbed. Back at 6.
+
+### The crew job
+
+Ask Marco at the pass if they're hiring. Crew member, **$9.50 an hour** (entry level, paid
+to your bank with a slip) and a **free crew meal** after a real shift. Shifts start any time
+the place is open between 6 AM and 11 PM; ask Marco to start one and he puts you on while
+Theo and two of the cooks take a break. The **staff gate** at the west end of the counter
+(a half door under a lift-up flap) opens for you, and you get the teal shirt.
+
+- **Register 2** is yours. Customers come up and say what they want (sometimes they change
+  their mind halfway through the sentence). Press E at the register, punch it into the
+  screen, set eat here or to go, and send it to the kitchen; they tap their card. Leave
+  someone standing for 45 seconds and Jo waves them over to register 1. Get the ticket
+  wrong and they bring it back when they collect it: Marco comps it, you're docked $2.
+- **The fryer** (behind the line): drop a basket (fries, or hash browns before 11), lift it
+  when the timer beeps, before it burns. Each basket fills the fry bin.
+- **The grill**: lay down patties (eggs and sausage at breakfast), flip them on the beep,
+  pull them into the warming cabinet on the next one. Leave them and they turn to charcoal:
+  docked, and you have to scrape the grill.
+- **The bins hold up the line.** Marco only puts an order on the pass when the fry and grill
+  bins have what its ticket needs, so an empty bin stops everything (he lets you know). The
+  **screens over the line** show the live tickets, how old they are, and both bins.
+- **To-go orders** come up on the pass for you to bag: stand at the pass, E, and call the
+  number. Leave a bag too long and Marco does it himself (and gives you a look).
+- The shift HUD lists who's at your register, bags to do, both bins and what the fryer and
+  grill are doing. Walk off and you're docked; at 2 AM Marco sends everyone home. Clock
+  out by talking to Marco: the slip shows orders rung up, wrong orders, people sent to Jo,
+  baskets and grill loads, anything burnt, bags, and what was docked. Working drains energy,
+  hygiene and fun faster; the register is a bit social; the meal fixes your hunger.
 
 ## How the PS2 look works
 
@@ -336,7 +367,8 @@ src/
                           store job, the club's dance game (dance.js), photo booth
                           (photobooth.js), theme nights (clubNights.js), bar job
                           (barJob.js) and DJ set (djSet.js), GULLY'S menu data
-                          (gullysMenu.js) and your visit there (gullysVisit.js)
+                          (gullysMenu.js), your visit there (gullysVisit.js) and the
+                          crew job (crewJob.js)
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls,
                           the city map (map.js; its places and hours are game/places.js,
                           the route beam is world/waypoint.js)
@@ -355,20 +387,17 @@ The big goal: **lots of cool places to hang out**. Every new space (diner, arcad
 rooftop, karaoke bar, record shop, a 2 AM laundromat, the pier) gets a real walk-in
 interior with the same detail, light and sound as the apartments and the store.
 
-1. **GULLY'S crew job**: Marco's "come back when the forms are sorted". Early shifts on the
-   fryers, the grill or a register (cook to the ticket screen, call numbers, bag to-go
-   orders), entry-level pay plus a free meal, using the store's shift system.
-2. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
+1. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
    noodle bar cook, courier, office temp. Promotions and raises at the store.
-3. **Economy**: rent and bills, a bank screen with transactions, shop inventories.
-4. **Clothes shops**: buy items that unlock in the wardrobe; outfits as data.
-5. **Furniture**: buy and place furniture in your apartment (the kit already has the
+2. **Economy**: rent and bills, a bank screen with transactions, shop inventories.
+3. **Clothes shops**: buy items that unlock in the wardrobe; outfits as data.
+4. **Furniture**: buy and place furniture in your apartment (the kit already has the
    pieces; this needs a placement mode and saving the layout).
-6. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
-7. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
-8. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
-9. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
-10. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
+5. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
+6. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
+7. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
+8. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
+9. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
     streets, chat and visiting apartments; the bank must move server‑side then.
 
 All names, shops and brands in the game are made up.

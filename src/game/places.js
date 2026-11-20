@@ -57,7 +57,7 @@ export function buildPlaces(w) {
     color: () => '#ff9a4a',
     at: { x: gullys.outsideSpot.x, z: gullys.outsideSpot.z },
     name: () => "GULLY'S",
-    sub: () => 'Burgers, fries, shakes · Gull Box toys',
+    sub: () => (w.crew?.J.hired ? (w.crew.onShift ? 'Your job · on shift now' : 'Your job · crew, $9.50 an hour + a meal') : 'Burgers, fries, shakes · Gull Box toys · hiring'),
     status: (h) => (gullysOpen(h) ? { text: 'OPEN · until 2 AM', open: true } : { text: 'CLOSED · opens 6 AM', open: false }),
     needs: () => ['hunger', 'fun', 'social'],
     big: () => true,

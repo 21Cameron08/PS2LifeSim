@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GeoBuilder, shade, trs } from '../core/geo.js';
 import { Rng, damp, angleLerp, clamp } from '../core/rng.js';
 import { randomAppearance } from './appearance.js';
-import { BRAND } from '../game/gullysMenu.js';
+import { BRAND, LUNCH, makeWish, kitchenNeeds, sameOrder } from '../game/gullysMenu.js';
 
 // Everyone at GULLY'S: the crew behind the counter and the customers. Customers
 // walk in off the street, queue at a register, order, wait by the pickup end for
@@ -101,6 +101,9 @@ export class Diners {
     this.busy = 0;
     this.watched = false;
     this.onCall = null; // (order) => {}, when a number goes up on the board
+    this.menuFn = () => LUNCH; // what's on the boards right now
+    this.shift = null; // you're on the crew: { stock: { fry, grill }, short } (see game/crewJob.js)
+    this.onCrew = null; // (event, customer, order) => {}: 'lost' (gave up on register 2), 'wrong' (wrong food)
 
     // which seats share a table (people prefer an empty table)
     this.seats = [...G.seats, ...G.patioSeats];
@@ -310,11 +313,21 @@ export class Diners {
   }
 
   // ---------------------------------------------------------------- orders
-  placeOrder(owner, toGo, cook) {
-    const o = { num: this.num, owner, toGo, state: 'cooking', readyAt: this.time + (cook ?? this.rng.float(12, 28)), slot: -1, tray: null };
+  placeOrder(owner, toGo, cook, items = null) {
+    const o = { num: this.num, owner, toGo, state: 'cooking', readyAt: this.time + (cook ?? this.rng.float(12, 28)), slot: -1, tray: null, items: items ?? makeWish(this.menuFn(), this.rng).items, at: this.time };
     this.num = this.num >= 199 ? 100 : this.num + 1;
     this.orders.push(o);
     return o;
+  }
+
+  /** A to-go order bagged at the pass (by you, or by Marco if you leave it): its number goes up. */
+  bagUp(o) {
+    if (o.state !== 'bag') return;
+    o.tray = this.newTray('bag');
+    const P = this.G.pickSlots[o.slot].tray;
+    this.putDown(o.tray, P.x, P.y, P.z, 0);
+    o.state = 'ready';
+    this.onCall?.(o);
   }
 
   /** Numbers up on the NOW SERVING board. */
@@ -354,7 +367,56 @@ export class Diners {
   }
 
   registerOpen(r) {
-    return this.open && (r === 0 || this.busy >= TWO_REGISTERS || this.queue[1].length > 0);
+    return this.open && (r === 0 || !!this.shift || this.busy >= TWO_REGISTERS || this.queue[1].length > 0);
+  }
+
+  /** Is there enough in the holding bins for this order? (Only matters when you're on the crew.) */
+  stocked(o) {
+    if (!this.shift) return true;
+    const n = kitchenNeeds(o.items);
+    const st = this.shift.stock;
+    if (st.fry >= n.fry && st.grill >= n.grill) return true;
+    this.shift.short = st.fry < n.fry ? 'fry' : 'grill';
+    return false;
+  }
+
+  consume(o) {
+    if (!this.shift) return;
+    const n = kitchenNeeds(o.items);
+    this.shift.stock.fry -= n.fry;
+    this.shift.stock.grill -= n.grill;
+  }
+
+  /** The customer at register 2 (yours, on a shift) who's waiting to order, if any. */
+  waitingAt(r) {
+    const a = this.queue[r][0];
+    return a && a.mode === 'queue' && a.wish && !a.path.length ? a : null;
+  }
+
+  /** You rang them up: their order goes to the kitchen with whatever you put on the ticket. */
+  ringUp(a, ticket) {
+    const i = this.queue[a.reg].indexOf(a);
+    if (i >= 0) this.queue[a.reg].splice(i, 1);
+    a.toGo = ticket.toGo;
+    a.order = this.placeOrder(a, ticket.toGo, this.rng.float(5, 10), [...ticket.items]);
+    a.order.wrong = !sameOrder(ticket, a.wish);
+    a.order.wish = a.wish;
+    a.wish = null;
+    a.c.talk = false;
+    this.goWait(a);
+    return a.order;
+  }
+
+  goWait(a) {
+    const G = this.G;
+    const rng = this.rng;
+    const free = G.waitSpots.filter((w) => !this.waitTaken.has(w));
+    a.wait = free.length ? rng.pick(free) : null;
+    if (a.wait) this.waitTaken.add(a.wait);
+    const to = a.wait ?? { x: G.w(rng.float(12.6, 16), 0).x, z: G.w(0, rng.float(9.0, 9.5)).z, yaw: Math.PI };
+    a.spot = to;
+    a.path = [to];
+    a.mode = 'toWait';
   }
 
   // ---------------------------------------------------------------- customers
@@ -397,7 +459,7 @@ export class Diners {
     this.place(c, G.street.x + rng.sign() * rng.float(3, 9), G.street.z + rng.float(-0.5, 0.5), 0);
     a.mode = 'in';
     a.path = [{ x: G.patioGate.x + rng.float(-0.6, 0.6), z: G.patioGate.z }, xz(G.doorOut), xz(G.doorIn)];
-    a.reg = this.registerOpen(1) && this.queue[1].length < this.queue[0].length ? 1 : 0;
+    a.reg = this.registerOpen(1) && (this.shift ? this.queue[1].length <= this.queue[0].length : this.queue[1].length < this.queue[0].length) ? 1 : 0;
     this.queue[a.reg].push(a);
   }
 
@@ -467,6 +529,24 @@ export class Diners {
         this.idle(c, dt);
         this.face(c, Math.PI, dt);
         if (a.slot !== 0) return;
+        if (a.reg === 1 && this.shift) {
+          // your register: they say what they want and wait for you to ring it up
+          if (!a.wish) {
+            a.wish = makeWish(this.menuFn(), rng);
+            a.waitT = 0;
+          }
+          c.talk = Math.sin(this.time * 1.7 + a.k) > 0.7;
+          if (!a.atPos && (a.waitT += dt) > 45) {
+            // Jo waves them over to register 1
+            this.queue[1].shift();
+            a.reg = 0;
+            this.queue[0].push(a);
+            a.wish = null;
+            c.talk = false;
+            this.onCrew?.('lost', a);
+          }
+          return;
+        }
         if (!a.ordering) {
           a.ordering = true;
           a.t = rng.float(3.5, 7);
@@ -478,13 +558,7 @@ export class Diners {
         a.ordering = false;
         this.queue[a.reg].shift();
         a.order = this.placeOrder(a, a.toGo);
-        const free = G.waitSpots.filter((w) => !this.waitTaken.has(w));
-        a.wait = free.length ? rng.pick(free) : null;
-        if (a.wait) this.waitTaken.add(a.wait);
-        const to = a.wait ?? { x: G.w(rng.float(12.6, 16), 0).x, z: G.w(0, rng.float(9.0, 9.5)).z, yaw: Math.PI };
-        a.spot = to;
-        a.path = [to];
-        a.mode = 'toWait';
+        this.goWait(a);
         return;
       }
       case 'toWait':
@@ -511,8 +585,13 @@ export class Diners {
       case 'toPick': {
         if (!this.walk(a, dt)) return;
         this.face(c, Math.PI, 1);
-        a.tray = this.collect(a.order, c);
+        const got = a.order;
+        a.tray = this.collect(got, c);
         a.order = null;
+        if (got.wrong && this.shift) {
+          this.onCrew?.('wrong', a, got);
+          return this.leave(a);
+        }
         if (a.toGo || !this.open) return this.leave(a);
         if (a.refill && this.open) {
           a.path = [xz(G.w(16.7, 7.6)), xz(G.drinkSpot)];
@@ -613,7 +692,7 @@ export class Diners {
     // cashiers: one register, two when it's busy
     for (const k of this.cashiers) {
       const c = k.c;
-      c.visible = show && this.registerOpen(k.reg);
+      c.visible = show && this.registerOpen(k.reg) && !(k.reg === 1 && this.shift);
       if (!c.visible) continue;
       this.place(c, k.spot.x, k.spot.z);
       this.idle(c, dt);
@@ -628,7 +707,7 @@ export class Diners {
     // cooks: the grill, the assembly line, the fryers
     for (const k of this.cooks) {
       const c = k.c;
-      c.visible = show && (open || (k.role === 'grill' && s.cleaning));
+      c.visible = show && (open || (k.role === 'grill' && s.cleaning)) && !(this.shift && (k.role === 'fry' || k.role === 'grill'));
       if (!c.visible) continue;
       this.place(c, k.spot.x, k.spot.z);
       this.idle(c, dt);
@@ -645,9 +724,11 @@ export class Diners {
     const E = this.expo;
     E.c.visible = show && open;
     if (!E.task && open) {
-      const o = this.orders.find((q) => q.state === 'cooking' && this.time >= q.readyAt);
+      if (this.shift) this.shift.short = null;
+      const o = this.orders.find((q) => q.state === 'cooking' && this.time >= q.readyAt && this.stocked(q));
       const k = this.slots.findIndex((sl) => !sl.order);
       if (o && k >= 0) {
+        this.consume(o);
         E.task = { o, k };
         this.slots[k].order = o;
         o.state = 'plating';
@@ -663,7 +744,12 @@ export class Diners {
       if (this.walk(E, dt, this.watched ? 1.5 : 80)) {
         const { o, k } = E.task;
         E.task = null;
-        if (o.state === 'plating') {
+        if (o.state === 'plating' && this.shift && o.toGo) {
+          // to go: the food goes up on the pass for you to bag and call
+          o.state = 'bag';
+          o.slot = k;
+          o.bagAt = this.time;
+        } else if (o.state === 'plating') {
           o.tray = this.newTray(o.toGo ? 'bag' : 'full');
           const P = G.pickSlots[k].tray;
           this.putDown(o.tray, P.x, P.y, P.z, 0);
@@ -872,6 +958,17 @@ export class Diners {
       }
     }
     return best;
+  }
+
+  /** You clocked out: Theo and the cooks take over again. */
+  endShift() {
+    this.shift = null;
+    for (const o of this.orders) if (o.state === 'bag') this.bagUp(o);
+    for (const Q of this.queue)
+      for (const a of Q) {
+        a.wish = null;
+        a.atPos = false;
+      }
   }
 
   /** Put the restaurant back as it is at hour h (after a jump in time). */

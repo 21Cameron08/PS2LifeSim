@@ -28,6 +28,7 @@ const CTR = [6.4, 16.4];
 const AISLE = 10.25; // the walkway between the tables and the window booths
 export const REG = [8.2, 10.4];
 export const PICK = [13.2, 14.4, 15.6];
+const GATE = CTR[0] + 1.05; // the staff gate at the west end of the counter
 const { teal, orange, cream, navy } = BRAND;
 
 export class Gullys {
@@ -66,6 +67,14 @@ export class Gullys {
 
   w(x, z, y = 0) {
     return new THREE.Vector3(this.origin.x + x, this.origin.y + y, this.origin.z + z);
+  }
+
+  /** Behind the counter (the crew's side)? */
+  behindCounter(p) {
+    const x = p.x - this.origin.x;
+    const z = p.z - this.origin.z;
+    // (standing in the gate counts too, so it doesn't swing shut on you)
+    return x > CTR[0] - 0.3 && x < CTR[1] + 0.3 && z > 0 && z < (x < GATE + 0.4 ? CTR_F + 0.4 : CTR_Z + 0.1) && Math.abs(p.y - this.origin.y) < 1;
   }
 
   contains(p, pad = 0) {
@@ -286,13 +295,13 @@ export class Gullys {
     const dark = C('#2a2a30');
     // --- the counter: teal front with an orange stripe, laminate top
     const K = P(0, 0);
-    K.box('solid', CTR[0], 0, CTR_Z, CTR[1], 1.0, CTR_F, C(teal));
-    K.box('solid', CTR[0], 0.6, CTR_F + 0.001, CTR[1], 0.68, CTR_F + 0.006, C(orange));
-    K.box('solid', CTR[0], 0, CTR_F + 0.001, CTR[1], 0.1, CTR_F + 0.006, C(navy));
-    K.box('solid', CTR[0], 1.0, CTR_Z - 0.04, CTR[1], 1.05, CTR_F + 0.06, C('#e8e2d4'), { bottom: true });
+    K.box('solid', GATE, 0, CTR_Z, CTR[1], 1.0, CTR_F, C(teal));
+    K.box('solid', GATE, 0.6, CTR_F + 0.001, CTR[1], 0.68, CTR_F + 0.006, C(orange));
+    K.box('solid', GATE, 0, CTR_F + 0.001, CTR[1], 0.1, CTR_F + 0.006, C(navy));
+    K.box('solid', GATE - 0.04, 1.0, CTR_Z - 0.04, CTR[1], 1.05, CTR_F + 0.06, C('#e8e2d4'), { bottom: true });
     K.panel('gSigns', 7.3, 0.76, 11.3, 0.92, CTR_F + 0.007, gsignUV(0));
     K.panel('gSigns', 12.9, 0.76, 15.9, 0.92, CTR_F + 0.007, gsignUV(1));
-    K.collide(CTR[0], CTR_Z - 0.05, CTR[1], CTR_F + 0.08, 1.05);
+    K.collide(GATE, CTR_Z - 0.01, CTR[1], CTR_F + 0.08, 1.05);
     // registers: a screen for the cashier, a pole display for you
     for (const x of REG) {
       const R = P(x, 6.55);
@@ -313,14 +322,14 @@ export class Gullys {
     // menu boards, NOW SERVING and PICK UP live on the bulkhead (see buildDynamic)
     P(15.5, CTR_F + 0.106).panel('gSigns', -0.75, 2.62, 0.75, 2.8, 0, gsignUV(1));
     P(15.5, CTR_F + 0.106).panel('gSigns', -0.75, 2.42, 0.75, 2.57, 0, gsignUV(7));
-    // the flip-up flap at the west end where the crew come out
-    K.box('solid', CTR[0], 1.05, CTR_Z, CTR[0] + 0.7, 1.08, CTR_F, C('#d8d2c4'));
+    // the staff gate at the west end is a moving part (see buildDynamic)
 
     // --- front line (cooks face the counter): drink tower, toaster, assembly, fries, fryers, bagging
     const FL = P(0, 0);
-    FL.box('solid', 6.6, 0, 4.7, 7.6, 1.7, 5.5, C('#3a3e44'));
-    FL.box('glow', 6.68, 1.25, 5.501, 7.52, 1.6, 5.506, C('#7ae8c0'));
-    for (let k = 0; k < 4; k++) FL.box('solid', 6.72 + k * 0.2, 1.0, 5.5, 6.8 + k * 0.2, 1.1, 5.58, steel);
+    FL.box('solid', 6.49, 0, 2.85, 7.16, 1.7, 3.85, C('#3a3e44')); // clear of the wall's skirting
+    FL.box('glow', 7.161, 1.25, 2.93, 7.166, 1.6, 3.77, C('#7ae8c0'));
+    for (let k = 0; k < 4; k++) FL.box('solid', 7.16, 1.0, 2.97 + k * 0.2, 7.24, 1.1, 3.05 + k * 0.2, steel);
+    FL.collide(6.46, 2.85, 7.25, 3.85, 1.7);
     FL.box('solid', 7.9, 0, 4.8, 8.6, 1.25, 5.5, steel);
     FL.box('glow', 7.95, 0.9, 5.501, 8.55, 1.0, 5.506, C('#ff7a2a'));
     FL.box('solid', 8.8, 0, 4.7, 11.8, 0.9, 5.6, steel);
@@ -351,7 +360,7 @@ export class Gullys {
     FL.box('solid', 13.1, 0.88, 4.7, 15.0, 1.4, 4.78, steel);
     FL.box('solid', 15.2, 0, 4.8, 16.2, 0.9, 5.6, steel);
     for (let k = 0; k < 4; k++) FL.box('solid', 15.3 + k * 0.22, 0.9, 5.0, 15.48 + k * 0.22, 1.18, 5.18, C('#c8a070'));
-    FL.collide(6.6, 4.7, 16.2, 5.6, 1.9);
+    FL.collide(7.85, 4.7, 16.2, 5.52, 1.9); // a hair short of the steel, so crew fit between the line and the counter
     // order screens over the line, facing the cooks
     for (const x of [9.6, 13.8]) {
       const S = P(x, 4.6, PI);
@@ -418,6 +427,7 @@ export class Gullys {
     this.group.add(serve);
     // the kitchen screens
     const ks = new THREE.MeshBasicMaterial({ map: this.gt.kitchen, fog: false });
+    this.kitchenMat = ks; // the crew job puts the live ticket screen on it
     for (const p of this.screenSpots) {
       const s = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.42), ks);
       s.position.copy(p);
@@ -445,7 +455,26 @@ export class Gullys {
     const g = this.grill;
     const pg = new GeoBuilder();
     for (let k = 0; k < 8; k++) pg.addGeometry(new THREE.CylinderGeometry(0.09, 0.09, 0.025, 10), trs(o.x + g.x0 + 0.15 + (k % 4) * 0.55, o.y + g.y + 0.012, o.z + g.z0 + 0.15 + Math.floor(k / 4) * 0.3), shade('#4a2a18'));
-    this.group.add(new THREE.Mesh(pg.build(), new THREE.MeshLambertMaterial({ vertexColors: true })));
+    this.patties = new THREE.Mesh(pg.build(), new THREE.MeshLambertMaterial({ vertexColors: true }));
+    this.group.add(this.patties);
+    // the staff gate: a teal half door that swings out, under a counter flap that lifts
+    // up, both hinged at the counter end
+    const gateMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const gb = new GeoBuilder();
+    const leaf = GATE - CTR[0] - 0.03;
+    gb.box(-leaf, 0.08, -0.03, 0, 1.0, 0.03, { color: shade(teal), bottom: true });
+    gb.box(-leaf, 0.6, 0.031, 0, 0.68, 0.037, { color: shade(orange) });
+    gb.box(-leaf, 0.6, -0.037, 0, 0.68, -0.031, { color: shade(orange) });
+    this.gateMesh = new THREE.Mesh(gb.build(), gateMat);
+    this.gateMesh.position.set(o.x + GATE, o.y, o.z + (CTR_Z + CTR_F) / 2);
+    this.group.add(this.gateMesh);
+    const fb = new GeoBuilder();
+    fb.box(-(GATE - CTR[0]) + 0.01, -0.017, -0.39, -0.01, 0.017, 0.39, { color: shade('#e8e2d4'), bottom: true });
+    fb.box(-0.12, 0.017, -0.05, -0.04, 0.024, 0.05, { color: shade('#b8bcc0') }); // the finger plate
+    this.flapMesh = new THREE.Mesh(fb.build(), gateMat);
+    this.flapMesh.position.set(o.x + GATE, o.y + 1.073, o.z + (CTR_Z + CTR_F) / 2); // sits proud of the counter top
+    this.group.add(this.flapMesh);
+    this.gateOpen = 0;
     const N = 18;
     const sg = new THREE.BufferGeometry();
     sg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(N * 3), 3));
@@ -596,6 +625,12 @@ export class Gullys {
     this.waitSpots = [];
     for (let k = 0; k < 8; k++) this.waitSpots.push({ ...xz(this.w(12.8 + (k % 4) * 0.9, 7.95 + Math.floor(k / 4) * 0.8)), yaw: Math.PI });
     this.pickSlots = PICK.map((x) => ({ tray: this.w(x, 6.55, 1.06), stand: xz(this.w(x, CTR_F + 0.45)), expo: xz(this.w(x, 5.75)) }));
+    this.stations = {
+      register: xz(this.w(REG[1], 5.75)),
+      fryer: xz(this.w(13.75, 4.2)),
+      grill: xz(this.w(9.9, 1.55)),
+      pass: xz(this.w(14.4, 5.75)),
+    };
     this.crewSpots = {
       grill: { ...xz(this.w(9.9, 1.55)), yaw: Math.PI },
       assembly: { ...xz(this.w(10.3, 4.25)), yaw: 0 },
@@ -642,6 +677,10 @@ export class Gullys {
     // locked between 2 and 6 AM
     this.city.colliders.add(o.x + DOOR[0], o.z + D - 0.05, o.x + DOOR[1], o.z + D + 0.32, o.y, o.y + 2.4);
     this.gate = this.city.colliders.boxes[this.city.colliders.boxes.length - 1];
+    this.staffGate = this.city.colliders.add(o.x + CTR[0], o.z + CTR_Z - 0.05, o.x + GATE, o.z + CTR_F + 0.08, o.y, o.y + 1.05);
+    this.staffGateTop = this.staffGate.y1;
+    this.crewKitchen = null; // set by the crew job: { baskets: [down...], grill: 'off'|'raw'|'cooked'|'burnt' }
+    this.staffInside = false; // you're still behind the counter (the gate waits for you)
     this.gateTop = this.gate.y1;
     this.positionDoors();
   }
@@ -684,9 +723,10 @@ export class Gullys {
 
     // kitchen life
     if (near) {
+      const ck = this.crewKitchen;
       this.baskets.forEach((b, k) => {
         const ph = (time * 0.05 + k * 0.37) % 1;
-        const down = open && ph > 0.15 && ph < 0.7;
+        const down = ck ? !!ck.baskets[k] : open && ph > 0.15 && ph < 0.7;
         b.position.y = damp(b.position.y, this.origin.y + (down ? 0.82 : 1.0), 5, dt);
       });
       const sp = this.steam.geometry.attributes.position;
@@ -701,6 +741,15 @@ export class Gullys {
       this.ride.position.y = this.origin.y + 0.22 + this.rideBob * (0.06 + 0.06 * Math.sin(time * 6));
       this.ride.rotation.z = this.rideBob * Math.sin(time * 3) * 0.12;
     }
+
+    // the staff gate swings out when you're on the crew; the grill shows what you're cooking
+    this.gateOpen = damp(this.gateOpen, this.crewKitchen || this.staffInside ? 1 : 0, 4, dt);
+    this.flapMesh.rotation.z = -Math.min(1, this.gateOpen * 1.6) * Math.PI * 0.47;
+    this.gateMesh.rotation.y = Math.max(0, this.gateOpen * 1.4 - 0.4) * Math.PI * 0.5;
+    this.staffGate.y1 = this.gateOpen > 0.5 ? -10 : this.staffGateTop;
+    const gs = this.crewKitchen?.grill;
+    this.patties.visible = !gs || gs !== 'off';
+    this.patties.material.color.set(gs === 'raw' ? '#ffb0a0' : gs === 'burnt' ? '#303030' : '#ffffff');
 
     // outside: the pole sign's Gully turns, signs and neon light up at night
     this.poleGully.rotation.y = time * 0.6;

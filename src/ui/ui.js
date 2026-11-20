@@ -746,6 +746,91 @@ export class UI {
     b?.onClose?.();
   }
 
+  // ---------------------------------------------------------------- GULLY'S register 2 (the crew job)
+  /** o: { title, who, says, menu, keys, patience() -> 0..1, onSend({ items, toGo }) -> error|null, onClose } */
+  openPos(o) {
+    this.modal = 'pos';
+    this.posS = { ...o, items: [], toGo: false, note: '' };
+    $('pos').classList.remove('hidden');
+    document.body.classList.add('in-menu');
+    this.setPrompt(null);
+    this.renderPos();
+  }
+  renderPos() {
+    const r = this.posS;
+    const m = (n) => `$${n.toFixed(2)}`;
+    const byId = Object.fromEntries(r.menu.map((it) => [it.id, it]));
+    const counts = {};
+    for (const id of r.items) counts[id] = (counts[id] ?? 0) + 1;
+    const lines = Object.entries(counts)
+      .map(([id, n]) => `<div><span>${n} × ${byId[id].name}</span><span>${m(byId[id].price * n)}</span></div>`)
+      .join('');
+    const total = r.items.reduce((s, id) => s + byId[id].price, 0);
+    const btns = r.menu.map((it, i) => `<button class="reg-btn" data-add="${i}"><span>${r.keys[i]}</span>${it.name}</button>`).join('');
+    const pat = Math.max(0, Math.min(1, r.patience()));
+    $('pos').innerHTML = `<div class="reg-head"><span>${r.title}</span><span>${r.who}</span></div>
+      <div class="pos-says"><span class="pos-pat"><i style="width:${Math.round(pat * 100)}%"></i></span>${r.says}</div>
+      <div class="bar-body"><div>
+        <h3>THE SCREEN</h3><div class="reg-btns pos-grid">${btns}</div>
+        <div class="ord-where"><button class="reg-btn${r.toGo ? '' : ' on'}" data-where="here">EAT HERE</button><button class="reg-btn${r.toGo ? ' on' : ''}" data-where="togo">TO GO</button></div>
+      </div><div>
+        <h3>THE TICKET</h3><div class="receipt">${lines || '<div><span>— empty —</span></div>'}<div class="tot"><span>${r.toGo ? 'TO GO' : 'EAT HERE'} · TOTAL</span><span>${m(total)}</span></div></div>
+        <div class="reg-btns bar-acts"><button class="reg-btn go" data-send="1"><span>↵</span>Send to the kitchen</button><button class="reg-btn no" data-void="1"><span>⌫</span>Void last</button><button class="reg-btn" data-away="1"><span>Esc</span>Step away</button></div>
+        <div class="reg-note">${r.note}</div>
+      </div></div>
+      <div class="reg-foot">keys: items ${r.keys[0]}-${r.keys[r.menu.length - 1]} · Space eat here / to go · Backspace void last · Enter send · Esc step away (they keep waiting)</div>`;
+    const el = $('pos');
+    el.querySelectorAll('[data-add]').forEach((b) => b.addEventListener('click', () => this.posAdd(Number(b.dataset.add))));
+    el.querySelectorAll('[data-where]').forEach((b) => b.addEventListener('click', () => this.posWhere(b.dataset.where === 'togo')));
+    el.querySelector('[data-send]').addEventListener('click', () => this.posSend());
+    el.querySelector('[data-void]').addEventListener('click', () => this.posVoid());
+    el.querySelector('[data-away]').addEventListener('click', () => this.closePos());
+  }
+  posAdd(i) {
+    const r = this.posS;
+    if (r.items.length >= 8) return;
+    r.items.push(r.menu[i].id);
+    r.note = '';
+    this.audio.tone(1320, 'square', 0.02, 0.05);
+    this.renderPos();
+  }
+  posVoid() {
+    const r = this.posS;
+    if (!r.items.length) return;
+    r.items.pop();
+    r.note = '';
+    this.audio.tone(660, 'square', 0.02, 0.06);
+    this.renderPos();
+  }
+  posWhere(toGo) {
+    this.posS.toGo = toGo;
+    this.audio.blip(false);
+    this.renderPos();
+  }
+  posSend() {
+    const r = this.posS;
+    if (!r.items.length) {
+      r.note = 'The ticket is empty.';
+      this.audio.tone(300, 'square', 0.03, 0.2);
+      return this.renderPos();
+    }
+    const err = r.onSend({ items: [...r.items].sort(), toGo: r.toGo });
+    if (err) {
+      r.note = err;
+      this.audio.tone(300, 'square', 0.03, 0.2);
+      return this.renderPos();
+    }
+    this.closePos();
+  }
+  closePos() {
+    const r = this.posS;
+    this.posS = null;
+    if (this.modal === 'pos') this.modal = null;
+    $('pos').classList.add('hidden');
+    document.body.classList.remove('in-menu');
+    r?.onClose?.();
+  }
+
   // ---------------------------------------------------------------- GULLY'S order panel
   /** o: { title, sub, greet, menu, cash, bank, onPay(sel) -> error|null, onClose } */
   openOrder(o) {
@@ -943,6 +1028,16 @@ export class UI {
       else if (k === 'Enter' || k === 'NumpadEnter') this.barFinish();
       else if (k === 'Backspace') this.barTip();
       else if (k === 'KeyS') this.barServe();
+      return eat();
+    }
+    if (this.modal === 'pos') {
+      const r = this.posS;
+      const i = r.keys.findIndex((key) => k === `Digit${key}` || k === `Key${key}` || k === `Numpad${key}`);
+      if (k === 'Escape') this.closePos();
+      else if (i >= 0 && i < r.menu.length) this.posAdd(i);
+      else if (k === 'Space' || k === 'Tab') this.posWhere(!r.toGo);
+      else if (k === 'Backspace') this.posVoid();
+      else if (k === 'Enter' || k === 'NumpadEnter') this.posSend();
       return eat();
     }
     if (this.modal === 'order') {
