@@ -14,9 +14,15 @@
 
     <div id="ui">
       <div id="hud" class="hidden">
-        <div id="hud-time" class="panel">
-          <div id="clock">MON 6:00 PM</div>
-          <div id="day" class="sub">DAY 1</div>
+        <div id="hud-left">
+          <div id="hud-time" class="panel">
+            <div id="clock">MON 6:00 PM</div>
+            <div id="day" class="sub">DAY 1</div>
+          </div>
+          <div id="route" class="panel hidden">
+            <svg id="route-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 14 8 10.5 2 14z" /></svg>
+            <div><div id="route-name"></div><div id="route-dist" class="sub"></div></div>
+          </div>
         </div>
         <div id="hud-right">
           <div id="hud-money" class="panel">
@@ -58,7 +64,7 @@
           <div><b>E</b> talk / use</div>
           <div><b>C</b> wardrobe</div>
           <div><b>T</b> (hold) fast-forward time</div>
-          <div><b>M</b> mute · <b>Esc</b> pause</div>
+          <div><b>M</b> map · <b>Esc</b> pause</div>
         </div>
         <button class="btn" data-close>RESUME</button>
       </div>
@@ -80,6 +86,21 @@
       </div>
 
       <div id="flash"><span id="flash-count"></span></div>
+
+      <div id="map" class="hidden">
+        <div class="map-head"><span class="map-title">PORT HALCYON</span><span id="map-where"></span><span id="map-time"></span></div>
+        <div class="map-body">
+          <canvas id="map-canvas"></canvas>
+          <div class="map-side">
+            <div id="map-list"></div>
+            <div class="map-legend">
+              <span><i class="lg-you"></i>you</span><span><i class="lg-route"></i>route</span><span><i class="lg-atm"></i>ATM</span><span><i class="lg-vend"></i>vending</span><span><i class="lg-need"></i>fixes a low need</span>
+            </div>
+            <div class="map-foot">↑↓ pick · Enter set / clear route · M or Esc close</div>
+            <button class="btn" id="map-close">CLOSE</button>
+          </div>
+        </div>
+      </div>
 
       <div id="photo" class="menu hidden">
         <h2>SUBSTATION</h2>
@@ -105,6 +126,7 @@
         <button class="tbtn" data-run>RUN</button>
         <button class="tbtn small" data-key="KeyC">STYLE</button>
         <button class="tbtn small" data-key="Escape">MENU</button>
+        <button class="tbtn small map-btn" data-key="KeyM">MAP</button>
       </div>
       <div id="stick"><div id="stick-knob"></div></div>
     </div>

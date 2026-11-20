@@ -20,7 +20,8 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 | Pause / settings | Esc (or P) | MENU |
 | Fast‑forward time | hold T | – |
 | Dance (on the club's floor) | E to start, ← ↑ → ↓ or WASD on the beat, Esc to stop | USE, then the arrow pad |
-| Mute | M | in the pause menu |
+| City map, routes | M (↑↓ pick a place, Enter set a route) | MAP |
+| Sound on/off | pause menu (Sound) | in the pause menu |
 
 ## What's in this first slice
 
@@ -54,6 +55,8 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   ("Snatch a bite!" since 1987). Open 6 AM to 2 AM. See below.
 - **Needs**: hunger, energy, hygiene, fun and social, shown under your money with your
   mood. Eat, sleep, shower, have fun and talk to people to keep them up. See below.
+- **City map** (M, or MAP on touch): the real blocks and buildings, coloured by district,
+  with every place worth going to, when it's open, and a route you can follow. See below.
 - **Customization**: the wardrobe (C) edits skin, hair style/colour, top style
   (tee, long sleeve, jacket over a shirt), colours, bottoms, shoes, height, build.
 - **Save**: autosaves to localStorage ("memory card"): position, time, money,
@@ -187,6 +190,23 @@ Dmitri won't let you into SUBSTATION. Your mood sets how fast friendships grow.
 
 The cheat menu has a Needs row (fill, drain, starving, exhausted, smelly) for testing.
 
+## The map
+
+Press **M** (MAP on touch) for a top-down map drawn from the city itself: roads, every
+block and building (lighter = taller), coloured by district, with the park, the Lantern
+Quarter's glow, ATMs and vending machines. You're the white arrow (the soft wedge is where
+the camera looks); your home is outlined in green.
+
+The list beside it has every place worth going to: home, the flats for lease, HALCYON 24,
+GULLY'S, SUBSTATION, the Lantern Quarter and Greenway Park, each with what it is, whether
+it's open right now (and until when, or when it opens), how far it is, and which needs it
+fills. A place that would fix one of your low needs, and is open, gets an orange badge.
+
+Pick one and **set a route**: an orange light beam rises over its door (you can see it over
+the rooftops), and a chip under the clock shows the name, the distance and an arrow that
+turns with the camera. Get there and it clears itself. Sound on/off moved to the pause
+menu, since M is the map now.
+
 ## GULLY'S (fast food)
 
 A small, made-up harbour-town burger chain: a round seagull mascot called Gully in a teal
@@ -268,7 +288,9 @@ src/
                           store job, the club's dance game (dance.js) and photo booth
                           (photobooth.js), GULLY'S menu data (gullysMenu.js) and your
                           visit there (gullysVisit.js)
-  ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls
+  ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls,
+                          the city map (map.js; its places and hours are game/places.js,
+                          the route beam is world/waypoint.js)
   audio/                  procedural ambience, sound effects and music; clubTrack.js is the
                           club song's arrangement, shared with the lights
 ```

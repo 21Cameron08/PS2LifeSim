@@ -21,6 +21,9 @@ import { Diners } from './actors/diners.js';
 import { GullysVisit } from './game/gullysVisit.js';
 import { Needs, NEEDS } from './game/needs.js';
 import { additive } from './render/materials.js';
+import { buildPlaces } from './game/places.js';
+import { CityMap } from './ui/map.js';
+import { Waypoint } from './world/waypoint.js';
 import { StoreJob } from './game/job.js';
 import { Pedestrians } from './actors/pedestrians.js';
 import { Traffic } from './actors/traffic.js';
@@ -1222,6 +1225,7 @@ function updateNeeds(dt) {
   if (home && place.tvOn) needs.add('fun', 0.25 * dt);
   if (home && audio.music) needs.add('fun', 0.08 * dt);
   if (env.magic > 0.1) needs.add('fun', 0.12 * env.magic * dt);
+  if (!place && city.blockAt(player.pos.x, player.pos.z)?.kind === 'park') needs.add('fun', 0.05 * dt);
   if (inClub && club.status === 'open') needs.give({ fun: 0.04 * dt, social: 0.05 * dt });
   if (inGullys && gullys.open) needs.add('social', 0.015 * dt);
   if (dance.active) needs.give({ fun: 0.45 * dt, energy: -0.2 * dt, hygiene: -0.15 * dt, social: clubbers.partner ? 0.1 * dt : 0 });
@@ -1463,6 +1467,63 @@ let districtTimer = 0;
 let current = null;
 const park = city.blocks.find((b) => b.kind === 'park');
 
+// ----------------------------------------------------------------------------
+// The map (M) and routes
+const places = buildPlaces({ city, apts, state, store, job, gullys, club, lantern, park, clubNight });
+const cityMap = new CityMap(ui, city);
+ui.mapView = cityMap;
+const waypoint = new Waypoint(scene, tex);
+let route = null; // a place from the map
+
+function whereAmI() {
+  if (place) return touring ? `${place.L.name} (viewing)` : `${place.L.name} (home)`;
+  if (inStore) return 'HALCYON 24';
+  if (inClub) return 'SUBSTATION';
+  if (inGullys) return "GULLY'S";
+  return city.districtAt(player.pos.x, player.pos.z);
+}
+
+function setRoute(p) {
+  route = p;
+  waypoint.set(p ? p.at : null);
+  if (!p) ui.setRoute(null);
+}
+
+function openMap() {
+  if (!playing || ui.modal || ui.fading) return;
+  player.locked = true;
+  audio.blip(true);
+  cityMap.open({
+    places,
+    player,
+    camYaw: () => rig.yaw,
+    hour: () => clock.hour,
+    time: () => clock.format(),
+    where: whereAmI,
+    route: () => route,
+    setRoute,
+    lowNeeds: () => NEEDS.filter((n) => needs.get(n.key) < 25).map((n) => n.key),
+    onClose: () => (player.locked = !!(seat || visit.seat || visit.riding || visit.eating)),
+  });
+}
+
+function updateRoute(dt) {
+  cityMap.update(dt);
+  if (!route) return;
+  waypoint.update(time, player.pos);
+  const dx = route.at.x - player.pos.x;
+  const dz = route.at.z - player.pos.z;
+  const d = Math.hypot(dx, dz);
+  // the arrow turns with the camera: 0 means straight ahead
+  const turn = ((rig.yaw - Math.atan2(dx, dz)) * 180) / Math.PI;
+  ui.setRoute(route.name(), d, ((turn % 360) + 540) % 360 - 180);
+  if (d < 6 && playing && !ui.modal) {
+    ui.toast(`You've arrived: ${route.name()}.`);
+    audio.chime();
+    setRoute(null);
+  }
+}
+
 function openWardrobe() {
   if (job.J.shift) return ui.toast("You're in uniform. Clock out first.");
   player.locked = true;
@@ -1511,11 +1572,7 @@ function handleKeys() {
     return;
   }
   if (input.hit('KeyC')) return openWardrobe();
-  if (input.hit('KeyM')) {
-    settings.muted = !settings.muted;
-    audio.setMuted(settings.muted);
-    ui.toast(settings.muted ? 'Sound off' : 'Sound on');
-  }
+  if (input.hit('KeyM')) return openMap();
   if (input.hit('KeyE') && current) current.act();
 }
 
@@ -1593,6 +1650,7 @@ function frame(now) {
   updateClub(dt);
   updateGullys(dt);
   updateNeeds(dt);
+  updateRoute(dt);
   peds.update(dt, player.pos, env.night);
   traffic.update(dt, player.pos, peds.list, env.night);
   if (traffic.honk && playing) {

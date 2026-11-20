@@ -42,6 +42,10 @@ features, controls and the code map.
   anything that skips time on purpose (sleep, shower, fridge, passing out) applies its own
   effect and resets `needsLast`. Activities call `needs.give({...})`; conversations call
   `needs.chat(key, minutes)`. New things to do should feed at least one need.
+- The map (`ui/map.js`, places in `game/places.js`, route beam `world/waypoint.js`): it is
+  drawn from `city.blocks`/`city.footprints`, so new buildings show up on their own. A new
+  hangout space needs an entry in `buildPlaces` (door position, live status/hours, needs it
+  fills) to appear in the list, on the map and as a route target.
 - Secret cheat menu (money, warps, time) for testing: type `BLING` while walking around,
   or tap the money display five times. Code is in `main.js` (`openCheats`) and
   `ui/ui.js` (`openCheats`). Not listed in the in-game controls on purpose.

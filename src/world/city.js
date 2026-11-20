@@ -52,6 +52,7 @@ export class City {
     this.interactables = [];
     this.steamVents = [];
     this.apartmentSites = {};
+    this.footprints = []; // every building's outline and height (the map draws them)
     this.T = makePropTemplates();
     this.B = {
       facades: FACADE_STYLES.map(() => new GeoBuilder()),
@@ -333,6 +334,7 @@ export class City {
     const gf = opts.gf ?? (shop ? CITY.GF_H : 0);
     const floors = opts.floors ?? Math.max(1, Math.round((H - gf) / CITY.FLOOR_H));
     const top = gf + floors * CITY.FLOOR_H + 0.4;
+    this.footprints.push({ x0, z0, x1, z1, top });
     const tint = rng.float(0.86, 1.06);
     const col = [tint * rng.float(0.96, 1.04), tint, tint * rng.float(0.96, 1.04)];
     const glassy = FACADE_STYLES[style].curtain || FACADE_STYLES[style].ribbon;

@@ -2,7 +2,7 @@ import { SKIN, HAIR_COLORS, CLOTH, SHOES, HAIR_STYLES, TOP_STYLES, BOTTOM_STYLES
 import { NEEDS } from '../game/needs.js';
 
 // little icons for the needs bars (16x16, drawn in currentColor)
-const NEED_ICONS = {
+export const NEED_ICONS = {
   hunger: '<path d="M2 7.2a6 4.2 0 0 1 12 0z"/><rect x="1.4" y="8.2" width="13.2" height="2" rx="1"/><path d="M2 11.2h12v.8a2.2 2.2 0 0 1-2.2 2.2H4.2A2.2 2.2 0 0 1 2 12z"/>',
   energy: '<path d="M9.5 1 3 9.2h4.2L6.3 15 13 6.6H8.8z"/>',
   hygiene: '<path d="M8 1.2S3.2 7 3.2 10.1a4.8 4.8 0 0 0 9.6 0C12.8 7 8 1.2 8 1.2z"/>',
@@ -108,6 +108,21 @@ export class UI {
       $('bank').classList.toggle('neg', bank < 0);
     }
   }
+  /** The route chip under the clock: where you're headed, how far, which way (degrees, 0 = straight ahead). */
+  setRoute(name, dist = 0, turn = 0) {
+    const el = $('route');
+    if (!name) {
+      el.classList.add('hidden');
+      this._route = null;
+      return;
+    }
+    el.classList.remove('hidden');
+    if (name !== this._route) $('route-name').textContent = this._route = name;
+    const d = `${dist < 1000 ? Math.round(dist / 5) * 5 : (dist / 1000).toFixed(1) + 'k'} m`;
+    if (d !== this._routeD) $('route-dist').textContent = this._routeD = d;
+    $('route-arrow').style.transform = `rotate(${Math.round(turn)}deg)`;
+  }
+
   /** The needs bars under the money (needs: a Needs). */
   setNeeds(needs) {
     const el = $('needs');
@@ -759,6 +774,10 @@ export class UI {
       else if (r.stage === 'pay' && /^Digit[1-7]$/.test(k)) this.regCash([1000, 500, 100, 25, 10, 5, 1][Number(k.slice(5)) - 1]);
       else if (r.stage === 'pay' && k === 'Backspace') this.regCash(0);
       else if (r.stage === 'pay' && (k === 'Enter' || k === 'Space')) this.regDone();
+      return eat();
+    }
+    if (this.modal === 'map') {
+      if (!e.repeat) this.mapView?.key(k);
       return eat();
     }
     if (this.modal === 'order') {
