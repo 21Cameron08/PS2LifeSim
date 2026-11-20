@@ -191,7 +191,7 @@ export class City {
         // keep the entrances of the park / Lantern Quarter clear
         if (!isCity && Math.abs(tm - e.len / 2) < 5) continue;
         // and the pavement in front of the club (queue, rope line, fries cart) and the restaurant
-        if (e.face === 's' && ['club', 'gullys'].includes(siteForBlock(b.i, b.j)?.[0]) && Math.abs(tm - e.len / 2) < 13) continue;
+        if (e.face === 's' && ['club', 'gullys', 'galleria'].includes(siteForBlock(b.i, b.j)?.[0]) && Math.abs(tm - e.len / 2) < 13) continue;
         if (r < leafy) {
           const [x, z] = at(tm, 0.95);
           this.addTree(x, z);
@@ -289,6 +289,7 @@ export class City {
           if (site[0] === 'store') this.storeBuilding(site[1], x0, z0, x1, z1);
           else if (site[0] === 'club') this.clubSite = { x0, z0, x1, z1 }; // the club builds its own shell
           else if (site[0] === 'gullys') this.gullysSite = { x0, z0, x1, z1 }; // so does the restaurant
+          else if (site[0] === 'galleria') this.galleriaSite = { x0, z0, x1, z1 }; // and the mall
           else this.apartmentBuilding(site[0], site[1], x0, z0, x1, z1);
           continue;
         }

@@ -51,6 +51,20 @@ features, controls and the code map.
   is reached through the staff gate (`gullys.staffGate` collider, opened while
   `gullys.crewKitchen` is set or you're still `behindCounter`); the live ticket screen is
   `KitchenScreen` swapped onto `gullys.kitchenMat`. One job at a time: `onClock()` in main.js.
+- Clothes and status (`game/fashion.js`): the appearance carries `wear` (an item id per slot);
+  `crowd.setAppearance` runs it through `dress()`, so anything that sets an appearance works
+  (uniforms pass `wear: null`). Slots left out of `wear` keep the appearance's own clothes
+  (NPCs that only add accessories). New wearables are instanced parts in `actors/crowd.js`
+  (hood, coat tail, cap, beanie, shades, chain, watch, sole, bags via `c.bags`, logo prints
+  from the atlas in `render/fashionTextures.js`). `statusOf(app, home)` drives the HUD,
+  `peds.stare`, staff greetings, Dmitri and Jo. Bank card payments push to `state.ledger`
+  (the ATM statement).
+- The Halcyon Galleria (`world/galleria.js`, `actors/shoppers.js`, `game/shopping.js`,
+  `render/galleriaTextures.js`): two floors (`UP` = 4.6) and escalators in one kit;
+  `galleria.groundAt` is chained into the city's ground like the club's, and
+  `escalatorFlow` carries the player. Displays, tills, mirrors, seats and staff spots are
+  data on the galleria object; shoppers walk a small waypoint graph (`buildGraph`) with
+  'up'/'down' escalator legs. RACK & RUIN's stock is seeded by the day.
 - Needs (`game/needs.js`, `updateNeeds`/`passOut` in main.js, HUD in `ui.setNeeds`): decay
   comes from game time each frame (`needs.tick`); jumps of 30+ minutes are skipped there, so
   anything that skips time on purpose (sleep, shower, fridge, passing out) applies its own

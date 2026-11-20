@@ -453,7 +453,7 @@ export class StoreJob {
   // ----------------------------------------------------------------- uniform
   wearUniform(on) {
     const app = this.state.appearance;
-    this.crowd.setAppearance(this.player.char.id, on ? { ...app, topStyle: 2, top: '#f2f0ea', jacket: '#2e6a46' } : app);
+    this.crowd.setAppearance(this.player.char.id, on ? { ...app, wear: null, topStyle: 2, top: '#f2f0ea', jacket: '#2e6a46' } : app);
   }
 
   clockIn() {
@@ -476,6 +476,7 @@ export class StoreJob {
     const wage = Math.floor((mins / 60) * WAGE_CENTS);
     const total = Math.max(0, wage + s.tips - s.docked);
     this.state.bank += total / 100;
+    this.state.ledger?.push({ t: Math.round(this.clock.minutes), what: 'HALCYON 24 wages', amt: total / 100 });
     this.J.earned += total;
     this.J.shifts++;
     this.J.shift = null;

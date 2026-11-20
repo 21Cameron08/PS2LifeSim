@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { GeoBuilder } from '../core/geo.js';
+import { dress } from '../game/fashion.js';
+import { printAtlas } from '../render/fashionTextures.js';
 
-// Renders every person in the game (player + NPCs) with ~12 instanced meshes,
+// Renders every person in the game (player + NPCs) with ~20 instanced meshes,
 // one per body part. Each person is a little puppet of boxes with hips, knees,
-// shoulders and elbows, like a PS2-era LOD model. Appearance = instance colours.
+// shoulders and elbows, like a PS2-era LOD model. Appearance = instance colours,
+// plus what they're wearing (game/fashion.js): hoods, long coats, caps, shades,
+// chains, watches, two-tone soles, logo prints and shopping bags in their hands.
 
 const HIP_Y = 0.86;
 const NECK_Y = 1.46;
@@ -54,7 +58,62 @@ const GEOS = {
   thigh: () => geo((b) => bx(b, -0.09, -0.42, -0.1, 0.09, 0.04, 0.1)),
   shin: () => geo((b) => bx(b, -0.08, -0.36, -0.09, 0.08, 0.01, 0.09)),
   shoe: () => geo((b) => bx(b, -0.085, -0.45, -0.1, 0.085, -0.35, 0.15)),
+  // ---- things people wear (each sits a few mm outside what it covers)
+  hood: () =>
+    geo((b) => {
+      bx(b, -0.14, 0.5, -0.215, 0.14, 0.7, -0.09);
+      bx(b, -0.165, 0.58, -0.175, 0.165, 0.66, -0.005);
+    }),
+  coatTail: () =>
+    geo((b) => {
+      bx(b, -0.255, -0.46, -0.16, 0.255, 0.0, -0.105); // back
+      bx(b, -0.255, -0.46, -0.105, -0.205, 0.0, 0.105); // sides
+      bx(b, 0.205, -0.46, -0.105, 0.255, 0.0, 0.105);
+      bx(b, -0.255, -0.46, 0.105, -0.06, 0.0, 0.16); // front panels, open
+      bx(b, 0.06, -0.46, 0.105, 0.255, 0.0, 0.16);
+    }),
+  cap: () =>
+    geo((b) => {
+      bx(b, -0.162, 0.3, -0.168, 0.162, 0.44, 0.158);
+      bx(b, -0.13, 0.3, 0.158, 0.13, 0.322, 0.31); // brim
+    }),
+  beanie: () =>
+    geo((b) => {
+      bx(b, -0.158, 0.31, -0.164, 0.158, 0.47, 0.154);
+      bx(b, -0.166, 0.27, -0.172, 0.166, 0.34, 0.162); // folded cuff
+    }),
+  shades: () =>
+    geo((b) => {
+      bx(b, -0.122, 0.192, 0.142, 0.122, 0.245, 0.162);
+      bx(b, -0.152, 0.214, -0.04, -0.142, 0.226, 0.152);
+      bx(b, 0.142, 0.214, -0.04, 0.152, 0.226, 0.152);
+    }),
+  chain: () =>
+    geo((b) => {
+      bx(b, -0.056, 0.47, 0.127, -0.042, 0.605, 0.137);
+      bx(b, 0.042, 0.47, 0.127, 0.056, 0.605, 0.137);
+      bx(b, -0.056, 0.456, 0.127, 0.056, 0.47, 0.137);
+      bx(b, -0.022, 0.405, 0.128, 0.022, 0.456, 0.146); // pendant
+    }),
+  watch: () =>
+    geo((b) => {
+      bx(b, -0.061, -0.225, -0.066, 0.061, -0.185, 0.066);
+      bx(b, -0.074, -0.232, -0.03, -0.061, -0.178, 0.03); // the face, on the outside of the wrist
+    }),
+  sole: () => geo((b) => bx(b, -0.088, -0.454, -0.103, 0.088, -0.412, 0.153)),
+  bag: () =>
+    geo((b) => {
+      bx(b, -0.12, -0.38, -0.05, 0.12, -0.06, 0.05);
+      bx(b, -0.07, -0.06, -0.006, -0.058, 0.02, 0.006); // handles
+      bx(b, 0.058, -0.06, -0.006, 0.07, 0.02, 0.006);
+      bx(b, -0.07, 0.02, -0.006, 0.07, 0.03, 0.006);
+    }),
+  print: () => new THREE.PlaneGeometry(0.24, 0.24),
 };
+const SINGLE = ['torso', 'jacket', 'head', 'hairCap', 'hairBack', 'hood', 'coatTail', 'cap', 'beanie', 'shades', 'chain', 'watch', 'print'];
+const DOUBLE = ['upperArm', 'foreArm', 'hand', 'thigh', 'shin', 'shoe', 'sole', 'bag'];
+const WATCH = [null, '#f0c858', '#d0d4dc', '#1e1a1c'];
+const _h = new THREE.Vector3();
 
 // hair style -> [cap scale y, cap lift, back length, cap width]
 const HAIR = [
@@ -117,6 +176,26 @@ export class Crowd {
     mk('thigh', 2);
     mk('shin', 2);
     mk('shoe', 2);
+    mk('hood', 1);
+    mk('coatTail', 1);
+    mk('cap', 1);
+    mk('beanie', 1);
+    mk('shades', 1);
+    // gold and steel catch a little light of their own
+    const shiny = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: new THREE.Color('#3a3020') });
+    mk('chain', 1, shiny);
+    mk('watch', 1, shiny);
+    mk('sole', 2);
+    mk('bag', 2);
+    // logo prints: one quad per person, its tile in the atlas picked per instance
+    const printMat = new THREE.MeshLambertMaterial({ map: printAtlas(), alphaTest: 0.4, emissive: lift });
+    printMat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aTile;').replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\n  vMapUv = vMapUv * 0.25 + aTile;\n#endif');
+    };
+    const pm = mk('print', 1, printMat);
+    this.tiles = new THREE.InstancedBufferAttribute(new Float32Array(max * 2), 2);
+    this.tiles.setUsage(THREE.DynamicDrawUsage);
+    pm.geometry.setAttribute('aTile', this.tiles);
 
     const sg = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
     this.shadow = new THREE.InstancedMesh(
@@ -139,12 +218,14 @@ export class Crowd {
     return c;
   }
 
-  setAppearance(id, app) {
+  setAppearance(id, base) {
     const c = this.chars[id];
+    const app = dress(base);
     c.app = { ...app };
     const P = this.parts;
     const set = (name, k, col) => P[name].setColorAt(k, _c.set(col));
-    const sleeve = app.topStyle === 2 ? app.jacket : app.top;
+    const outer = app.topStyle === 2 || app.topStyle === 3;
+    const sleeve = outer ? app.jacket : app.top;
     const fore = app.topStyle === 0 ? app.skin : sleeve;
     set('torso', id, app.top);
     set('jacket', id, app.jacket);
@@ -159,22 +240,38 @@ export class Crowd {
       set('thigh', k, app.bottom);
       set('shin', k, app.bottomStyle === 1 ? app.skin : app.bottom);
       set('shoe', k, app.shoes);
+      set('sole', k, app.sole || app.shoes);
     }
+    set('hood', id, app.top);
+    set('coatTail', id, app.jacket);
+    set('cap', id, app.hatColor || '#1c1c20');
+    set('beanie', id, app.hatColor || '#1c1c20');
+    set('shades', id, app.glassesColor || '#1c1c20');
+    set('chain', id, app.chain === 1 ? '#f0c858' : '#d0d4dc');
+    set('watch', id, WATCH[app.watch] || '#d0d4dc');
+    // a print on the chest, or on the back of a jacket
+    const tile = outer ? (app.printBack ?? -1) : (app.print ?? -1);
+    c.printMode = tile >= 0 ? (outer ? 'back' : 'chest') : null;
+    if (tile >= 0) {
+      this.tiles.setXY(id, (tile % 4) * 0.25, 1 - (Math.floor(tile / 4) + 1) * 0.25);
+      this.tiles.needsUpdate = true;
+    }
+    c.bagKey = null;
     for (const m of Object.values(P)) m.instanceColor.needsUpdate = true;
   }
 
   update() {
     const P = this.parts;
     const n = this.chars.length;
-    for (const name of ['upperArm', 'foreArm', 'hand', 'thigh', 'shin', 'shoe']) P[name].count = n * 2;
-    for (const name of ['torso', 'jacket', 'head', 'hairCap', 'hairBack']) P[name].count = n;
+    for (const name of DOUBLE) P[name].count = n * 2;
+    for (const name of SINGLE) P[name].count = n;
     this.shadow.count = n;
 
     for (const c of this.chars) {
       const id = c.id;
       if (!c.visible) {
-        for (const name of ['torso', 'jacket', 'head', 'hairCap', 'hairBack']) P[name].setMatrixAt(id, ZERO);
-        for (const name of ['upperArm', 'foreArm', 'hand', 'thigh', 'shin', 'shoe']) {
+        for (const name of SINGLE) P[name].setMatrixAt(id, ZERO);
+        for (const name of DOUBLE) {
           P[name].setMatrixAt(id * 2, ZERO);
           P[name].setMatrixAt(id * 2 + 1, ZERO);
         }
@@ -209,17 +306,27 @@ export class Crowd {
       local(_L, 0, HIP_Y, 0, lean, twist, roll);
       _A.multiplyMatrices(_M, _L);
       P.torso.setMatrixAt(id, _A);
-      P.jacket.setMatrixAt(id, app.topStyle === 2 ? _A : ZERO);
+      const outer = app.topStyle === 2 || app.topStyle === 3;
+      P.jacket.setMatrixAt(id, outer ? _A : ZERO);
+      P.coatTail.setMatrixAt(id, app.topStyle === 3 ? _A : ZERO);
+      P.hood.setMatrixAt(id, app.hood ? _A : ZERO);
+      P.chain.setMatrixAt(id, app.chain ? _A : ZERO);
+      if (c.printMode === 'chest') local(_L, 0, 0.44, 0.131);
+      else if (c.printMode === 'back') local(_L, 0, 0.36, -0.157, 0, Math.PI, 0, 1.3, 1.3, 1);
+      P.print.setMatrixAt(id, c.printMode ? _L.premultiply(_A) : ZERO);
 
       // head (child of torso)
       const nod = c.nod + nodDance + (c.talk ? Math.sin(performance.now() * 0.012) * 0.06 : 0);
       local(_L, 0, NECK_Y - HIP_Y, 0, nod - lean * 0.6, c.headYaw, 0);
       _B.multiplyMatrices(_A, _L);
       P.head.setMatrixAt(id, _B);
+      P.cap.setMatrixAt(id, app.hat === 1 ? _B : ZERO);
+      P.beanie.setMatrixAt(id, app.hat === 2 ? _B : ZERO);
+      P.shades.setMatrixAt(id, app.glasses ? _B : ZERO);
       const hs = HAIR[app.hairStyle] || HAIR[0];
       if (hs[0] > 0) {
         local(_L, 0, 0.36 + hs[1], 0, 0, 0, 0, hs[3], hs[0], hs[3]);
-        P.hairCap.setMatrixAt(id, _L.premultiply(_B));
+        P.hairCap.setMatrixAt(id, app.hat ? ZERO : _L.premultiply(_B));
         local(_L, 0, 0.36, 0, 0, 0, 0, hs[3], hs[2], 1);
         P.hairBack.setMatrixAt(id, _L.premultiply(_B));
       } else {
@@ -251,6 +358,7 @@ export class Crowd {
         _B.multiplyMatrices(_A, _L);
         P.shin.setMatrixAt(k, _B);
         P.shoe.setMatrixAt(k, _B);
+        P.sole.setMatrixAt(k, app.sole ? _B : ZERO);
         // arms swing opposite to the leg on the same side; they ride on the torso
         local(_L, 0, HIP_Y, 0, lean, twist, roll);
         _A.multiplyMatrices(_M, _L);
@@ -299,6 +407,22 @@ export class Crowd {
         _B.multiplyMatrices(_A, _L);
         P.foreArm.setMatrixAt(k, _B);
         P.hand.setMatrixAt(k, _B);
+        if (s === 0) P.watch.setMatrixAt(id, app.watch ? _B : ZERO);
+        // a shopping bag hangs straight down from the hand
+        const bag = c.bags?.[s];
+        if (bag && !c.tray && !c.carry && !c.work && !c.sit && !dn && !c.eat) {
+          _h.set(0, -0.33, 0).applyMatrix4(_B);
+          const off = side * 0.05 * app.build;
+          local(_L, _h.x + Math.cos(c.yaw) * off, _h.y, _h.z - Math.sin(c.yaw) * off, 0, c.yaw, 0);
+          P.bag.setMatrixAt(k, _L);
+        } else P.bag.setMatrixAt(k, ZERO);
+      }
+      // bag colours follow whatever they're carrying
+      const bk = c.bags ? c.bags.join() : '';
+      if (bk !== c.bagKey) {
+        c.bagKey = bk;
+        for (const s of [0, 1]) if (c.bags?.[s]) P.bag.setColorAt(id * 2 + s, _c.set(c.bags[s]));
+        P.bag.instanceColor.needsUpdate = true;
       }
       local(_L, c.x, c.ground + 0.03, c.z, 0, 0, 0, 0.95 * app.build, 1, 0.95 * app.build);
       this.shadow.setMatrixAt(id, _L);

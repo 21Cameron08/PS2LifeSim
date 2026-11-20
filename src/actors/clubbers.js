@@ -1,6 +1,7 @@
 import { CITY } from '../config.js';
 import { Rng, damp, smoothstep, angleLerp } from '../core/rng.js';
 import { randomAppearance } from './appearance.js';
+import { npcWear } from '../game/fashion.js';
 import { FIRST_NAMES } from '../game/dialogue.js';
 import { nightsFor } from '../game/clubNights.js';
 
@@ -25,7 +26,9 @@ function clubLook(rng, look = ['#141418', '#2b2b30', '#e8e4dc', '#7a2330', '#1f2
   if (rng.chance(0.4)) a.topStyle = 2;
   a.jacket = rng.pick(['#141418', '#2b2b30', '#5a4632', '#7a2330', '#3a3a6a', '#c9b48a']);
   a.bottomStyle = rng.chance(0.08) ? 1 : 0;
-  return a;
+  // chains, shades, caps and the odd designer watch; the clothes above stay as they are
+  const w = npcWear(a, rng, 0.45).wear;
+  return { ...a, wear: { shoes: w.shoes, hat: w.hat, glasses: w.glasses, chain: w.chain, watch: w.watch } };
 }
 
 export class Clubbers {

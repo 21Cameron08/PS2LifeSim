@@ -1,5 +1,6 @@
-import { SKIN, HAIR_COLORS, CLOTH, SHOES, HAIR_STYLES, TOP_STYLES, BOTTOM_STYLES } from '../actors/appearance.js';
+import { SKIN, HAIR_COLORS, CLOTH, SHOES, HAIR_STYLES } from '../actors/appearance.js';
 import { NEEDS } from '../game/needs.js';
+import { ITEM, BRANDS, SLOTS, SLOT_NAMES, itemsFor } from '../game/fashion.js';
 
 // little icons for the needs bars (16x16, drawn in currentColor)
 export const NEED_ICONS = {
@@ -17,19 +18,35 @@ const money = (n) => {
   return `$${c.toLocaleString('en-US', Number.isInteger(c) ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-const WARDROBE_ROWS = [
-  { label: 'Skin', key: 'skin', options: SKIN, swatch: true },
-  { label: 'Hair', key: 'hairStyle', options: HAIR_STYLES.map((_, i) => i), names: HAIR_STYLES },
-  { label: 'Hair colour', key: 'hair', options: HAIR_COLORS, swatch: true },
-  { label: 'Top', key: 'topStyle', options: TOP_STYLES.map((_, i) => i), names: TOP_STYLES },
-  { label: 'Top colour', key: 'top', options: CLOTH, swatch: true },
-  { label: 'Jacket', key: 'jacket', options: CLOTH, swatch: true, when: (a) => a.topStyle === 2 },
-  { label: 'Bottoms', key: 'bottomStyle', options: BOTTOM_STYLES.map((_, i) => i), names: BOTTOM_STYLES },
-  { label: 'Bottom colour', key: 'bottom', options: CLOTH, swatch: true },
-  { label: 'Shoes', key: 'shoes', options: SHOES, swatch: true },
-  { label: 'Height', key: 'height', options: [0.92, 0.96, 1.0, 1.04, 1.08], names: ['Short', 'Smaller', 'Average', 'Taller', 'Tall'] },
-  { label: 'Build', key: 'build', options: [0.88, 0.95, 1.0, 1.08, 1.16], names: ['Slim', 'Lean', 'Average', 'Sturdy', 'Broad'] },
-];
+// what the basics' colour rows follow (only shown while you're wearing the basic one)
+const BASIC_COLOUR = { top: ['top', 'Top colour', CLOTH], outer: ['jacket', 'Jacket colour', CLOTH], bottom: ['bottom', 'Bottom colour', CLOTH], shoes: ['shoes', 'Shoe colour', SHOES] };
+const itemName = (id) => {
+  const it = id && ITEM[id];
+  if (!it) return 'None';
+  return it.basic ? it.name : `${BRANDS[it.brand].name} ${it.name}`;
+};
+/** The wardrobe: your body, then a row per slot with the basics and everything you own. */
+function wardrobeRows(app, owned) {
+  const rows = [
+    { label: 'Skin', key: 'skin', options: SKIN, swatch: true },
+    { label: 'Hair', key: 'hairStyle', options: HAIR_STYLES.map((_, i) => i), names: HAIR_STYLES },
+    { label: 'Hair colour', key: 'hair', options: HAIR_COLORS, swatch: true },
+  ];
+  for (const slot of SLOTS) {
+    const items = itemsFor(slot, owned);
+    const optional = !['top', 'bottom', 'shoes'].includes(slot);
+    if (optional && !items.length) continue;
+    const options = [...(optional ? [null] : []), ...items.map((it) => it.id)];
+    rows.push({ label: SLOT_NAMES[slot], slot, options, names: options.map(itemName) });
+    const bc = BASIC_COLOUR[slot];
+    if (bc && ITEM[app.wear?.[slot]]?.basic) rows.push({ label: bc[1], key: bc[0], options: bc[2], swatch: true });
+  }
+  rows.push(
+    { label: 'Height', key: 'height', options: [0.92, 0.96, 1.0, 1.04, 1.08], names: ['Short', 'Smaller', 'Average', 'Taller', 'Tall'] },
+    { label: 'Build', key: 'build', options: [0.88, 0.95, 1.0, 1.08, 1.16], names: ['Slim', 'Lean', 'Average', 'Sturdy', 'Broad'] },
+  );
+  return rows;
+}
 
 const RES = [240, 360, 448, 540, 720];
 // cheat menu money presets; any amount can also be typed with the number keys
@@ -106,6 +123,20 @@ export class UI {
     if (b !== this._bank) {
       $('bank').textContent = this._bank = b;
       $('bank').classList.toggle('neg', bank < 0);
+    }
+  }
+  /** Your status under the money: st = statusOf(); wish = { name, have, price } or null. */
+  setStatus(st, wish) {
+    const pips = Array.from({ length: 7 }, (_, i) => `<i class="${i < st.tier ? 'on' : ''}"></i>`).join('');
+    const html = `<span class="pips">${pips}</span>${st.name.toUpperCase()}`;
+    if (html !== this._status) {
+      $('status').innerHTML = this._status = html;
+      $('status').dataset.tier = st.tier;
+    }
+    const w = wish ? `WANT · ${wish.name} <span class="wish-bar"><i style="width:${Math.min(100, Math.max(0, Math.round((wish.have / wish.price) * 100)))}%"></i></span>` : '';
+    if (w !== this._wish) {
+      $('wish').innerHTML = this._wish = w;
+      $('wish').classList.toggle('hidden', !w);
     }
   }
   /** The route chip under the clock: where you're headed, how far, which way (degrees, 0 = straight ahead). */
@@ -436,16 +467,17 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- menus
-  openWardrobe(app, onChange, onClose) {
+  /** opts: { owned: [item ids], status(app) -> html } */
+  openWardrobe(app, onChange, onClose, opts = {}) {
     this.modal = 'wardrobe';
-    this.menu = { kind: 'wardrobe', app: { ...app }, sel: 0, onChange, onClose };
+    this.menu = { kind: 'wardrobe', app: { ...app, wear: { ...app.wear } }, sel: 0, onChange, onClose, owned: opts.owned ?? [], status: opts.status };
     $('wardrobe').classList.remove('hidden');
     document.body.classList.add('in-menu');
     this.setPrompt(null);
     this.renderWardrobe();
   }
   wardrobeRows() {
-    return WARDROBE_ROWS.filter((r) => !r.when || r.when(this.menu.app));
+    return wardrobeRows(this.menu.app, this.menu.owned);
   }
   renderWardrobe() {
     const m = this.menu;
@@ -454,11 +486,12 @@ export class UI {
     const box = $('wardrobe-rows');
     box.innerHTML = '';
     rows.forEach((r, i) => {
-      const v = m.app[r.key];
+      const v = r.slot ? m.app.wear[r.slot] : m.app[r.key];
       const idx = this.optionIndex(r, v);
       const div = document.createElement('div');
       div.className = `row${i === m.sel ? ' sel' : ''}`;
-      const value = r.swatch ? `<span class="swatch" style="background:${v}"></span>` : `<span>${r.names[idx]}</span>`;
+      const it = r.slot && ITEM[v];
+      const value = r.swatch ? `<span class="swatch" style="background:${v}"></span>` : `<span${it && !it.basic ? ` class="branded" style="color:${BRANDS[it.brand].color}"` : ''}>${r.names[idx]}</span>`;
       div.innerHTML = `<span class="label">${r.label}</span><span class="val"><button class="arrow" data-d="-1">◀</button>${value}<button class="arrow" data-d="1">▶</button></span>`;
       div.querySelectorAll('.arrow').forEach((b) =>
         b.addEventListener('click', () => {
@@ -468,6 +501,7 @@ export class UI {
       );
       box.appendChild(div);
     });
+    $('wardrobe-status').innerHTML = m.status ? m.status(m.app) : '';
   }
   optionIndex(r, v) {
     if (typeof v === 'number' && !Number.isInteger(v)) {
@@ -482,8 +516,10 @@ export class UI {
   }
   cycle(r, d) {
     const m = this.menu;
-    const i = this.optionIndex(r, m.app[r.key]);
-    m.app[r.key] = r.options[(i + d + r.options.length) % r.options.length];
+    const i = this.optionIndex(r, r.slot ? m.app.wear[r.slot] : m.app[r.key]);
+    const v = r.options[(i + d + r.options.length) % r.options.length];
+    if (r.slot) m.app.wear[r.slot] = v;
+    else m.app[r.key] = v;
     this.audio.blip(d > 0);
     m.onChange(m.app);
     this.renderWardrobe();
@@ -744,6 +780,75 @@ export class UI {
     $('bar').classList.add('hidden');
     document.body.classList.remove('in-menu');
     b?.onClose?.();
+  }
+
+  // ---------------------------------------------------------------- the Galleria's shop panel
+  /** o: { title, shop, empty, rows() -> [{ it, owned, tryingOn, inBag, wish, note, gain, afford }], cash(), bank(), cartText(), onTry(it), onBag(it), onWish(it), onClose } */
+  openShop(o) {
+    this.modal = 'shop';
+    this.shopS = { ...o, sel: 0, note: '' };
+    const el = $('shop');
+    el.classList.remove('hidden');
+    el.dataset.shop = o.shop;
+    document.body.classList.add('in-menu');
+    this.setPrompt(null);
+    this.renderShop();
+  }
+  renderShop() {
+    const r = this.shopS;
+    const rows = r.rows();
+    r.sel = Math.min(r.sel, Math.max(0, rows.length - 1));
+    const chip = (it) => {
+      const L = it.look;
+      if (L.watch) return ['', '#f0c858', '#d0d4dc', '#1e1a1c'][L.watch];
+      if (L.chain) return L.chain === 1 ? '#f0c858' : '#d0d4dc';
+      return L.jacket ?? L.top ?? L.bottom ?? L.shoes ?? L.hatColor ?? L.glassesColor ?? '#888';
+    };
+    const html = rows
+      .map(({ it, owned, tryingOn, inBag, wish, note, gain, afford }, i) => {
+        const tags = [owned && '<em class="own">YOURS</em>', tryingOn && '<em>TRYING ON</em>', inBag && '<em>IN YOUR BAG</em>', wish && '<em class="want">WANT</em>', note && `<em class="note">${note}</em>`, it.gem && !owned && '<em class="gem">ONE OF A KIND</em>'].filter(Boolean).join('');
+        const acts = owned || note
+          ? ''
+          : `<button class="reg-btn" data-act="try" data-i="${i}"><span>T</span>${tryingOn ? 'Take off' : 'Try on'}</button><button class="reg-btn go" data-act="bag" data-i="${i}"><span>↵</span>${inBag ? 'Put back' : 'Bag it'}</button><button class="reg-btn${wish ? ' on' : ''}" data-act="wish" data-i="${i}"><span>␣</span>${wish ? 'Unwant' : 'I want this'}</button>`;
+        return `<div class="shop-item${i === r.sel ? ' sel' : ''}" data-sel="${i}">
+          <span class="chip" style="background:${chip(it)}"></span>
+          <div class="shop-name"><b>${it.name}</b>${tags}<small>${it.desc}</small></div>
+          <div class="shop-price${afford ? '' : ' dear'}">${it.price ? money(it.price) : 'free'}<small>+${gain} status</small></div>
+          <div class="shop-acts">${acts}</div>
+        </div>`;
+      })
+      .join('');
+    $('shop').innerHTML = `<div class="reg-head"><span>${r.title}</span><span>${money(r.cash())} cash · ${money(r.bank())} bank</span></div>
+      <div class="shop-list">${html || `<div class="shop-empty">${r.empty}</div>`}</div>
+      <div class="reg-note">${r.note || r.cartText()}</div>
+      <div class="reg-foot">↑↓ pick · T try on · Enter bag it · Space I want this · Esc done</div>`;
+    const el = $('shop');
+    el.querySelectorAll('[data-sel]').forEach((b) => b.addEventListener('click', () => ((r.sel = Number(b.dataset.sel)), this.renderShop())));
+    el.querySelectorAll('[data-act]').forEach((b) =>
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        r.sel = Number(b.dataset.i);
+        this.shopAct(b.dataset.act);
+      }),
+    );
+    el.querySelector('.shop-item.sel')?.scrollIntoView({ block: 'nearest' });
+  }
+  shopAct(kind) {
+    const r = this.shopS;
+    const row = r.rows()[r.sel];
+    if (!row || row.owned || row.note) return;
+    const fn = { try: r.onTry, bag: r.onBag, wish: r.onWish }[kind];
+    r.note = fn(row.it) ?? '';
+    this.audio.blip(kind !== 'wish');
+    this.renderShop();
+  }
+  closeShop() {
+    const r = this.shopS;
+    this.shopS = null;
+    if (this.modal === 'shop') this.modal = null;
+    $('shop').classList.add('hidden');
+    document.body.classList.remove('in-menu');
+    r?.onClose?.();
   }
 
   // ---------------------------------------------------------------- GULLY'S register 2 (the crew job)
@@ -1028,6 +1133,20 @@ export class UI {
       else if (k === 'Enter' || k === 'NumpadEnter') this.barFinish();
       else if (k === 'Backspace') this.barTip();
       else if (k === 'KeyS') this.barServe();
+      return eat();
+    }
+    if (this.modal === 'shop') {
+      const r = this.shopS;
+      const n = r.rows().length;
+      if (k === 'Escape') this.closeShop();
+      else if ((k === 'ArrowUp' || k === 'KeyW' || k === 'ArrowDown' || k === 'KeyS') && n) {
+        r.sel = (r.sel + (k === 'ArrowUp' || k === 'KeyW' ? -1 : 1) + n) % n;
+        r.note = '';
+        this.audio.blip(false);
+        this.renderShop();
+      } else if (k === 'KeyT') this.shopAct('try');
+      else if (k === 'Enter' || k === 'KeyE' || k === 'NumpadEnter') this.shopAct('bag');
+      else if (k === 'Space') this.shopAct('wish');
       return eat();
     }
     if (this.modal === 'pos') {

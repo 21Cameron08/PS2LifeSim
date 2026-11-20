@@ -158,6 +158,7 @@ export class BarJob {
     const wage = Math.floor((mins / 60) * BAR_WAGE);
     const total = Math.max(0, wage + s.tips - s.docked);
     this.state.bank += total / 100;
+    this.state.ledger?.push({ t: Math.round(this.clock.minutes), what: 'SUBSTATION bar wages', amt: total / 100 });
     this.J.earned += total;
     this.J.shifts++;
     this.J.shift = null;
@@ -206,7 +207,7 @@ export class BarJob {
 
   wearUniform(on) {
     const app = this.state.appearance;
-    this.crowd.setAppearance(this.player.char.id, on ? { ...app, topStyle: 0, top: '#141418', bottom: '#141418' } : app);
+    this.crowd.setAppearance(this.player.char.id, on ? { ...app, wear: null, topStyle: 0, top: '#141418', bottom: '#141418' } : app);
   }
 
   nadiaLine() {

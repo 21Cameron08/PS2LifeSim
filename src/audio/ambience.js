@@ -278,10 +278,12 @@ export class Ambience {
     if (style === 'club') return this.startClub(opts.beat ?? 0);
     const out = ctx.createGain();
     out.gain.value = 0.0001;
-    out.gain.setTargetAtTime(style === 'piano' ? 0.16 : style === 'muzak' ? 0.07 : style === 'gullys' ? 0.075 : style === 'under' ? 0.14 : 0.12, ctx.currentTime, 0.4);
+    const GAIN = { piano: 0.16, muzak: 0.07, gullys: 0.075, under: 0.14, mall: 0.075, street: 0.09, lounge: 0.085 };
+    out.gain.setTargetAtTime(GAIN[style] ?? 0.12, ctx.currentTime, 0.4);
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = style === 'radio' ? 2400 : style === 'records' ? 4200 : style === 'muzak' ? 1800 : style === 'gullys' ? 2800 : style === 'under' ? 2200 : 9000;
+    const CUT = { radio: 2400, records: 4200, muzak: 1800, gullys: 2800, under: 2200, mall: 3200, street: 3600, lounge: 2600 };
+    lp.frequency.value = CUT[style] ?? 9000;
     out.connect(lp);
     let tail = lp;
     if (style === 'radio') {
@@ -319,7 +321,8 @@ export class Ambience {
       crackle.start();
       nodes.push(crackle);
     }
-    this.music = { style, out, echo, nodes, bar: 0, next: ctx.currentTime + 0.15, len: style === 'piano' ? 2.6 : style === 'muzak' ? 2.8 : style === 'gullys' ? 2.0 : style === 'under' ? (4 * 60) / 70 : 2.2 };
+    const LEN = { piano: 2.6, muzak: 2.8, gullys: 2.0, under: (4 * 60) / 70, mall: (4 * 60) / 96, street: (4 * 60) / 88, lounge: (4 * 60) / 104 };
+    this.music = { style, out, echo, nodes, bar: 0, next: ctx.currentTime + 0.15, len: LEN[style] ?? 2.2 };
   }
 
   // ---------------------------------------------------------------- club
@@ -650,6 +653,9 @@ export class Ambience {
     if (m.style === 'club') return this.playClubBar(m, t);
     if (m.style === 'gullys') return this.playGullysBar(m, t);
     if (m.style === 'under') return this.playUnderBar(m, t);
+    if (m.style === 'mall') return this.playMallBar(m, t);
+    if (m.style === 'street') return this.playStreetBar(m, t);
+    if (m.style === 'lounge') return this.playLoungeBar(m, t);
     const prog = [
       [62, 65, 69, 72],
       [55, 59, 62, 65],
@@ -709,6 +715,61 @@ export class Ambience {
       const scale = [72, 74, 76, 79, 81, 84];
       for (let i = 0; i < 4; i++) if (Math.random() < 0.45) this.voice(m.out, hz(scale[Math.floor(Math.random() * scale.length)]), t + (i * L) / 4 + 0.02, 0.35, 'sine', 0.035, 0.01);
     }
+  }
+
+  // The Galleria's ceiling speakers: shiny 2003 mall pop. Major sevenths on an
+  // electric piano, a round bass, a shaker, a little bell melody that never resolves.
+  playMallBar(m, t) {
+    const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const prog = [
+      [60, 64, 67, 71],
+      [57, 60, 64, 67],
+      [62, 65, 69, 72],
+      [55, 59, 62, 65],
+    ];
+    const L = m.len;
+    const chord = prog[m.bar % 4];
+    chord.forEach((n, i) => {
+      this.voice(m.out, hz(n + 12), t + i * 0.012, L * 0.45, 'sine', 0.03, 0.01);
+      this.voice(m.out, hz(n + 12) * 1.004, t + L * 0.5 + 0.03, L * 0.4, 'sine', 0.022, 0.01);
+    });
+    [0, 0.375, 0.5, 0.875].forEach((b, i) => this.voice(m.out, hz(chord[i === 1 ? 2 : 0] - 24), t + b * L, L * 0.18, 'triangle', 0.09, 0.008));
+    for (let i = 0; i < 8; i++) this.noiseAt(m.out, t + (i * L) / 8, 6500, i % 2 ? 0.012 : 0.02, 0.05, 'highpass');
+    this.kick(m.out, t);
+    this.noiseAt(m.out, t + L / 2, 2000, 0.05, 0.1);
+    const bells = [79, 83, 84, 86, 88, 91];
+    for (let i = 0; i < 4; i++) if (Math.random() < 0.5) this.voice(m.out, hz(bells[Math.floor(Math.random() * bells.length)]), t + (i * L) / 4 + 0.03, 0.5, 'sine', 0.03, 0.004);
+  }
+
+  // SPLITGRAIN: a slow, heavy beat. Kick, a cracking snare, swung hats, a dark bass and a stab.
+  playStreetBar(m, t) {
+    const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const L = m.len;
+    const roots = [45, 45, 41, 43];
+    const r = roots[m.bar % 4];
+    for (const b of [0, 0.375, 0.625]) this.kick(m.out, t + b * L);
+    for (const b of [0.25, 0.75]) this.noiseAt(m.out, t + b * L, 1500, 0.14, 0.14);
+    for (let i = 0; i < 8; i++) this.hat(m.out, t + ((i + (i % 2 ? 0.16 : 0)) * L) / 8);
+    this.voice(m.out, hz(r - 12), t, L * 0.3, 'sawtooth', 0.05, 0.01);
+    this.voice(m.out, hz(r - 12), t + L * 0.5, L * 0.25, 'sawtooth', 0.045, 0.01);
+    if (m.bar % 2 === 0) [r + 24, r + 27, r + 31].forEach((n) => this.voice(m.out, hz(n), t + L * 0.125, 0.18, 'square', 0.012, 0.004));
+  }
+
+  // MAISON VELLARD: lounge. Soft four-on-the-floor, brushed hats, rhodes ninths, a walking bass.
+  playLoungeBar(m, t) {
+    const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const L = m.len;
+    const prog = [
+      [62, 65, 69, 72, 76],
+      [55, 59, 62, 65, 69],
+      [60, 64, 67, 71, 74],
+      [57, 60, 64, 67, 71],
+    ];
+    const chord = prog[m.bar % 4];
+    chord.forEach((n, i) => this.voice(m.out, hz(n), t + 0.02 + i * 0.02, L * 0.7, 'triangle', 0.018, 0.06));
+    [0, 0.25, 0.5, 0.75].forEach((b, i) => this.voice(m.out, hz(chord[[0, 2, 1, 3][i]] - 24), t + b * L, L * 0.22, 'sine', 0.1, 0.01));
+    for (let i = 0; i < 4; i++) this.noiseAt(m.out, t + (i * L) / 4, 140, 0.05, 0.12, 'lowpass');
+    for (let i = 0; i < 8; i++) this.noiseAt(m.out, t + (i * L) / 8 + 0.01, 9000, 0.008, 0.09, 'highpass');
   }
 
   // The Undercurrent: SUBSTATION's chords, slowed to 70 BPM and pitched down, detuned

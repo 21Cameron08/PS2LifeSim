@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GeoBuilder, shade, trs } from '../core/geo.js';
 import { Rng, damp, angleLerp, clamp } from '../core/rng.js';
 import { randomAppearance } from './appearance.js';
+import { npcWear } from '../game/fashion.js';
 import { BRAND, LUNCH, makeWish, kitchenNeeds, sameOrder } from '../game/gullysMenu.js';
 
 // Everyone at GULLY'S: the crew behind the counter and the customers. Customers
@@ -86,7 +87,7 @@ export class Diners {
     this.lobby = { c: mk(crew(BRAND.orange, 0, { hairStyle: 2 })), name: 'Pip', role: 'lobby', path: [], task: null, t: 0, home: lobbyHome };
     this.crew = [...this.cashiers, ...this.cooks, this.expo, this.lobby];
     this.pool = [];
-    for (let k = 0; k < POOL; k++) this.pool.push({ c: mk(randomAppearance(rng)), mode: 'off', path: [], k });
+    for (let k = 0; k < POOL; k++) this.pool.push({ c: mk(npcWear(randomAppearance(rng), rng, 0.2)), mode: 'off', path: [], k });
     this.queue = [[], []];
     this.hold = [false, false]; // the player is standing at (or ordering at) a register
     this.taken = new Set(); // seats someone is in or walking to

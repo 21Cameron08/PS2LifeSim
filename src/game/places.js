@@ -16,6 +16,7 @@ export const PLACE_ICONS = {
   club: 'M6 2.2 14 1v9.6a2.4 2 0 1 1-1.5-1.9V4.2L7.5 5v7.2A2.4 2 0 1 1 6 10.3z',
   lantern: 'M8 1 10.8 5.5 8 15 5.2 5.5zM6.6 5.6h2.8L8 11z',
   tree: 'M8 1a4.8 4.8 0 0 1 2.6 8.8H9v4.7H7V9.8H5.4A4.8 4.8 0 0 1 8 1z',
+  bag: 'M2.5 5h11l.8 9.5H1.7zM5.4 5V3.8a2.6 2.6 0 0 1 5.2 0V5H9.2V3.8a1.2 1.2 0 0 0-2.4 0V5z',
 };
 
 /**
@@ -60,6 +61,20 @@ export function buildPlaces(w) {
     sub: () => (w.crew?.J.hired ? (w.crew.onShift ? 'Your job · on shift now' : 'Your job · crew, $9.50 an hour + a meal') : 'Burgers, fries, shakes · Gull Box toys · hiring'),
     status: (h) => (gullysOpen(h) ? { text: 'OPEN · until 2 AM', open: true } : { text: 'CLOSED · opens 6 AM', open: false }),
     needs: () => ['hunger', 'fun', 'social'],
+    big: () => true,
+  });
+  P.push({
+    id: 'galleria',
+    icon: () => 'bag',
+    color: () => '#d8b46a',
+    at: { x: w.galleria.outsideSpot.x, z: w.galleria.outsideSpot.z },
+    name: () => 'HALCYON GALLERIA',
+    sub: () => {
+      const sat = w.weekday?.() === 'SAT';
+      return `RACK & RUIN thrift · SPLITGRAIN streetwear · MAISON VELLARD luxury${sat ? " · Grain Runner 9 drop today, 10 AM" : ''}`;
+    },
+    status: (h) => (h >= 10 && h < 22 ? { text: 'OPEN · until 10 PM', open: true } : { text: 'CLOSED · opens 10 AM', open: false }),
+    needs: () => ['fun', 'social', 'hunger'],
     big: () => true,
   });
   P.push({

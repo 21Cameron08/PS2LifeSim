@@ -179,7 +179,7 @@ export class GullysVisit {
     this.ui.openOrder({
       title: `GULLY'S · REGISTER ${r + 1}`,
       sub: breakfast ? 'SUNRISE MENU · until 11 AM' : 'ALL DAY MENU',
-      greet: `${cashier.name}: "${this.rng.pick(['Welcome to Gully\'s! What can I get you?', 'Hi! What are we having today?', 'Snatch a bite! What\'ll it be?'])}"`,
+      greet: `${cashier.name}: "${this.rng.pick((this.statusTier?.() ?? 0) >= 5 ? ["Oh, fancy! Slumming it with us today?", "Wow. Nice watch. Er, what can I get you?", "Are you famous? You look famous. What can I get you?"] : ['Welcome to Gully\'s! What can I get you?', 'Hi! What are we having today?', 'Snatch a bite! What\'ll it be?'])}"`,
       menu,
       cash: this.state.cash,
       bank: this.state.bank,
@@ -203,6 +203,7 @@ export class GullysVisit {
     } else {
       if (st.bank < total) return 'Card declined. Ouch.';
       st.bank = cents(st.bank - total);
+      st.ledger?.push({ t: Math.round(this.clock.minutes), what: "GULLY'S", amt: -total });
       this.audio.tone(1800, 'sine', 0.04, 0.15);
     }
     const items = sel.lines.flatMap((l) => Array(l.qty).fill(l.item));

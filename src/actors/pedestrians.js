@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CITY } from '../config.js';
 import { Rng, angleLerp, clamp, damp } from '../core/rng.js';
 import { randomAppearance } from './appearance.js';
+import { npcWear } from '../game/fashion.js';
 import { FIRST_NAMES, LAST_NAMES, MOODS } from '../game/dialogue.js';
 
 // Pedestrians walk loops around the sidewalk of a block and sometimes cross the
@@ -50,9 +51,12 @@ export class Pedestrians {
     }
   }
 
+  /** How likely a passer-by is to turn and look at you (your status; main.js sets it). */
+  stare = 0;
+
   makeNpc(app) {
     const rng = this.rng;
-    const c = this.crowd.add(app ?? randomAppearance(rng));
+    const c = this.crowd.add(app ?? npcWear(randomAppearance(rng), rng, Math.pow(rng.next(), 2)));
     const npc = {
       c,
       id: `npc${c.id}`,
@@ -255,7 +259,17 @@ export class Pedestrians {
       c.phase = npc.phase;
       c.amount = moving ? clamp(npc.curSpeed / 1.4, 0, 1) : damp(c.amount, 0, 8, dt);
       c.run = 0;
-      if (npc.mode !== 'stand') c.headYaw = damp(c.headYaw, 0, 3, dt);
+      // heads turn when you walk past looking like money (this.stare: 0 = nobody looks, 1 = everybody)
+      if (distP > 7) npc.noticed = undefined;
+      else if (npc.noticed === undefined) npc.noticed = rng.next() < this.stare;
+      let look = 0;
+      if (npc.noticed && distP > 0.8 && npc.mode !== 'talk') {
+        let rel = Math.atan2(dxp, dzp) - npc.yaw;
+        rel = Math.atan2(Math.sin(rel), Math.cos(rel));
+        if (Math.abs(rel) < 2.2) look = clamp(rel, -1.25, 1.25);
+      }
+      if (npc.mode !== 'stand') c.headYaw = damp(c.headYaw, look, look ? 5 : 3, dt);
+      else if (look) c.headYaw = damp(c.headYaw, look, 5, dt);
     }
   }
 

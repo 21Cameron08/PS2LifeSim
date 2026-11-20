@@ -302,6 +302,28 @@ body.touch #hint {
   gap: 8px;
   font-weight: 700;
 }
+#wardrobe {
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
+}
+#wardrobe .val span:not(.swatch) {
+  max-width: 190px;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.15;
+}
+#wardrobe-status {
+  margin: 10px 0 4px;
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+#wardrobe-status small {
+  display: block;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--muted);
+}
 .swatch {
   width: 22px;
   height: 22px;
@@ -718,6 +740,54 @@ body.touch #cheats .menu-foot {
   letter-spacing: 0.3em;
   color: var(--muted);
   animation: blink 1s steps(2, start) infinite;
+}
+#status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+#status .pips {
+  display: inline-flex;
+  gap: 2px;
+}
+#status .pips i {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.18);
+}
+#status .pips i.on {
+  background: #ffd36a;
+  box-shadow: 0 0 4px rgba(255, 200, 90, 0.8);
+}
+#status[data-tier='6'],
+#status[data-tier='7'] {
+  color: #ffd36a;
+  text-shadow: 0 0 8px rgba(255, 200, 90, 0.6);
+}
+#wish {
+  max-width: 220px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-align: right;
+  line-height: 1.25;
+}
+.wish-bar {
+  display: block;
+  height: 4px;
+  margin-top: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+.wish-bar i {
+  display: block;
+  height: 100%;
+  background: #7dff9a;
 }
 #bank.neg {
   color: var(--bad);
@@ -1363,6 +1433,143 @@ body.touch #map .map-foot {
 .bar-card span {
   color: #4a4a50;
   text-align: right;
+}
+
+/* ------------------------------------------------------------------ the Galleria's shops */
+/* the big district banner and the hint line step aside while a panel is open */
+body.in-menu #location,
+body.in-menu #hint {
+  opacity: 0 !important;
+}
+#shop {
+  z-index: 5;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(900px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #1c1a24, #0c0c12);
+  border: 2px solid #9fb0d0;
+  border-radius: 10px;
+  pointer-events: auto;
+  padding: 14px 16px;
+}
+#shop[data-shop='rr'] {
+  background: linear-gradient(180deg, #2e2018, #160e0a);
+  border-color: #e0a53a;
+}
+#shop[data-shop='sg'] {
+  background: linear-gradient(180deg, #1c1c20, #0a0a0c);
+  border-color: #ff5a3a;
+}
+#shop[data-shop='mv'] {
+  background: linear-gradient(180deg, #14110c, #070605);
+  border-color: #d8b46a;
+  box-shadow: 0 0 40px rgba(216, 180, 106, 0.25);
+}
+#shop[data-shop='mv'] .reg-head {
+  color: #e8cc88;
+  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: 0.12em;
+}
+.shop-list {
+  overflow-y: auto;
+  min-height: 80px;
+  margin: 8px 0;
+}
+.shop-item {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  grid-template-areas: 'chip name price' 'chip acts acts';
+  gap: 4px 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.shop-item.sel {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.shop-item .chip {
+  grid-area: chip;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+.shop-name {
+  grid-area: name;
+}
+.shop-name small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.shop-name em {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-style: normal;
+  letter-spacing: 0.08em;
+  background: rgba(127, 212, 255, 0.2);
+  color: #9fe0ff;
+}
+.shop-name em.own {
+  background: rgba(125, 255, 154, 0.2);
+  color: #8dff9a;
+}
+.shop-name em.want {
+  background: rgba(255, 211, 106, 0.2);
+  color: #ffd36a;
+}
+.shop-name em.note {
+  background: rgba(255, 106, 42, 0.25);
+  color: #ffb08a;
+}
+.shop-name em.gem {
+  background: rgba(216, 180, 106, 0.3);
+  color: #ffe0a0;
+}
+.shop-price {
+  grid-area: price;
+  text-align: right;
+  font-weight: 700;
+  font-size: 18px;
+}
+.shop-price.dear {
+  color: #ff9a8a;
+}
+.shop-price small {
+  display: block;
+  font-size: 12px;
+  color: #ffd36a;
+  font-weight: 600;
+}
+.shop-acts {
+  grid-area: acts;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.shop-acts .reg-btn {
+  min-height: 32px;
+  padding: 3px 9px;
+  font-size: 13px;
+}
+.shop-item:not(.sel) .shop-acts {
+  display: none;
+}
+.shop-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--muted);
 }
 
 /* ------------------------------------------------------------------ GULLY'S register 2 (crew job) */

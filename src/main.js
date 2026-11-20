@@ -20,6 +20,9 @@ import { Gullys } from './world/gullys.js';
 import { Diners } from './actors/diners.js';
 import { GullysVisit } from './game/gullysVisit.js';
 import { CrewJob } from './game/crewJob.js';
+import { Galleria } from './world/galleria.js';
+import { Shoppers } from './actors/shoppers.js';
+import { Shopping } from './game/shopping.js';
 import { Needs, NEEDS } from './game/needs.js';
 import { additive } from './render/materials.js';
 import { buildPlaces } from './game/places.js';
@@ -40,6 +43,7 @@ import { Undercurrent } from './world/undercurrent.js';
 import { PhotoBooth, stripTexture } from './game/photobooth.js';
 import { Ambience } from './audio/ambience.js';
 import { UI } from './ui/ui.js';
+import { baseWear, statusOf, dress, outerOn, ITEM, TIERS, showpiece } from './game/fashion.js';
 
 // ----------------------------------------------------------------------------
 // Boot
@@ -87,7 +91,22 @@ const state = {
   gullOrders: save?.gullOrders ?? 0,
   lastMeal: save?.lastMeal,
   fridge: save?.fridge ?? 4, // home-cooked meals left in the fridge
+  owned: save?.owned ?? [], // clothes you've bought (item ids, game/fashion.js)
+  wish: save?.wish ?? null, // the thing you're saving up for (an item id)
+  ledger: save?.ledger ?? [], // bank transactions: { t, what, amt }
+  thrift: save?.thrift, // RACK & RUIN: today's sold one-offs
+  drop: save?.drop, // this week's sneaker drop: { week, stock, mine }
+  spent: save?.spent ?? 0, // everything you've ever spent at the Galleria
+  spentDay: save?.spentDay, // today's spend at MAISON VELLARD (for the champagne)
+  champagneDay: save?.champagneDay,
 };
+// saves from before clothes could be owned: what you had on becomes basics
+if (!state.appearance.wear) state.appearance.wear = baseWear(state.appearance);
+// ...and nothing you were only trying on comes home with you
+{
+  const base = baseWear(state.appearance);
+  for (const [slot, id] of Object.entries(state.appearance.wear)) if (id && !ITEM[id]?.basic && !state.owned.includes(id)) state.appearance.wear[slot] = base[slot];
+}
 const needs = new Needs(save?.needs);
 const SAVE_VERSION = 2;
 // saves from before apartments existed keep money/looks but start you at home
@@ -110,7 +129,7 @@ const apts = new Apartments(scene, city, tex);
 apts.setHome(state.home);
 const outdoor = citySpace(city);
 const store = new Store(scene, city, tex, apts.tex);
-const crowd = new Crowd(scene, tex, 264);
+const crowd = new Crowd(scene, tex, 320);
 // where do we start? a fresh life starts inside your apartment
 let place = freshStart ? apts.byId[state.home] : save.inside ? apts.byId[save.inside] : null;
 let touring = false;
@@ -136,7 +155,20 @@ let inUnder = false;
 // the club has stairs, a balcony, a fire escape and a roof: the player's ground
 // height depends on which level their feet are on
 const cityGround = outdoor.groundHeight;
-outdoor.groundHeight = (x, z) => club.groundAt(x, z, player.pos.y, cityGround(x, z));
+// ...and so does the Galleria (two floors and the escalators between them)
+const galleria = new Galleria(scene, city, tex, apts.tex);
+outdoor.groundHeight = (x, z) => galleria.groundAt(x, z, player.pos.y, club.groundAt(x, z, player.pos.y, cityGround(x, z)));
+// the mall's ceiling is low in the shops and high under the glass roof
+const mallSpace = {
+  ...outdoor,
+  indoor: true,
+  get ceiling() {
+    return galleria.ceilingAt(player.pos);
+  },
+};
+let inGalleria = false;
+let mallKick = 0;
+const shoppers = new Shoppers(crowd, galleria, city);
 // the club's lobby is low, its hall is 7 m tall: the camera asks where you are
 const clubSpace = {
   ...outdoor,
@@ -155,12 +187,14 @@ const visit = new GullysVisit({ gullys, diners, ui, audio, state, clock, player,
 const crew = new CrewJob({ gullys, diners, visit, ui, audio, state, clock, player, crowd, needs });
 crew.blocked = () => !!job.J.shift || barJob.onShift;
 visit.crew = crew;
+visit.statusTier = () => statusOf(state.appearance, state.home).tier;
 /** On the clock at any job. */
 const onClock = () => !!job.J.shift || barJob.onShift || crew.onShift;
 if (state.gullToys.length) apts.setToys(state.gullToys);
 let gullysKick = 0;
 let lightsUpNight = -1;
 const rig = new CameraRig(camera, player.space);
+const shopping = new Shopping({ galleria, shoppers, ui, audio, state, clock, player, crowd, needs, input, rig, saveNow: () => saveNow() });
 rig.yaw = player.yaw;
 let outdoorDist = 6.2;
 if (place) {
@@ -264,6 +298,14 @@ function saveNow(showToast = false) {
     doorChat: state.doorChat,
     doorTip: state.doorTip,
     gullToys: state.gullToys,
+    thrift: state.thrift,
+    drop: state.drop,
+    spent: state.spent,
+    spentDay: state.spentDay,
+    champagneDay: state.champagneDay,
+    owned: state.owned,
+    wish: state.wish,
+    ledger: state.ledger.slice(-60),
     gullMeals: state.gullMeals,
     gullOrders: state.gullOrders,
     lastMeal: state.lastMeal,
@@ -412,8 +454,26 @@ function useAtm() {
     { label: 'Withdraw $100', fn: () => move(-100) },
     { label: 'Deposit $100', fn: () => move(100) },
     { label: 'Deposit all', fn: () => move(state.cash) },
+    { label: 'Statement', fn: () => statement() },
     { label: 'Exit', fn: () => ui.closeDialog() },
   ];
+  const statement = () => {
+    const rows = state.ledger.slice(-12).reverse();
+    const line = (e) => {
+      const d = Math.floor(e.t / 1440) + 1;
+      const what = e.what.length > 22 ? `${e.what.slice(0, 21)}…` : e.what.padEnd(22, ' ');
+      return `D${String(d).padEnd(3, ' ')} ${what} ${(e.amt < 0 ? '-' : '+') + money(Math.abs(e.amt))}`;
+    };
+    const ins = state.ledger.filter((e) => e.amt > 0).reduce((s, e) => s + e.amt, 0);
+    const outs = state.ledger.filter((e) => e.amt < 0).reduce((s, e) => s - e.amt, 0);
+    ui.openDialog({
+      name: 'HALCYON SAVINGS · STATEMENT',
+      text: [...(rows.length ? rows.map(line) : ['No transactions yet.']), '', `In ${money(ins)} · out ${money(outs)} · balance ${money(state.bank)}`].join('\n'),
+      mono: true,
+      choices: [{ label: 'Back', fn: () => show() }],
+      onClose: () => (player.locked = false),
+    });
+  };
   const show = (msg = '') =>
     ui.openDialog({
       name: 'HALCYON SAVINGS · ATM',
@@ -427,6 +487,7 @@ function useAtm() {
     if (amt === 0) return show('Nothing to deposit. ');
     state.cash -= amt;
     state.bank += amt;
+    state.ledger.push({ t: Math.round(clock.minutes), what: amt > 0 ? 'ATM deposit' : 'ATM withdrawal', amt });
     audio.coin();
     show(amt > 0 ? 'Deposited. ' : 'Please take your cash. ');
   };
@@ -692,6 +753,12 @@ function findInteraction() {
   if (work) return work;
   const crewWork = crew.find(player.pos);
   if (crewWork) return crewWork;
+  const mall = shopping.find(player.pos);
+  if (mall) return mall;
+  if (inGalleria || galleria.onPlaza(player.pos)) {
+    const m = mallSeatOrTalk();
+    if (m) return m;
+  }
   const food = visit.find();
   if (food) return food;
   const nightlife = clubInteraction();
@@ -708,6 +775,7 @@ function findInteraction() {
   let best = null;
   let bd = Infinity;
   for (const it of city.interactables) {
+    if (it.y !== undefined && Math.abs(it.y - player.pos.y) > 1.5) continue; // (the mall's ATM is downstairs)
     const d = Math.hypot(it.x - player.pos.x, it.z - player.pos.z);
     if (d < it.r && d < bd) {
       best = it;
@@ -794,7 +862,7 @@ function clubInteraction() {
 // ---------------------------------------------------------------- the door
 /** Why the bouncer won't let you in dressed like that (or null). */
 function dressCode() {
-  const a = state.appearance;
+  const a = dress(state.appearance);
   const th = tonightTheme();
   if (needs.get('hygiene') < 20) return 'Whoa. No. You smell like the bottom of a gym bag. Go home and shower, then we can talk.';
   if (a.bottomStyle === 1 && !th.shorts) return "Shorts? No. It's a club, not a barbecue. Go and change.";
@@ -825,7 +893,8 @@ function bouncerTalk() {
   }
   // a line outside: friends of the door and VIPs walk past it
   const q = club.status === 'open' ? clubbers.queueLength() : 0;
-  if (q >= 2 && !friend && state.vipNight !== tonight && state.queuedNight !== tonight) {
+  const flashy = statusOf(state.appearance, state.home).tier >= 5;
+  if (q >= 2 && !friend && !flashy && state.vipNight !== tonight && state.queuedNight !== tonight) {
     const mins = q * 4;
     return say(`"There's a line." He nods at the ${q} people behind the rope. "Back of it."`, [
       {
@@ -847,7 +916,7 @@ function bouncerTalk() {
   const th = tonightTheme();
   const quiet = th.id === 'house' || th.id === 'low';
   const cover = close && quiet ? 0 : coverCharge();
-  const sharp = state.appearance.topStyle === 2 ? 'Nice jacket. ' : '';
+  const sharp = flashy ? talkRng.pick(['Looking expensive tonight. ', 'Nice watch. Skip the line. ', 'Well, look at you. ']) : outerOn(dress(state.appearance)) ? 'Nice jacket. ' : '';
   const greet = close
     ? cover
       ? talkRng.pick([`There they are. ${th.name} tonight, it'll be wild. ${cover}, cash. Sorry, the boss counts.`, `My favourite regular. ${cover} tonight, I can't do anything about Saturdays.`])
@@ -1257,17 +1326,17 @@ function vipHost() {
 function coatCheck() {
   const app = state.appearance;
   if (state.coatCheck) {
-    app.topStyle = 2;
+    app.wear.outer = state.coatCheck.outer ?? 'basic:jacket';
     app.jacket = state.coatCheck.jacket;
     state.coatCheck = null;
     crowd.setAppearance(player.char.id, app);
     return ui.toast('Ticket 42. Your jacket, back on.');
   }
-  if (app.topStyle !== 2) return ui.toast("You're not wearing a jacket.");
+  if (!app.wear.outer) return ui.toast("You're not wearing a jacket.");
   if (state.cash < 2) return ui.toast('Two dollars, cash.');
   state.cash -= 2;
-  state.coatCheck = { jacket: app.jacket };
-  app.topStyle = 1;
+  state.coatCheck = { jacket: app.jacket, outer: app.wear.outer };
+  app.wear.outer = null;
   crowd.setAppearance(player.char.id, app);
   audio.coin();
   ui.toast('You hand over your jacket and get ticket 42.');
@@ -1426,6 +1495,7 @@ function standUp() {
   const sp = seat;
   seat = null;
   clubbers.taken.delete(sp);
+  shoppers.seatTaken.delete(sp);
   player.locked = false;
   player.pos.x = sp.out.x;
   player.pos.z = sp.out.z;
@@ -1673,6 +1743,104 @@ function updateGullys(dt) {
 }
 
 // ----------------------------------------------------------------------------
+// The Halcyon Galleria: sitting, and talking to the staff and the shoppers
+const MALL_LINES = {
+  dot: ['Everything in here had a life before you. Give it a good second one.', "I've had this shop since before the mall had a roof. True story. It leaked.", "If it doesn't fit, it's vintage. If it does, it's fate."],
+  kez: ['The drop is Saturday, ten sharp. People camp. I am not joking.', "Resellers buy six pairs and sell them for triple. I hate it here. I love it here.", 'Cargos are back. Cargos never left. Cargos are forever.'],
+  celeste: ['Everything here is made by hand, in very small numbers, for very particular people.', 'The Meridian has a waiting list. The Noir has a waiting list for the waiting list.', 'We do not have sales. We have seasons.'],
+  anton: ['Good afternoon.', 'Mind the step. It is a very expensive step.', 'Welcome to Maison Vellard.'],
+  guard: ['No running, no skateboards, no feeding the pigeons. They get in through the doors.', "Mall's open ten to ten. I'm here eleven to eleven. Do the math.", 'Somebody tried to fish the coins out of the fountain once. Once.'],
+  pretzel: ['Pretzel? Salt, cinnamon, or "the works". The works is both. Do not get the works.', "Twenty years at this kiosk. I've seen three escalators break and one wedding.", 'Cash only. The card machine broke in 2003 and honestly, good.'],
+  shopper: ["I came in for socks. I have four bags. Help.", 'Have you been in the fancy one upstairs? I touched a coat and a man appeared.', 'The pretzel guy remembers my order. That is a kind of love.', "My partner's in RACK & RUIN. I'll see them in three hours.", 'They say the drop sells out in eleven minutes.'],
+};
+/** What shoppers say when they notice what you're wearing (or don't). */
+function outfitLine(a) {
+  const st = statusOf(state.appearance, state.home);
+  const piece = showpiece(state.appearance);
+  if (st.tier >= 6 && piece) return talkRng.pick([`Wait, is that the ${piece.name}? Can I... no. Sorry. Never mind.`, `Okay, you're clearly someone. Are you someone?`, `I've only ever seen the ${piece.name} in the window.`]);
+  if (st.tier >= 3 && piece) return talkRng.pick([`Love the ${piece.name}. Where's that from?`, 'You look like you know where you\'re going.', 'Sick fit, honestly.']);
+  return talkRng.pick(MALL_LINES.shopper);
+}
+function mallSeatOrTalk() {
+  const p = player.pos;
+  const a = shoppers.nearest(p, 1.5);
+  let sp = null;
+  let sd = 1.0;
+  for (const s of galleria.seats) {
+    if (shoppers.seatTaken.has(s) || Math.abs(s.y - p.y) > 0.6) continue;
+    const d = Math.hypot(s.x - p.x, s.z - p.z);
+    if (d < sd) {
+      sd = d;
+      sp = s;
+    }
+  }
+  const da = a ? Math.hypot(a.c.x - p.x, a.c.z - p.z) - (a.role ? 0.6 : 0) : Infinity;
+  if (a && da <= sd) return { label: `Talk to ${a.name ?? 'shopper'}`, act: () => mallTalk(a) };
+  if (sp)
+    return {
+      label: sp.mall ? 'Sit on the bench' : 'Sit down',
+      act: () => {
+        shoppers.seatTaken.add(sp);
+        sitDown(sp);
+        if (sp.y > galleria.origin.y + 2) ui.toast(talkRng.pick(['You sit and watch the escalators. People going up with nothing, coming down with bags.', 'The whole atrium below you. A kid drops a coin in the fountain and makes a face like it worked.']));
+      },
+    };
+  return null;
+}
+function mallTalk(a) {
+  const key = a.key ?? 'shopper';
+  player.locked = true;
+  a.talking = true;
+  const close = () => ui.closeDialog();
+  needs.chat(`mall:${a.name ?? a.k}`, clock.minutes, 6);
+  const st = statusOf(state.appearance, state.home);
+  let text = talkRng.pick(MALL_LINES[key] ?? MALL_LINES.shopper);
+  if (!a.key) text = outfitLine(a);
+  if (key === 'anton') text = st.tier >= 5 ? talkRng.pick(['A pleasure to see you again.', 'He opens the door before you reach it, with a small bow.']) : st.tier <= 1 ? 'He looks at your shoes for a long second. "...Welcome."' : talkRng.pick(MALL_LINES.anton);
+  if (key === 'celeste' && st.tier <= 2) text = 'She keeps folding the scarf. "If you need anything, I\'ll be... here."';
+  const choices = [];
+  if (key === 'pretzel') choices.push({ label: 'A pretzel ($4.50)', fn: () => (close(), shopping.pretzel()) });
+  if (key === 'kez') choices.push({ label: 'When is the next drop?', fn: () => ui.openDialog({ name: 'Kez', text: `Saturday, ten AM. Grain Runner 9 'Harbour'. ${state.drop?.stock ?? 12} pairs. The line starts on the plaza before nine. Bring a chair.`, choices: [{ label: 'Okay', fn: close }], onClose: done }) });
+  choices.push({ label: 'Bye', fn: close });
+  const done = () => {
+    a.talking = false;
+    player.locked = false;
+  };
+  ui.openDialog({ name: a.name ?? 'Shopper', text, choices, onClose: done });
+}
+
+// ----------------------------------------------------------------------------
+// The Halcyon Galleria
+function updateGalleria(dt) {
+  const camD = camera.position.distanceTo(galleria.doorCenter);
+  const people = shoppers.people();
+  if (galleria.open) people.push(player.pos);
+  galleria.update(dt, time, env, { hour: clock.hour, camera, people });
+  shoppers.update(dt, { hour: clock.hour, weekend: ['SAT', 'SUN'].includes(clock.weekday), near: camD < 95, watched: camD < 50, playerPos: player.pos, drop: shopping.drop });
+  if (!playing) return;
+  shopping.update(dt);
+  // the music follows you from shop to shop
+  const zone = inGalleria && galleria.open ? galleria.zoneAt(player.pos) : null;
+  const style = zone && { rr: 'radio', sg: 'street', mv: 'lounge', mall: 'mall' }[zone];
+  const mallStyles = ['radio', 'street', 'lounge', 'mall'];
+  if (style && audio.music?.style !== style) audio.startMusic(style);
+  if (!style && mallStyles.includes(audio.music?.style) && !place) audio.stopMusic();
+  // 10 PM: the guard walks the last shoppers out
+  if (inGalleria && !galleria.open && !ui.modal && !ui.fading) {
+    if ((mallKick += dt) > 10) {
+      mallKick = 0;
+      ui.fade(() => {
+        leaveInterior();
+        const sp = galleria.outsideSpot;
+        player.teleport(outdoor, sp.x, sp.z, sp.yaw);
+        Object.assign(rig, { space: outdoor, pitch: 0.28, yaw: sp.yaw, curDist: rig.dist, mode: 'follow', blend: 1 });
+        ui.toast('The guard jingles his keys. "Mall\'s closed, friend. Ten AM tomorrow."');
+      }, 'CLOSING TIME');
+    }
+  } else mallKick = 0;
+}
+
+// ----------------------------------------------------------------------------
 // Needs: time drains them, places and activities fill them, and running on
 // empty has consequences (see game/needs.js)
 let needsLast = clock.minutes;
@@ -1835,6 +2003,7 @@ function leaveInterior() {
   inStore = false;
   inClub = false;
   inGullys = false;
+  inGalleria = false;
   if (inUnder) {
     inUnder = false;
     under.show(false);
@@ -1866,6 +2035,7 @@ function cheatPlaces() {
   }
   list.push({ label: 'HALCYON 24', go: () => warpOutside({ ...store.outsideSpot, yaw: Math.PI }) });
   list.push({ label: "GULLY'S", go: () => warpOutside(gullys.outsideSpot) });
+  list.push({ label: 'HALCYON GALLERIA', go: () => warpOutside(galleria.outsideSpot) });
   list.push({ label: 'SUBSTATION', go: () => warpOutside(club.outsideSpot) });
   list.push({ label: 'SUBSTATION · VIP', go: () => warpOutside({ ...club.w(11.0, 15.0, 3.6), yaw: 0 }) });
   list.push({ label: 'SUBSTATION · roof', go: () => warpOutside({ ...club.w(11.0, 12.0, 8.36), yaw: 0 }) });
@@ -1960,7 +2130,7 @@ const park = city.blocks.find((b) => b.kind === 'park');
 
 // ----------------------------------------------------------------------------
 // The map (M) and routes
-const places = buildPlaces({ city, apts, state, store, job, crew, gullys, club, lantern, park, clubNight, clubTheme: tonightTheme, clubFriends });
+const places = buildPlaces({ city, apts, state, store, job, crew, gullys, galleria, club, lantern, park, clubNight, clubTheme: tonightTheme, clubFriends, weekday: () => clock.weekday });
 
 /** Friends whose usual night it is tonight (for the map). */
 function clubFriends() {
@@ -2021,8 +2191,56 @@ function updateRoute(dt) {
   }
 }
 
+/** The wardrobe's status line for an outfit. */
+function statusHtml(app) {
+  const st = statusOf(app, state.home);
+  const next = st.next !== null ? `${st.next - st.score} more to ${TIERS[st.tier + 1].name}` : 'nowhere left to climb';
+  return `STATUS · ${st.name.toUpperCase()} <small>${st.score} points (outfit + home) · ${next}</small>`;
+}
+
+let lastTier = null;
+let remarkT = 20;
+const REMARKS = [
+  [],
+  [],
+  [],
+  ['Someone glances at your shoes on the way past.', '"Nice jacket," says someone, already gone.'],
+  ['"Okay, that fit," someone mutters to their friend.', 'A couple stops talking as you pass, then starts again, about you.'],
+  ['Someone stops dead to look at your {piece}. You keep walking. Obviously.', '"Is that real?" you hear behind you. It is.'],
+  ['A tourist takes your photo. You pretend not to notice.', 'Two people argue about whether you are somebody. You are.', 'Someone actually gasps at your {piece}.'],
+  ['A kid asks if you\'re famous. Their mum says "shh" but she\'s looking too.', 'A phone comes up to film you. Then another one.', 'People part like the sea. It\'s the {piece}.'],
+];
+/** Your status and the thing you're saving for, under the money. */
+function updateStatus() {
+  const st = statusOf(state.appearance, state.home);
+  peds.stare = onClock() ? 0 : [0, 0, 0.05, 0.15, 0.3, 0.45, 0.65, 0.85][st.tier];
+  // now and then someone says something
+  if (!place && st.tier >= 3 && !ui.modal && (remarkT -= 1 / 60) <= 0) {
+    const npc = peds.list.find((n) => n.noticed && n.c.visible && Math.hypot(n.pos.x - player.pos.x, n.pos.z - player.pos.z) < 3.5);
+    if (npc) {
+      remarkT = talkRng.float(25, 50) / (1 + st.tier * 0.15);
+      const piece = showpiece(state.appearance);
+      ui.toast(talkRng.pick(REMARKS[st.tier]).replace('{piece}', piece ? piece.name : 'outfit'));
+      needs.give({ fun: 1.5, social: 1 });
+    }
+  }
+  const it = state.wish && ITEM[state.wish];
+  ui.setStatus(st, it && !state.owned.includes(it.id) ? { name: it.name, have: state.cash + Math.max(0, state.bank), price: it.price } : null);
+  // (the climb only counts once you've paid: trying things on just previews it)
+  const wear = state.appearance.wear;
+  const paid = Object.values(wear).every((id) => !id || ITEM[id]?.basic || state.owned.includes(id));
+  if (!paid) return;
+  if (lastTier !== null && st.tier > lastTier && !onClock()) {
+    const LINES = ['', 'People stop looking straight through you.', "You look like you've got it together.", 'Fresh. Heads turn a little.', 'Sharp. People notice when you walk in.', 'Flashy. You can feel the looks.', 'Rich. Doors start opening for you.', 'Untouchable. The city knows your name.'];
+    ui.toast(`STATUS: ${st.name.toUpperCase()}. ${LINES[st.tier]}`);
+    audio.blip(true);
+  }
+  if (!onClock()) lastTier = st.tier;
+}
+
 function openWardrobe() {
   if (onClock()) return ui.toast("You're in uniform. Clock out first.");
+  if (shopping.busy) return ui.toast("You're trying something on. Pay for it or take it off first.");
   player.locked = true;
   rig.setMode('wardrobe');
   ui.openWardrobe(
@@ -2034,6 +2252,7 @@ function openWardrobe() {
       rig.setMode('follow');
       saveNow(true);
     },
+    { owned: state.owned, status: statusHtml },
   );
 }
 
@@ -2046,6 +2265,7 @@ function payRent() {
   const apt = apts.byId[state.home];
   const due = apt.L.rent * n;
   state.bank -= due;
+  state.ledger.push({ t: Math.round(clock.minutes), what: `Rent · ${apt.L.name}`, amt: -due });
   ui.toast(`Rent paid: -${money(due)} · ${apt.L.name}`);
   if (state.bank < 0) setTimeout(() => ui.toast('Your bank account is overdrawn!'), 2600);
 }
@@ -2090,6 +2310,13 @@ function frame(now) {
     peds.push(p, r);
   });
   job.push(player.pos, player.radius);
+  if (inGalleria && !player.locked) {
+    const flow = galleria.escalatorFlow(player.pos);
+    if (flow) {
+      player.pos.x += flow.dx * dt;
+      player.pos.z += flow.dz * dt;
+    }
+  }
   // walking into the shop: tighter camera, shop music, shop lighting
   if (!place && !inUnder) {
     const nowIn = store.contains(player.pos, -0.05);
@@ -2140,13 +2367,28 @@ function frame(now) {
         district = '';
       }
     }
+    const nowInM = galleria.contains(player.pos, -0.05);
+    if (nowInM !== inGalleria) {
+      inGalleria = nowInM;
+      player.space = rig.space = nowInM ? mallSpace : outdoor;
+      if (nowInM) {
+        outdoorDist = rig.dist;
+        rig.dist = 4.2;
+        if (playing) ui.showLocation('HALCYON GALLERIA', galleria.open ? 'shop. dream. repeat.' : 'closed · opens 10 am');
+      } else {
+        rig.dist = outdoorDist;
+        district = '';
+      }
+    }
   }
   job.update(dt, time, { playerPos: player.pos });
   if (!place && !inUnder) clubbers.push(player.pos, inClub ? 0.28 : player.radius);
   under.update(dt, time);
   if (!place && (inGullys || gullys.onPatio(player.pos))) diners.push(player.pos, player.radius);
+  if (!place && (inGalleria || galleria.onPlaza(player.pos))) shoppers.push(player.pos, player.radius);
   updateClub(dt);
   updateGullys(dt);
+  updateGalleria(dt);
   updateNeeds(dt);
   updateRoute(dt);
   peds.update(dt, player.pos, env.night);
@@ -2170,7 +2412,7 @@ function frame(now) {
   city.updateLampLights(
     playing ? player.pos : camera.position,
     env.night,
-    place ? { list: place.fixtures, on: apts.lampOn } : inUnder ? { list: under.fixtures, on: 1 } : inStore ? { list: store.fixtures, on: 1 } : inClub ? { list: club.fixtures, on: 1 } : inGullys ? { list: gullys.fixtures, on: 1 } : aloft && club.status === 'open' ? { list: club.roofFixtures, on: 1 } : null,
+    place ? { list: place.fixtures, on: apts.lampOn } : inUnder ? { list: under.fixtures, on: 1 } : inStore ? { list: store.fixtures, on: 1 } : inClub ? { list: club.fixtures, on: 1 } : inGullys ? { list: gullys.fixtures, on: 1 } : inGalleria ? { list: galleria.fixtures, on: 1 } : aloft && club.status === 'open' ? { list: club.roofFixtures, on: 1 } : null,
   );
   store.update(dt, time, env, job.people(player.pos), camera);
   apts.update(dt, time, env, place);
@@ -2184,6 +2426,7 @@ function frame(now) {
     ui.setPrompt(current?.label ?? null);
     ui.setClock(clock.format(), clock.day);
     ui.setMoney(state.cash, state.bank);
+    updateStatus();
     if (!place && !inUnder && (districtTimer -= dt) <= 0) {
       districtTimer = 0.5;
       const d = city.districtAt(player.pos.x, player.pos.z);
@@ -2201,7 +2444,7 @@ function frame(now) {
 
   const parkD = park ? Math.hypot(player.pos.x - park.cx, player.pos.z - park.cz) : 999;
   const green = Math.max(smoothstep(45, 15, parkD), smoothstep(0.6, 1.0, Math.hypot(player.pos.x, player.pos.z) / 160));
-  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place || inUnder ? 1 : inStore || inGullys ? 0.5 : inClub ? 0.85 : 0, store: inStore ? 1 : 0, kitchen: inGullys && gullys.open ? 1 : 0 });
+  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place || inUnder ? 1 : inStore || inGullys ? 0.5 : inGalleria ? 0.6 : inClub ? 0.85 : 0, store: inStore ? 1 : 0, kitchen: inGullys && gullys.open ? 1 : 0 });
 
   // the shop's security cameras (only when you're close enough to see a monitor)
   if (!place && cctvTick++ % 4 === 0 && camera.position.distanceTo(store.doorCenter) < 30) store.renderCCTV(renderer, scene);
@@ -2236,6 +2479,12 @@ window.game = {
   clubbers,
   gullys,
   diners,
+  galleria,
+  shoppers,
+  shopping,
+  get inGalleria() {
+    return inGalleria;
+  },
   visit,
   needs,
   barJob,

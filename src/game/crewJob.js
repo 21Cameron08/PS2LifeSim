@@ -145,6 +145,7 @@ export class CrewJob {
     const wage = Math.floor((mins / 60) * CREW_WAGE);
     const total = Math.max(0, wage - s.docked);
     this.state.bank += total / 100;
+    this.state.ledger?.push({ t: Math.round(this.clock.minutes), what: "GULLY'S wages", amt: total / 100 });
     this.J.earned += total;
     this.J.shifts++;
     this.J.shift = null;
@@ -229,7 +230,7 @@ export class CrewJob {
 
   wearUniform(on) {
     const app = this.state.appearance;
-    this.crowd.setAppearance(this.player.char.id, on ? { ...app, top: BRAND.teal, topStyle: 0, bottom: BRAND.navy, bottomStyle: 0, shoes: '#1e1e22' } : app);
+    this.crowd.setAppearance(this.player.char.id, on ? { ...app, wear: null, top: BRAND.teal, topStyle: 0, bottom: BRAND.navy, bottomStyle: 0, shoes: '#1e1e22' } : app);
   }
 
   /** From the restaurant sim: someone at your register gave up, or got the wrong food. */

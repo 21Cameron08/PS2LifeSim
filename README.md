@@ -22,6 +22,7 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 | Dance (on the club's floor) | E to start, ← ↑ → ↓ or WASD on the beat, Esc to stop | USE, then the arrow pad |
 | Bartending (SUBSTATION) | ingredients 1-0, Q, W · Enter finish the glass · Backspace tip it out · S serve | the panel's buttons |
 | DJ set (SUBSTATION) | 1-4 pick what plays next · Space cue on the one · Esc end the set | the panel's buttons |
+| Shopping (Galleria) | ↑ ↓ pick · T try on · Enter bag it · Space "I want this" · Esc done | the panel's buttons |
 | Register 2 (GULLY'S crew) | items 1-0, Q, W, R, T · Space eat here / to go · Backspace void last · Enter send · Esc step away | the panel's buttons |
 | City map, routes | M (↑↓ pick a place, Enter set a route) | MAP |
 | Sound on/off | pause menu (Sound) | in the pause menu |
@@ -44,8 +45,9 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   a friendship value that grows when you chat once a day.
 - **Traffic**: cars and taxis on the road grid that turn at junctions, queue, stop
   for pedestrians, and honk if you stand in the road.
-- **Money**: cash + bank balance, working ATMs (deposit/withdraw), vending machines,
-  a lantern seller and a fortune teller in the night market.
+- **Money**: cash + bank balance, working ATMs (deposit, withdraw, and a statement of
+  your wages, rent and card payments), vending machines, a lantern seller and a fortune
+  teller in the night market.
 - **Apartments**: you start in **Unit 3B**, a cramped walk-up above a laundromat in
   Old Market. Two better homes are up for lease (follow the blue diamonds):
   **Loft 4** at The Kiln Works in Kiln Heights, and the **Meridian Tower Penthouse**
@@ -57,12 +59,18 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   road from the Lantern Quarter. Open 10 PM to 4 AM. See below.
 - **A burger joint**: **GULLY'S** in Greenway, a little harbour-town fast food chain
   ("Snatch a bite!" since 1987). Open 6 AM to 2 AM. See below.
+- **A mall**: the **Halcyon Galleria** Downtown: a skylit two-storey atrium, escalators,
+  a fountain, a thrift shop, a streetwear and sneaker shop and a luxury boutique.
+  Open 10 AM to 10 PM. See below.
+- **Clothes you own and status**: what you wear (and where you live) gives you a status,
+  shown under your money. People notice. See below.
 - **Needs**: hunger, energy, hygiene, fun and social, shown under your money with your
   mood. Eat, sleep, shower, have fun and talk to people to keep them up. See below.
 - **City map** (M, or MAP on touch): the real blocks and buildings, coloured by district,
   with every place worth going to, when it's open, and a route you can follow. See below.
-- **Customization**: the wardrobe (C) edits skin, hair style/colour, top style
-  (tee, long sleeve, jacket over a shirt), colours, bottoms, shoes, height, build.
+- **Customization**: the wardrobe (C) edits skin, hair style and colour, height, build,
+  and what you wear: the free basics in any colour (tee, long sleeve, jacket, trousers or
+  shorts, shoes), plus every piece you've bought.
 - **Save**: autosaves to localStorage ("memory card"): position, time, money,
   looks, friendships, needs, what's in your fridge, Gull Box toys, settings.
 - **Sound**: all synthesised with WebAudio: city rumble, wind, crickets, footsteps,
@@ -320,6 +328,56 @@ Theo and two of the cooks take a break. The **staff gate** at the west end of th
   baskets and grill loads, anything burnt, bags, and what was docked. Working drains energy,
   hygiene and fun faster; the register is a bit social; the meal fixes your hunger.
 
+## The Halcyon Galleria (shopping)
+
+A two-storey mall Downtown, between Greenway Park and the Meridian tower, behind a plaza
+with a slowly turning gold ring sculpture, benches and planters. Open 10 AM to 10 PM; at
+ten the guard, Pruitt, walks the last shoppers out.
+
+- **The atrium**: a gabled glass roof (the real sky, day and night), big globe pendants,
+  a marble floor, a three-tier fountain (toss a coin, 25¢, and make a wish), palms, a
+  directory, an up and a down escalator that really carry you, glass balconies with
+  benches for people-watching, PRETZEL PILOT under the back walkway (Benny, $4.50, cash
+  only) and an ATM. Smooth 2003 mall music in the atrium; each shop plays its own.
+- **RACK & RUIN** (thrift, ground floor, Dot): brick walls, rolling racks, a shoe shelf,
+  a hats-and-shades spinner, the bargain bin, a curtained fitting room, a crackly radio.
+  $3 to $30. The stock changes every morning and every piece is one of a kind; some days
+  the bin hides a gem (a 1994 VELLARD jacket for $40, a SPLITGRAIN sample hoodie).
+- **SPLITGRAIN** (streetwear, ground floor, Kez): concrete and plywood, a backlit sneaker
+  wall, the tee table, hoodie and jacket rails, cargos, caps, shades and chains, a heavy
+  slow beat. $28 to $165. **Saturday 10 AM: the Grain Runner 9 'Harbour' drop**: twelve
+  pairs, a line on the plaza from 8:45 (join it with E), first come first served.
+- **MAISON VELLARD** (luxury, upper floor, Céleste, with Anton on the door): marble,
+  mannequins on plinths, lit niches, a black marble till, the watch and jewellery case,
+  a salon with a velvet sofa and a gold-framed mirror, lounge music. $480 to $48,000: the
+  silk shirt, the cashmere coats, the monogram jacket, loafers, the 18k Cuban link chain,
+  the **Meridian Chronograph** ($14,500) and the **Meridian Noir** ($48,000).
+- Upstairs across the atrium: ROOMSET (furniture, "opening soon") and BRIGHTWIRE (closed
+  for refit, a wall of TVs still on behind the shutter).
+- **Shopping**: browse any rack, wall, table or case (E). Each piece shows its price and
+  how much status it gives. **Try it on** (you really wear it round the shop; the
+  mirrors turn the camera on you) or **bag it**, then pay at the till, cash or card:
+  a receipt, a ka-ching, and the shop's bag in your hand. Walk out without paying and the
+  gate shrieks and it all goes back. **"I want this"** pins a piece under your money with
+  a bar that fills as you save. Buying something new is a fun boost.
+- **The staff notice you**: Dot loves everyone; Kez only looks up if your fit is good;
+  Céleste asks a Nobody if they're lost and brings champagne to the salon for anyone
+  Flashy or better (or who spent $1,000 there today).
+
+## Clothes and status
+
+- Every piece is data in `src/game/fashion.js` (all brands made up): basics (free,
+  any colour), RACK & RUIN, SPLITGRAIN and MAISON VELLARD. New things to wear: hoodies,
+  long coats, caps and beanies, sunglasses, gold and steel chains, watches, logo prints
+  on the chest or across the back of a jacket, two-tone soles.
+- **Status** adds up what you're wearing and where you live (the loft and the penthouse
+  count): Nobody, Regular, Put-Together, Fresh, Sharp, Flashy, Rich, Untouchable.
+  It sits under your money as gold pips; the wardrobe shows it as you change.
+- **The world notices**: people turn their heads as you pass (more of them the higher you
+  climb) and now and then say something about your Meridian; Jo at GULLY'S asks if you're
+  slumming it; Dmitri waves Flashy and up past the SUBSTATION line; shop staff change
+  their tune. People around the city wear the brands too (more of it Downtown).
+
 ## How the PS2 look works
 
 It's mostly a rendering recipe, not expensive art (see `src/render/ps2pipeline.js`):
@@ -357,18 +415,20 @@ src/
                           apartments (doors, markers, interiors), the HALCYON 24 store,
                           the SUBSTATION club (club.js) and the room under it
                           (undercurrent.js), GULLY'S (gullys.js, and the mascot figure in
-                          gullyFigure.js)
+                          gullyFigure.js), the Halcyon Galleria (galleria.js)
   world/interior/         room/wall builder, furniture kit, baked lighting, apartment layouts
   actors/                 crowd renderer (instanced puppets, walk/carry/dance/sit poses),
                           appearance model, player + camera, pedestrians AI, traffic,
                           clubbers (the club's staff, queue and crowd), diners (GULLY'S
-                          crew, customers, orders and trays)
+                          crew, customers, orders and trays), shoppers (the Galleria's
+                          staff, mannequins and shoppers)
   game/                   clock + save system, needs (needs.js), NPC dialogue data, the
                           store job, the club's dance game (dance.js), photo booth
                           (photobooth.js), theme nights (clubNights.js), bar job
                           (barJob.js) and DJ set (djSet.js), GULLY'S menu data
-                          (gullysMenu.js), your visit there (gullysVisit.js) and the
-                          crew job (crewJob.js)
+                          (gullysMenu.js), your visit there (gullysVisit.js), the
+                          crew job (crewJob.js), clothes and status (fashion.js) and
+                          shopping at the Galleria (shopping.js)
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls,
                           the city map (map.js; its places and hours are game/places.js,
                           the route beam is world/waypoint.js)
@@ -378,8 +438,8 @@ src/
 ```
 
 Performance notes: static scenery is merged into one mesh per material and every
-person is drawn with ~12 instanced meshes total, so a frame is roughly 60–140 draw
-calls. It should run well on integrated GPUs and phones.
+person is drawn with ~20 instanced meshes total (body parts plus what they wear), so a
+frame is roughly 70–140 draw calls. It should run well on integrated GPUs and phones.
 
 ## Roadmap (suggested order)
 
@@ -387,17 +447,24 @@ The big goal: **lots of cool places to hang out**. Every new space (diner, arcad
 rooftop, karaoke bar, record shop, a 2 AM laundromat, the pier) gets a real walk-in
 interior with the same detail, light and sound as the apartments and the store.
 
-1. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
+1. **Being rich, phase 2: home and collections**: ROOMSET opens upstairs at the
+   Galleria (a furniture showroom); a placement mode for your apartment; display walls
+   for sneakers, art and the Gull Box toys; deliveries to your door; penthouse upgrades
+   (an aquarium, a home bar, a hot tub on the terrace).
+2. **Being rich, phase 3: getting rich**: promotions (shift manager at GULLY'S, then
+   franchisee), investing (a ticker of made-up companies at the bank), buying property
+   and collecting rent, reselling limited sneaker drops.
+3. **Being rich, phase 4: the high life**: BRIGHTWIRE reopens, a car dealership and
+   cars, a members' club and pool on the Meridian tower's roof, fine dining, hired help,
+   bottle service at SUBSTATION.
+4. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
    noodle bar cook, courier, office temp. Promotions and raises at the store.
-2. **Economy**: rent and bills, a bank screen with transactions, shop inventories.
-3. **Clothes shops**: buy items that unlock in the wardrobe; outfits as data.
-4. **Furniture**: buy and place furniture in your apartment (the kit already has the
-   pieces; this needs a placement mode and saving the layout).
-5. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
-6. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
-7. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
-8. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
-9. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
+5. **Economy**: bills, shop inventories.
+6. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
+7. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
+8. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
+9. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
+10. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
     streets, chat and visiting apartments; the bank must move server‑side then.
 
 All names, shops and brands in the game are made up.
