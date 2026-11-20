@@ -2,6 +2,7 @@ import { CITY } from '../config.js';
 import { Rng, damp, smoothstep, angleLerp } from '../core/rng.js';
 import { randomAppearance } from './appearance.js';
 import { FIRST_NAMES } from '../game/dialogue.js';
+import { nightsFor } from '../game/clubNights.js';
 
 // Everyone at SUBSTATION: the staff, the queue on the pavement, and a pool of
 // clubbers who arrive through the lobby, dance, prop up the bar, sit in the
@@ -17,10 +18,10 @@ const POOL = 56;
 const QUEUE = 8;
 const WALK = 1.25;
 
-function clubLook(rng) {
+function clubLook(rng, look = ['#141418', '#2b2b30', '#e8e4dc', '#7a2330', '#1f2e4a', '#e86a2a', '#d77aa0', '#5ac8d8']) {
   const a = randomAppearance(rng);
-  // dressed for a night out: darker tops, more jackets, the odd bright colour
-  if (rng.chance(0.55)) a.top = rng.pick(['#141418', '#2b2b30', '#e8e4dc', '#7a2330', '#1f2e4a', '#e86a2a', '#d77aa0', '#5ac8d8']);
+  // dressed for a night out (in tonight's colours): darker tops, more jackets, the odd bright colour
+  if (rng.chance(0.6)) a.top = rng.pick(look);
   if (rng.chance(0.4)) a.topStyle = 2;
   a.jacket = rng.pick(['#141418', '#2b2b30', '#5a4632', '#7a2330', '#3a3a6a', '#c9b48a']);
   a.bottomStyle = rng.chance(0.08) ? 1 : 0;
@@ -52,6 +53,13 @@ export class Clubbers {
     const who = (group, k, vibe) => ({ key: `club:${group}:${k}`, name: FIRST_NAMES[(k * 7 + group.length * 5 + 3) % FIRST_NAMES.length], vibe: vibe ?? VIBES[(k * 5 + group.length) % VIBES.length] });
     this.pool = [];
     for (let k = 0; k < POOL; k++) this.pool.push({ c: mk(clubLook(rng)), mode: 'off', path: [], spot: null, groove: rng.float(-0.06, 0.06), move: rng.int(0, 3), nextMove: 0, ox: 0, oz: 0, ...who('floor', k) });
+    // regulars: everyone has their usual nights
+    for (const a of this.pool) a.nights = nightsFor(a.k ?? this.pool.indexOf(a), a.vibe);
+    this.greeted = new Map(); // key -> night they came over to say hi
+    this.greetT = 8;
+    this.greeter = null;
+    this.djAway = false; // the DJ steps aside while you play
+    this.offShift = new Set(); // bartenders you're covering for
     // VIPs on the balcony and smokers on the roof just stay put
     const sharp = () => ({ ...clubLook(rng), topStyle: 2, jacket: rng.pick(['#141418', '#e8e4dc', '#7a2330', '#c9b48a']) });
     this.vips = [];
@@ -68,6 +76,28 @@ export class Clubbers {
     this.leaveTimer = 0;
     this.queueTimer = 4;
     this.seen = false;
+  }
+
+  /** Tonight's theme: everyone turns up dressed for it. */
+  setNight(night) {
+    if (this.night === night) return;
+    this.night = night;
+    const rng = new Rng(night.id.length * 977 + 13);
+    for (const a of [...this.pool, ...this.queue, ...this.roofers]) this.crowd.setAppearance(a.c.id, clubLook(rng, night.look));
+  }
+
+  /** How many are waiting in line outside. */
+  queueLength() {
+    return this.queue.filter((q) => q.mode === 'wait').length;
+  }
+
+  /** Who walks in next: friends whose night it is, then regulars, then anyone (a big night needs everyone). */
+  nextArrival(weekday, rel = {}) {
+    const off = this.pool.filter((p) => p.mode === 'off');
+    if (!off.length) return null;
+    const score = (a) => (a.nights.has(weekday) ? 2 : 0) + ((rel[a.key] ?? 0) >= 20 && a.nights.has(weekday) ? 2 : 0) + this.rng.next();
+    off.sort((p, q) => score(q) - score(p));
+    return off[0];
   }
 
   /** People who can open the club's street doors. */
@@ -163,7 +193,13 @@ export class Clubbers {
       if (!c.visible) continue;
       this.place(c, st.spot.x, st.spot.z, undefined, st.spot.y ?? null);
       if (st.spot.y != null) c.ground = st.spot.y;
-      if (key === 'dj') {
+      if (key === 'dj' && this.djAway && club.djAsideSpot) {
+        // watching your set from the side of the booth
+        this.place(c, club.djAsideSpot.x, club.djAsideSpot.z, club.djAsideSpot.yaw);
+        c.ground = club.origin.y;
+        c.work = false;
+        c.nod = 0.12 * hit;
+      } else if (key === 'dj') {
         c.yaw = 0;
         c.work = open;
         c.nod = open ? 0.18 * hit : 0;
@@ -186,7 +222,7 @@ export class Clubbers {
     }
     for (const b of this.bartenders) {
       const c = b.c;
-      c.visible = show && staffOn;
+      c.visible = show && staffOn && !this.offShift.has(b);
       if (!c.visible) continue;
       if (!c._placed) {
         const sp = club.bartenderSpots[b.spot];
@@ -223,7 +259,7 @@ export class Clubbers {
     // the player isn't looking: just make it so
     if (!inside || !this.seen) {
       while (present.length < target) {
-        const a = this.pool.find((p) => p.mode === 'off');
+        const a = this.nextArrival(s.weekday, s.rel);
         if (!a) break;
         this.assign(a, true);
         present.push(a);
@@ -234,7 +270,7 @@ export class Clubbers {
       // the player is inside: people walk in and out through the lobby
       if (present.length < target && (this.arriveTimer -= dt) <= 0) {
         this.arriveTimer = rng.float(1.5, 4);
-        const a = this.pool.find((p) => p.mode === 'off');
+        const a = this.nextArrival(s.weekday, s.rel);
         if (a) this.assign(a, false);
       }
       const leaveRate = s.status === 'lightsup' ? 0.35 : rng.float(2, 5);
@@ -245,6 +281,22 @@ export class Clubbers {
       }
     }
     this.seen = inside;
+
+    // a friend who's in tonight comes over to say hi (one at a time)
+    if (open && inside && s.playerFree && !this.greeter && (this.greetT -= dt) <= 0) {
+      this.greetT = rng.float(6, 14);
+      const night = s.nightIndex;
+      const friend = present.find((a) => (s.rel?.[a.key] ?? 0) >= 20 && this.greeted.get(a.key) !== night && (a.mode === 'dance' || a.mode === 'bar' || a.mode === 'sit') && !a.talking && this.partner !== a);
+      if (friend) {
+        this.greeted.set(friend.key, night);
+        this.greeter = friend;
+        friend.returnMode = friend.mode;
+        friend.mode = 'greet';
+        friend.greetPhase = 'go';
+        friend.greetT = 20;
+        friend.c.sit = false;
+      }
+    }
 
     // occasionally someone swaps the floor for the bar, or the bar for the floor
     if (open && inside && rng.chance(dt * 0.12)) {
@@ -263,6 +315,10 @@ export class Clubbers {
       }
       c.visible = hallVisible;
       c.beat = beat;
+      if (a.mode === 'greet') {
+        this.updateGreeter(a, dt, s);
+        continue;
+      }
       if (a.mode === 'walk' || a.mode === 'leave') {
         c.dance = damp(c.dance || 0, 0, 8, dt);
         c.sit = false;
@@ -282,6 +338,8 @@ export class Clubbers {
           c.move = a.move;
         }
         let want = open ? (S ? 0.45 + 0.55 * S.energy : 0.7) : 0;
+        // during your DJ set the floor follows the crowd's energy
+        if (s.crowdBoost != null) want *= 0.3 + 0.9 * s.crowdBoost;
         if (a.talking) want = 0.15;
         if (this.partner === a) {
           want = 1;
@@ -405,6 +463,41 @@ export class Clubbers {
     }
   }
 
+  /** A friend walking over to say hi, chatting for a moment, and going back to what they were doing. */
+  updateGreeter(a, dt, s) {
+    const c = a.c;
+    const pp = s.playerPos;
+    c.dance = damp(c.dance || 0, 0, 8, dt);
+    c.sit = false;
+    const end = () => {
+      a.greetPhase = 'back';
+      c.talk = false;
+      a.path = [{ x: a.spot.x, z: a.spot.z }];
+    };
+    if (a.greetPhase === 'go') {
+      const dx = c.x - pp.x;
+      const dz = c.z - pp.z;
+      const d = Math.hypot(dx, dz) || 1;
+      a.path = [{ x: pp.x + (dx / d) * 0.95, z: pp.z + (dz / d) * 0.95 }];
+      this.walk(a, dt);
+      if (d < 1.15) {
+        a.greetPhase = 'talk';
+        a.greetT = 4;
+        s.onGreet?.(a);
+      } else if ((a.greetT -= dt) <= 0 || !s.playerFree) end();
+    } else if (a.greetPhase === 'talk') {
+      this.idle(c, dt);
+      c.talk = true;
+      c.yaw = angleLerp(c.yaw, Math.atan2(pp.x - c.x, pp.z - c.z), Math.min(1, dt * 6));
+      if ((a.greetT -= dt) <= 0) end();
+    } else if (this.walk(a, dt)) {
+      a.mode = a.returnMode ?? 'dance';
+      if (a.mode === 'sit') c.sit = true;
+      this.arrive(a);
+      this.greeter = null;
+    }
+  }
+
   /** Fill (or empty) a group of people who just sit or stand in fixed spots. */
   settle(list, want, spots, instant) {
     const on = list.filter((a) => a.mode !== 'off');
@@ -449,7 +542,7 @@ export class Clubbers {
 
   /** Seats nobody's sitting in (for the player). */
   freeSeats() {
-    return [...this.club.seats, ...this.club.vipSeats, ...this.club.roofSeats].filter((sp) => !this.taken.has(sp));
+    return [...this.club.seats, ...this.club.vipSeats, ...this.club.roofSeats, ...(this.club.greenSeats ?? [])].filter((sp) => !this.taken.has(sp));
   }
 
   // ==========================================================================
@@ -533,6 +626,7 @@ export class Clubbers {
   }
 
   despawn(a) {
+    if (this.greeter === a) this.greeter = null;
     if (a.spot) this.taken.delete(a.spot);
     a.spot = null;
     a.mode = 'off';

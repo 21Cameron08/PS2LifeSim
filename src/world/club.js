@@ -7,6 +7,8 @@ import { makeInteriorUniforms, makeFxUniforms } from './interior/bake.js';
 import { createClubTextures, signUV } from '../render/clubTextures.js';
 import { additive } from '../render/materials.js';
 import { BPM, sectionAt } from '../audio/clubTrack.js';
+import { NIGHTS } from '../game/clubNights.js';
+import { makeCanvas, makeTex } from '../render/textures.js';
 
 // SUBSTATION: a nightclub in a decommissioned 1950s power substation in Ember Row,
 // across the road from the Lantern Quarter. Like HALCYON 24 it's part of the
@@ -33,15 +35,8 @@ const FLOOR = { x0: 8.1, z0: 3.6, n: 8 };
 const ROOF = 8.0; // top of the concrete shell above the club floor
 const COIL = { x: 11.7, y: 4.7 };
 
-// colour scenes for the washes; a new one every 8 bars
-const PALETTES = [
-  ['#ff2a6a', '#2a5aff'],
-  ['#ff7a1a', '#9a2aff'],
-  ['#1affb0', '#ff2ad0'],
-  ['#ffd02a', '#2ad8ff'],
-  ['#ff2a2a', '#ffffff'],
-  ['#8a2aff', '#2affd0'],
-].map((p) => p.map((h) => new THREE.Color(h)));
+// colour scenes for the washes come from tonight's theme (game/clubNights.js); a new one every 8 bars
+const toPalettes = (night) => night.palettes.map((p) => p.map((h) => new THREE.Color(h)));
 
 const ROOF_DECK = ROOF + 0.36; // the terrace decking
 const ROOF_DECK_Z = 8.6;
@@ -80,7 +75,11 @@ export class Club {
     this.dyn = []; // LED strips etc. whose colour follows the lights: { mat, ch, k }
     this.buildInterior(kit);
     kit.build(this.group, { stickers: { alphaTest: 0.5 } }, { fog: true });
-    for (const b of kit.colliders.boxes) city.colliders.add(b.x0, b.z0, b.x1, b.z1, b.y0, b.y1);
+    for (const b of kit.colliders.boxes) {
+      const nb = city.colliders.add(b.x0, b.z0, b.x1, b.z1, b.y0, b.y1);
+      if (Math.abs(b.x0 - (this.origin.x + 19.4)) < 0.01 && Math.abs(b.z0 - (this.origin.z + 12.8)) < 0.01) this.barFlap = nb;
+    }
+    this.barFlapTop = this.barFlap?.y1 ?? 1.1;
     this.buildEffects();
     this.buildExterior();
     this.buildDoors();
@@ -96,6 +95,47 @@ export class Club {
     this.floorCol = new THREE.Color();
     this.doorOpen = 0;
     this.allowPlayer = false;
+    this.setNight(NIGHTS.house);
+  }
+
+  /** Tonight's theme: wash colours, floor patterns, strobes, lasers, the TONIGHT sign by the door. */
+  setNight(night) {
+    if (this.night === night) return;
+    this.night = night;
+    this.palettes = toPalettes(night);
+    const g = this.tonightG;
+    if (!g) return;
+    g.fillStyle = '#0a0a0e';
+    g.fillRect(0, 0, 256, 96);
+    g.strokeStyle = night.sign[0];
+    g.lineWidth = 3;
+    g.strokeRect(4, 4, 248, 88);
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillStyle = '#d8d8e0';
+    g.font = 'bold 13px Arial, sans-serif';
+    g.fillText('T O N I G H T', 128, 19);
+    g.shadowColor = night.sign[0];
+    g.shadowBlur = 10;
+    g.fillStyle = night.sign[0];
+    g.font = `bold ${night.name.length > 9 ? 26 : 32}px "Arial Black", Impact, sans-serif`;
+    g.fillText(night.name, 128, 49, 236);
+    g.shadowBlur = 0;
+    g.fillStyle = night.sign[1];
+    g.font = 'bold 12px Arial, sans-serif';
+    g.fillText(`${night.blurb.toUpperCase()} · $${night.cover}`, 128, 78, 236);
+    this.tonightTex.needsUpdate = true;
+  }
+
+  /** Lift the flap at the end of the bar (staff only). */
+  setBarFlap(open) {
+    if (this.barFlap) this.barFlap.y1 = open ? -10 : this.barFlapTop;
+  }
+
+  /** OVERLOAD: confetti cannons when the drop lands. */
+  confettiBurst() {
+    this.confettiT = 0;
+    this.confetti.visible = true;
   }
 
   /** local -> world */
@@ -127,7 +167,7 @@ export class Club {
 
   ceilingAt(p) {
     const z = this.zoneAt(p);
-    const h = z === 'coat' || z === 'lobby' ? LOBBY_H : z === 'stairs' ? 6.0 : z === 'toilets' ? 3.0 : z === 'roof' ? Infinity : H;
+    const h = z === 'coat' || z === 'lobby' ? LOBBY_H : z === 'stairs' ? 6.0 : z === 'toilets' || z === 'green' ? 3.0 : z === 'roof' ? Infinity : H;
     return this.origin.y + h;
   }
 
@@ -221,6 +261,7 @@ export class Club {
       trim: '#c8a04a',
       zone: 'hall',
     });
+    kit.room('green', 0, 0, 5.0, 4.2, { floor: 'carpet', floorColor: '#3a2a30', wall: 'plaster', wallColor: '#4a3a46', ceil: '#2a2026', ceilKey: 'solid', base: BLACK, trim: '#c8a04a', h: 3.0 });
     kit.room('toilets', 18.4, 0, W, 5.4, {
       floor: 'penny',
       floorColor: '#7a8a84',
@@ -311,6 +352,7 @@ export class Club {
     P(11.7, 1.8).light(0, 2.6, 0, '#fff0d0', 0.25, true);
 
     this.buildHall(kit, P, R90, PI, BLACK);
+    this.buildGreenRoom(kit, P, R90, PI, BLACK);
     this.buildFront(kit, P, R90, PI, BLACK);
     this.buildToilets(kit, P, R90, PI, BLACK);
     this.buildVip(kit, P, R90, PI, BLACK);
@@ -564,6 +606,62 @@ export class Club {
     this.lobbyDoor = this.w((ARCH[0] + ARCH[1]) / 2, FRONT + 0.6);
   }
 
+  /** Backstage: a worn sofa, the DJ's rider, a mirror ringed with bulbs, record crates. */
+  buildGreenRoom(kit, P, R90, PI, BLACK) {
+    F.rug(P(1.7, 2.1, R90), { w: 2.4, l: 1.7, key: 'rugPersian' });
+    F.sofa(P(0.02, 2.1, R90), { w: 2.0, col: '#5a2a2a', style: 'old', accent: '#c8a04a' });
+    F.coffeeTable(P(1.45, 2.1, R90), { w: 1.0, d: 0.5, col: '#2a2a30' });
+    // the rider: bottles, a fruit bowl, crisps, a laminated set list
+    const R = P(1.45, 2.1);
+    for (const [x, z, col] of [
+      [-0.1, -0.3, '#3a6a2a'],
+      [0.05, -0.18, '#c8c8b8'],
+      [-0.12, 0.05, '#8a1a2a'],
+    ])
+      R.geo('solid', new THREE.CylinderGeometry(0.035, 0.04, 0.3, 7), x, 0.6, z, C(col));
+    F.fruitBowl(R, { x: 0.05, y: 0.45, z: 0.25 });
+    R.box('solid', -0.15, 0.45, 0.12, 0.05, 0.452, 0.3, C('#f4f0e0'));
+    // mirror with a frame of bulbs on the back wall, over a little counter
+    const M = P(3.4, 0.0);
+    M.box('solid', -0.7, 0.75, 0, 0.7, 0.8, 0.4, C('#2a2a30'), { bottom: true });
+    M.box('solid', -0.7, 0, 0.02, 0.7, 0.75, 0.38, C('#3a3a40'));
+    M.quad('mirror', [-0.55, 1.05, 0.012], [0.55, 1.05, 0.012], [0.55, 1.95, 0.012], [-0.55, 1.95, 0.012], [0, 0, 1], [0, 0, 1, 1], C('#c8d0d4'));
+    for (let k = 0; k < 6; k++) M.geo('glow', new THREE.SphereGeometry(0.035, 6, 4), -0.62 + k * 0.248, 2.02, 0.045, C('#fff2c8'));
+    for (let k = 0; k < 4; k++)
+      for (const x of [-0.62, 0.62]) M.geo('glow', new THREE.SphereGeometry(0.035, 6, 4), x, 1.15 + k * 0.25, 0.045, C('#fff2c8'));
+    M.light(0, 1.6, 0.5, '#ffe2b0', 0.8, true);
+    M.collide(-0.7, 0, 0.7, 0.4, 0.8);
+    // record crates and a clothes rail
+    const RC = P(4.55, 0.55);
+    for (let k = 0; k < 2; k++) {
+      RC.box('solid', -0.3, k * 0.32, -0.25, 0.3, k * 0.32 + 0.3, 0.25, C('#7a5a3a'));
+      for (let r = 0; r < 9; r++) RC.box('solid', -0.27 + r * 0.06, k * 0.32 + 0.3, -0.2, -0.24 + r * 0.06, k * 0.32 + 0.36, 0.2, C(['#141418', '#c83a3a', '#2a5aaa', '#e8e4dc', '#c8a04a'][r % 5]));
+    }
+    RC.collide(-0.3, -0.25, 0.3, 0.25, 0.7);
+    const CR = P(2.0, 3.95);
+    CR.box('solid', -0.7, 1.6, -0.015, 0.7, 1.63, 0.015, C('#8a8c90'));
+    for (const x of [-0.7, 0.7]) CR.box('solid', x - 0.015, 0, -0.015, x + 0.015, 1.63, 0.015, C('#8a8c90'));
+    for (let k = 0; k < 5; k++) CR.box('fabric', -0.55 + k * 0.26, 0.75, -0.12, -0.4 + k * 0.26, 1.55, 0.12, C(['#141418', '#7a2330', '#2a2a30', '#c9b48a', '#3a3a6a'][k]));
+    CR.collide(-0.72, -0.15, 0.72, 0.15, 1.65);
+    F.floorLamp(P(0.4, 3.75), { col: '#2a2a2a', shade: '#e8b878', power: 0.7 });
+    P(2.5, 2.1).light(0, 2.7, 0, '#ffc890', 0.85, true);
+    // tour laminates and flyers
+    for (let k = 0; k < 3; k++) P(0.006, 0.8 + k * 0.55 + (k > 1 ? 1.9 : 0), R90).panel('posters', -0.2, 1.5, 0.2, 2.2, 0, [(k % 4) / 4, 0, ((k % 4) + 1) / 4, 1]);
+    this.greenSeats = [1.7, 2.5].map((z) => ({ ...xz(this.w(0.42, z)), y: this.origin.y, yaw: R90, out: xz(this.w(1.0, z < 2.1 ? 1.0 : 3.2)), green: true }));
+    this.greenSpots = { rider: xz(this.w(1.45, 2.1)), mirror: xz(this.w(3.4, 0.75)), records: xz(this.w(4.0, 1.0)), inside: { ...xz(this.w(4.4, 3.35)), yaw: -R90 }, outside: { ...xz(this.w(5.65, 3.35)), yaw: R90 } };
+    this.djAsideSpot = { ...xz(this.w(7.45, 2.35)), yaw: R90 };
+
+    // the door behind the coil: a low steel hatch in the back wall over the DJ's platform
+    const DR = P(COIL.x, 0.0);
+    DR.box('solid', -0.48, 0.9, 0.006, 0.48, 2.56, 0.045, C('#2e3034'));
+    DR.box('solid', -0.54, 0.9, 0.006, -0.48, 2.62, 0.05, C('#1a1a1e'));
+    DR.box('solid', 0.48, 0.9, 0.006, 0.54, 2.62, 0.05, C('#1a1a1e'));
+    DR.box('solid', -0.54, 2.56, 0.006, 0.54, 2.62, 0.05, C('#1a1a1e'));
+    for (const y of [1.1, 2.35]) for (const x of [-0.38, 0.38]) DR.box('solid', x - 0.02, y - 0.02, 0.045, x + 0.02, y + 0.02, 0.055, C('#5a5a60'));
+    DR.box('solid', 0.3, 1.62, 0.045, 0.36, 1.78, 0.075, C('#8a8c90'));
+    this.hatch = this.w(COIL.x, 0.06, 1.73);
+  }
+
   buildFront(kit, P, R90, PI, BLACK) {
     // --- coat check: counter in the hatch, rails of coats, a tip jar
     const CC = P(3.6, 15.7, R90);
@@ -769,6 +867,26 @@ export class Club {
     const s2 = new GeoBuilder();
     s2.quad([o.x + 19.393, o.y + 1.0, o.z + 12.8], [o.x + 19.393, o.y + 1.0, o.z + 6.0], [o.x + 19.393, o.y + 1.05, o.z + 6.0], [o.x + 19.393, o.y + 1.05, o.z + 12.8], [-1, 0, 0]);
     strip(s2, 2, 1.4);
+    // 3:33: violet light leaking round the hatch behind the coil
+    const seam = new GeoBuilder();
+    const hz0 = o.z + 0.058;
+    const hx = o.x + COIL.x;
+    for (const [x0, y0, x1, y1] of [
+      [-0.56, 0.9, -0.5, 2.64],
+      [0.5, 0.9, 0.56, 2.64],
+      [-0.56, 2.58, 0.56, 2.64],
+    ])
+      seam.quad([hx + x0, o.y + y0, hz0], [hx + x1, o.y + y0, hz0], [hx + x1, o.y + y1, hz0], [hx + x0, o.y + y1, hz0], [0, 0, 1]);
+    this.seamMat = additive({ map: null, color: new THREE.Color('#b06aff'), opacity: 0 });
+    const seamMesh = new THREE.Mesh(seam.build(), this.seamMat);
+    seamMesh.renderOrder = 3;
+    this.group.add(seamMesh);
+    this.spillMat = additive({ map: glowTex, color: new THREE.Color('#9a4aff'), opacity: 0 });
+    const spill = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.0), this.spillMat);
+    spill.position.set(hx, o.y + 1.75, o.z + 0.07);
+    spill.renderOrder = 3;
+    this.group.add(spill);
+
     // the coil's glowing core
     const ring = new GeoBuilder();
     ring.addGeometry(new THREE.TorusGeometry(1.42, 0.05, 6, 48), trs(o.x + COIL.x, o.y + COIL.y, o.z + 0.42));
@@ -855,6 +973,26 @@ export class Club {
     this.lasers.frustumCulled = false;
     this.lasers.renderOrder = 4;
     this.group.add(this.lasers);
+
+    // confetti for OVERLOAD's drops: paper squares that flutter down from the truss
+    const CN = 220;
+    const cg = new THREE.BufferGeometry();
+    cg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(CN * 3), 3));
+    const cc = new Float32Array(CN * 3);
+    const crng = new Rng(77);
+    const cols = ['#c8ff2a', '#ff2a6a', '#ffffff', '#2affd0', '#ffd23a'].map((h) => new THREE.Color(h));
+    this.confettiSeeds = [];
+    for (let k = 0; k < CN; k++) {
+      const c = crng.pick(cols);
+      cc.set([c.r, c.g, c.b], k * 3);
+      this.confettiSeeds.push([crng.float(FLOOR.x0 - 1, FLOOR.x0 + FLOOR.n * TILE + 1), crng.float(FLOOR.z0 - 1, FLOOR.z0 + FLOOR.n * TILE + 1), crng.float(0.35, 0.8), crng.float(0, 6.28), crng.float(0, 0.6)]);
+    }
+    cg.setAttribute('color', new THREE.Float32BufferAttribute(cc, 3));
+    this.confetti = new THREE.Points(cg, new THREE.PointsMaterial({ size: 0.07, vertexColors: true, fog: false }));
+    this.confetti.frustumCulled = false;
+    this.confetti.visible = false;
+    this.group.add(this.confetti);
+    this.confettiT = 99;
 
     // haze: big soft sprites drifting under the roof
     const HN = 26;
@@ -1057,6 +1195,13 @@ export class Club {
     const signMat = new THREE.MeshLambertMaterial({ map: this.tex.clubSigns.map, emissive: '#ffffff', emissiveMap: this.tex.clubSigns.map, emissiveIntensity: 0.15 });
     this.signMat = signMat;
     decal(signMat, lx(8.2), ly(1.62), lx(10.0), ly(1.73), Z1 + 0.012, signUV(14));
+    // tonight's theme in a lightbox over the door signs
+    const [tc, tg] = makeCanvas(256, 96);
+    this.tonightG = tg;
+    this.tonightTex = makeTex(tc, { repeat: false });
+    this.tonightMat = new THREE.MeshLambertMaterial({ map: this.tonightTex, emissive: '#ffffff', emissiveMap: this.tonightTex, emissiveIntensity: 0.3 });
+    box(lx(8.15), ly(1.86), Z1, lx(10.05), ly(2.56), Z1 + 0.06, shade('#141416'));
+    decal(this.tonightMat, lx(8.2), ly(1.9), lx(10.0), ly(2.52), Z1 + 0.067);
     decal(signMat, lx(8.2), ly(1.48), lx(10.0), ly(1.59), Z1 + 0.012, signUV(10));
     decal(signMat, lx(8.2), ly(1.34), lx(10.0), ly(1.45), Z1 + 0.012, signUV(7));
     decal(signMat, lx(16.85), ly(2.2), lx(18.25), ly(2.29), Z1 + 0.012, signUV(6));
@@ -1370,6 +1515,9 @@ export class Club {
     this.flash = s.flash;
     const status = this.statusAt(s.hour);
     this.status = status;
+    // 3:33 to 3:45: the coil hums and the hatch behind it glows
+    this.humOpen = status === 'open' && s.hour >= 3.55 && s.hour < 3.75;
+    this.hum = damp(this.hum ?? 0, this.humOpen ? 1 : 0, 0.8, dt);
     // the song: follow the sound system when it's playing, otherwise keep time ourselves
     if (s.beat != null) this.beat = s.beat;
     else this.beat += (dt * BPM) / 60;
@@ -1394,7 +1542,9 @@ export class Club {
     const kick = S.kick ? Math.exp(-bph * (fl === 'full' ? 7 : 3.5)) : 0;
     this.kick = playing ? kick : 0;
     const bar = Math.floor(this.beat / 4);
-    const pal = PALETTES[(((Math.floor(bar / 8)) % PALETTES.length) + PALETTES.length) % PALETTES.length];
+    const PAL = this.palettes;
+    const pal = PAL[((Math.floor(bar / 8) % PAL.length) + PAL.length) % PAL.length];
+    const nid = this.night.id;
     const prog = (S.bar + (this.beat % 4) / 4) / S.len;
     const e = playing ? (S.name === 'build' ? 0.3 + prog * 0.6 : S.energy) : 0;
     const beatN = Math.floor(this.beat);
@@ -1409,7 +1559,7 @@ export class Club {
     this.wash[1].copy(breakdown ? _violet : B2).multiplyScalar(playing ? base + pk : 0);
     // strobe: only with flashing lights on full, on the last bars of the build and the drop's first beats
     let strobe = 0;
-    if (playing && fl === 'full') {
+    if (playing && fl === 'full' && this.night.strobe) {
       const sixteenth = Math.floor(this.beat * 4);
       if (S.name === 'build' && S.bar >= S.len - 1) strobe = sixteenth % 2 === 0 ? 1 : 0;
       if (S.name === 'drop' && S.bar % 8 === 0 && this.beat % 4 < 1) strobe = (this.beat * 8) % 1 < 0.35 ? 1 : 0;
@@ -1434,10 +1584,20 @@ export class Club {
           col = (i + j) % 2 ? A : B2;
         } else if (S.name === 'intro') {
           v = ((i + j + Math.floor(this.beat / 2)) % 2 ? 0.5 : 0.08) * (0.7 + 0.3 * kick);
+        } else if (nid === 'low' && S.name !== 'drop') {
+          // LOW VOLTAGE: slow ripples out from the middle
+          v = 0.2 + 0.35 * Math.max(0, Math.sin(dc * 1.1 - this.beat * 0.6));
+          col = dc < 2 ? B2 : A;
+        } else if (nid === 'static' && (S.name === 'groove' || S.name === 'drop')) {
+          // STATIC: tiles flicker like a dead channel
+          const h = hash(i, j, Math.floor(this.beat * 4));
+          v = h > 0.72 ? 0.9 : h > 0.5 ? 0.25 * (1 + kick) : 0.03;
+          col = h > 0.9 ? _white : h > 0.8 ? B2 : A;
         } else if (S.name === 'groove') {
           const row = Math.floor(this.beat * 2) % 8;
           v = j === row || j === 7 - row ? 0.95 : 0.1 + 0.25 * kick;
           col = j === row ? A : B2;
+          if (nid === 'overload' && (i + j + beatN) % 4 === 0) v = Math.max(v, 0.7 * kick);
         } else if (S.name === 'breakdown') {
           v = 0.25 + 0.25 * Math.sin(dc * 1.4 - this.beat * 1.2);
           col = _violet;
@@ -1462,7 +1622,7 @@ export class Club {
     const coilGlow = playing ? 0.35 + 0.65 * (S.name === 'drop' ? kick : 0.3 + 0.2 * Math.sin(this.beat * 0.5)) : 0.05;
     u[3].copy(avg).multiplyScalar(1.4).add(_c.copy(A).multiplyScalar(coilGlow * 0.5));
     for (const d of this.dyn) {
-      if (d.ch === 3) d.mat.color.copy(A).lerp(_white, 0.3).multiplyScalar(coilGlow * d.k);
+      if (d.ch === 3) d.mat.color.copy(A).lerp(_white, 0.3).lerp(_violet, this.hum).multiplyScalar(Math.max(coilGlow, this.hum * 1.2) * d.k);
       else d.mat.color.copy(this.wash[d.ch - 1]).multiplyScalar(d.k * (1 - this.lightsUp * 0.8));
     }
     this.cones.position.z = this.kick * 0.03;
@@ -1517,8 +1677,8 @@ export class Club {
     this.beamMesh.instanceMatrix.needsUpdate = true;
     this.beamMesh.instanceColor.needsUpdate = true;
 
-    // lasers only in the drop
-    const laserOn = playing && S.name === 'drop' ? (fl === 'off' ? 0.35 : 0.55 + 0.45 * kick) : 0;
+    // lasers in the drop (and through the groove on OVERLOAD); STATIC's are white and cyan
+    const laserOn = playing && (S.name === 'drop' || (this.night.lasers && S.name === 'groove')) ? (fl === 'off' ? 0.35 : (S.name === 'drop' ? 0.55 : 0.3) + 0.45 * kick) : 0;
     this.laserMat.opacity = laserOn;
     this.lasers.visible = laserOn > 0.01;
     if (this.lasers.visible) {
@@ -1529,7 +1689,22 @@ export class Club {
         this.lasers.setMatrixAt(k, _m.compose(this.laserOrigin, _q.setFromEuler(_e), _one));
       }
       this.lasers.instanceMatrix.needsUpdate = true;
-      this.laserMat.color.set(Math.abs(Math.floor(bar / 4)) % 2 ? '#3aff6a' : '#3ac8ff');
+      this.laserMat.color.set(nid === 'static' ? (Math.abs(Math.floor(bar / 2)) % 2 ? '#ffffff' : '#3ae8ff') : nid === 'overload' ? (Math.abs(Math.floor(bar / 4)) % 2 ? '#c8ff2a' : '#ff2a6a') : Math.abs(Math.floor(bar / 4)) % 2 ? '#3aff6a' : '#3ac8ff');
+    }
+    // confetti: fired on OVERLOAD's drops, flutters down, settles, fades
+    if (playing && this.night.confetti && S.name === 'drop' && S.bar === 0 && this.beat % 4 < 0.5 && this.confettiT > 4) this.confettiBurst();
+    if (this.confetti.visible) {
+      this.confettiT += dt;
+      const T = this.confettiT;
+      const cp = this.confetti.geometry.attributes.position;
+      this.confettiSeeds.forEach(([x, z, v, ph, delay], k) => {
+        const tt = Math.max(0, T - delay);
+        const y = Math.max(0.03, 5.4 - tt * v);
+        const sway = y > 0.05 ? Math.sin(tt * 3 + ph) * 0.25 : 0;
+        cp.setXYZ(k, o.x + x + sway, o.y + y, o.z + z + Math.cos(tt * 2.2 + ph) * 0.15);
+      });
+      cp.needsUpdate = true;
+      if (T > 16) this.confetti.visible = false;
     }
 
     // sparkler
@@ -1550,8 +1725,11 @@ export class Club {
     const hp = this.haze.geometry.attributes.position;
     this.hazeSeeds.forEach(([x, y, z, ph], k) => hp.setXYZ(k, o.x + x + Math.sin(time * 0.05 + ph) * 1.5, o.y + y + Math.sin(time * 0.07 + ph * 2) * 0.4, o.z + z + Math.cos(time * 0.04 + ph) * 1.2));
     hp.needsUpdate = true;
-    this.hazeMat.color.copy(this.wash[0]).add(this.wash[1]).multiplyScalar(0.5).addScalar(this.lightsUp * 0.3);
-    this.hazeMat.opacity = playing ? 0.07 : 0.02;
+    this.hazeMat.color.copy(this.wash[0]).add(this.wash[1]).multiplyScalar(0.5).addScalar(this.lightsUp * 0.3).lerp(_violet, this.hum * 0.8);
+    this.hazeMat.opacity = (playing ? 0.07 : 0.02) + this.hum * 0.05;
+    const seamFlick = 0.75 + 0.25 * Math.sin(time * 7.3) * Math.sin(time * 2.1);
+    this.seamMat.opacity = this.hum * seamFlick;
+    this.spillMat.opacity = this.hum * 0.35 * seamFlick;
     this.uvMat.color.setScalar(playing ? 0.75 + 0.25 * kick * pulseAmt : 0.25 + 0.3 * (1 - this.lightsUp));
 
     // lights for the people: stage fixtures follow the washes
@@ -1576,6 +1754,7 @@ export class Club {
     this.cartMat.opacity = cartOpen * night * 0.5;
     this.cartLamp.material.color.setRGB(cartOpen * 1.3, cartOpen * 1.0, cartOpen * 0.55);
     this.signMat.emissiveIntensity = 0.12 + night * 0.25 * this.neonOn;
+    this.tonightMat.emissiveIntensity = 0.2 + night * 0.9 * this.neonOn;
     const roofOn = status === 'open' ? 1 : 0;
     this.roofOn = damp(this.roofOn ?? 0, roofOn, 2, dt);
     this.bulbMat.opacity = this.roofOn * (0.35 + 0.65 * night) * (0.92 + 0.08 * Math.sin(time * 1.7));

@@ -639,6 +639,113 @@ export class UI {
     m.onClose?.(m.kind === 'wardrobe' ? m.app : m.s);
   }
 
+  // ---------------------------------------------------------------- SUBSTATION's bar (the bar job)
+  /** o: { order, orderText, ingredients, recipes, stock(), pour(steps) -> error|null, match(steps), onServe(tray), onClose } */
+  openBar(o) {
+    this.modal = 'bar';
+    this.barS = { ...o, glass: [], tray: [], note: '' };
+    $('bar').classList.remove('hidden');
+    document.body.classList.add('in-menu');
+    this.setPrompt(null);
+    this.renderBar();
+  }
+  renderBar() {
+    const b = this.barS;
+    const ing = Object.fromEntries(b.ingredients.map((i) => [i.id, i]));
+    const st = b.stock();
+    const bar = (v) => `<span class="bar-meter"><i style="width:${Math.round(v * 100)}%"></i></span>`;
+    const glass = b.glass.length ? b.glass.map((id) => `<span class="bar-chip">${ing[id].name}</span>`).join('<span class="bar-arrow">›</span>') : '<span class="bar-empty">— clean glass —</span>';
+    const want = [...b.order.items];
+    const tray = b.tray
+      .map((id) => {
+        const r = b.recipes.find((x) => x.id === id);
+        const i = want.indexOf(id);
+        if (i >= 0) want.splice(i, 1);
+        return `<div class="${i >= 0 ? 'ok' : 'bad'}"><span>${r.name}</span><span>${i >= 0 ? '✓' : '✗'}</span></div>`;
+      })
+      .join('');
+    const card = b.recipes.map((r) => `<div><b>${r.name}</b><span>${r.steps.map((s) => ing[s].name).join(' › ')}</span></div>`).join('');
+    $('bar').innerHTML = `<div class="reg-head"><span>SUBSTATION · BAR</span><span>${b.order.name.toUpperCase()}: ${b.orderText}</span></div>
+      <div class="bar-body"><div>
+        <h3>THE GLASS</h3><div class="bar-glass">${glass}</div>
+        <div class="reg-btns">${b.ingredients.map((i) => `<button class="reg-btn" data-ing="${i.id}"><span>${i.key}</span>${i.name}</button>`).join('')}</div>
+        <div class="reg-btns bar-acts"><button class="reg-btn go" data-finish="1"><span>↵</span>Finish the glass</button><button class="reg-btn no" data-tip="1"><span>⌫</span>Tip it out</button></div>
+        <div class="reg-note">${b.note}</div>
+      </div><div>
+        <h3>THE TRAY</h3><div class="receipt bar-tray">${tray || '<div><span>— empty —</span></div>'}${want.length ? `<div class="tot"><span>still to make</span><span>${want.length}</span></div>` : ''}</div>
+        <div class="reg-btns bar-acts"><button class="reg-btn go" data-serve="1"><span>S</span>Serve</button><button class="reg-btn" data-away="1"><span>Esc</span>Step away</button></div>
+        <div class="bar-stock">glasses <b>${st.glasses}</b> · ice ${bar(st.ice)} · keg ${bar(st.keg)}</div>
+        <h3>THE CARD (taped under the bar)</h3><div class="bar-card">${card}</div>
+      </div></div>
+      <div class="reg-foot">keys: ingredients 1-0, Q, W · Enter finish · Backspace tip out · S serve · Esc step away (they keep waiting)</div>`;
+    const el = $('bar');
+    el.querySelectorAll('[data-ing]').forEach((x) => x.addEventListener('click', () => this.barAdd(x.dataset.ing)));
+    el.querySelector('[data-finish]').addEventListener('click', () => this.barFinish());
+    el.querySelector('[data-tip]').addEventListener('click', () => this.barTip());
+    el.querySelector('[data-serve]').addEventListener('click', () => this.barServe());
+    el.querySelector('[data-away]').addEventListener('click', () => this.closeBar());
+  }
+  barAdd(id) {
+    const b = this.barS;
+    if (b.glass.length >= 6) return;
+    b.glass.push(id);
+    b.note = '';
+    this.audio.tone(id === 'ice' ? 2600 : id === 'tap' ? 300 : 700 + b.glass.length * 90, id === 'ice' ? 'square' : 'triangle', 0.02, id === 'tap' ? 0.35 : 0.08);
+    this.renderBar();
+  }
+  barTip() {
+    const b = this.barS;
+    if (!b.glass.length) return;
+    b.glass = [];
+    b.note = 'You tip it down the sink. Start again.';
+    this.audio.noiseHit?.(0.04, 800, 0.25);
+    this.renderBar();
+  }
+  barFinish() {
+    const b = this.barS;
+    if (!b.glass.length) return;
+    const r = b.match(b.glass);
+    if (!r) {
+      b.note = "That's not anything on the card. Tipped out. (Order matters: ice first.)";
+      b.glass = [];
+      this.audio.tone(300, 'square', 0.03, 0.2);
+      return this.renderBar();
+    }
+    const err = b.pour(b.glass);
+    if (err) {
+      b.note = err;
+      this.audio.tone(300, 'square', 0.03, 0.2);
+      return this.renderBar();
+    }
+    b.tray.push(r.id);
+    b.glass = [];
+    b.note = `${r.name} on the tray.`;
+    this.audio.tone(1500, 'sine', 0.03, 0.12);
+    this.renderBar();
+  }
+  barServe() {
+    const b = this.barS;
+    if (!b.tray.length) {
+      b.note = 'The tray is empty.';
+      return this.renderBar();
+    }
+    const tray = b.tray;
+    this.barS = null;
+    this.modal = null;
+    $('bar').classList.add('hidden');
+    document.body.classList.remove('in-menu');
+    b.onServe(tray);
+    b.onClose?.();
+  }
+  closeBar() {
+    const b = this.barS;
+    this.barS = null;
+    this.modal = null;
+    $('bar').classList.add('hidden');
+    document.body.classList.remove('in-menu');
+    b?.onClose?.();
+  }
+
   // ---------------------------------------------------------------- GULLY'S order panel
   /** o: { title, sub, greet, menu, cash, bank, onPay(sel) -> error|null, onClose } */
   openOrder(o) {
@@ -718,6 +825,54 @@ export class UI {
     if (r && r.onClose) r.onClose();
   }
 
+  // ---------------------------------------------------------------- the DJ set
+  /** onKey(code | 'stop' | 'cue' | section name) */
+  openDj(onKey) {
+    this.modal = 'dj';
+    this.djKey = onKey;
+    this.setPrompt(null);
+    this.clearHint();
+    document.body.classList.add('in-menu');
+    const el = $('dj');
+    el.classList.remove('hidden');
+    el.innerHTML = `<div class="dj-top"><span class="dj-title">YOUR SET</span><span id="dj-phrase"></span><span id="dj-text"></span><button class="arrow wide" data-dj="stop">END SET</button></div>
+      <div class="dj-row"><div class="dj-now"><small>PLAYING</small><b id="dj-now"></b></div>
+      <div class="dj-count"><small>NEXT CHANGE</small><div id="dj-beats"></div></div>
+      <div class="dj-meter"><small>CROWD</small><div class="dj-energy"><i id="dj-energy"></i></div></div></div>
+      <div class="dj-picks">${['groove', 'breakdown', 'build', 'drop'].map((n, i) => `<button class="reg-btn" data-dj="${n}"><span>${i + 1}</span>${n.toUpperCase()}</button>`).join('')}
+      <button class="reg-btn go dj-cue" data-dj="cue"><span>␣</span>CUE</button></div>
+      <div class="dj-foot">pick what plays next (1-4), hit CUE (Space) on the ONE when it changes · build before a drop · Esc ends the set</div>`;
+    el.querySelectorAll('[data-dj]').forEach((b) =>
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.djKey?.(b.dataset.dj);
+      }),
+    );
+  }
+  setDj(v) {
+    if (this.modal !== 'dj') return;
+    $('dj-phrase').textContent = `PHRASE ${v.phrase} / ${v.total}`;
+    $('dj-now').textContent = v.playing.toUpperCase();
+    const n = Math.ceil(v.beatsLeft);
+    const pips = [];
+    for (let k = 4; k >= 1; k--) pips.push(`<i class="${n <= k && n > 0 ? 'on' : ''}${n === 1 && k === 1 ? ' one' : ''}">${k}</i>`);
+    $('dj-beats').innerHTML = pips.join('') + `<em>${n > 4 ? `${Math.ceil(n / 4)} bars` : ''}</em>`;
+    const e = $('dj-energy');
+    e.style.width = `${Math.round(v.energy)}%`;
+    e.style.background = `hsl(${Math.round(v.energy * 1.2)}, 85%, 55%)`;
+    $('dj-text').textContent = v.text;
+    document.querySelectorAll('#dj [data-dj]').forEach((b) => {
+      const name = b.dataset.dj;
+      b.classList.toggle('on', name === v.next);
+      b.classList.toggle('locked', v.locked && name === v.next);
+    });
+  }
+  closeDj() {
+    if (this.modal === 'dj') this.modal = null;
+    $('dj').classList.add('hidden');
+    document.body.classList.remove('in-menu');
+  }
+
   // ---------------------------------------------------------------- dance / photos
   /** The dance game owns the keys while it runs: onKey(code) gets them, 'stop' to end. */
   openDance(onKey) {
@@ -780,6 +935,16 @@ export class UI {
       if (!e.repeat) this.mapView?.key(k);
       return eat();
     }
+    if (this.modal === 'bar') {
+      const b = this.barS;
+      const ingr = b.ingredients.find((i) => k === `Digit${i.key}` || k === `Key${i.key}` || k === `Numpad${i.key}`);
+      if (k === 'Escape') this.closeBar();
+      else if (ingr) this.barAdd(ingr.id);
+      else if (k === 'Enter' || k === 'NumpadEnter') this.barFinish();
+      else if (k === 'Backspace') this.barTip();
+      else if (k === 'KeyS') this.barServe();
+      return eat();
+    }
     if (this.modal === 'order') {
       const r = this.ord;
       if (k === 'Escape') this.closeOrder();
@@ -794,6 +959,15 @@ export class UI {
         this.audio.blip(false);
         this.renderOrder();
       } else if (k === 'Enter' || k === 'KeyE') this.ordPay();
+      return eat();
+    }
+    if (this.modal === 'dj') {
+      if (!e.repeat) {
+        const pick = { Digit1: 'groove', Digit2: 'breakdown', Digit3: 'build', Digit4: 'drop' }[k];
+        if (k === 'Escape' || k === 'KeyP') this.djKey?.('stop');
+        else if (pick) this.djKey?.(pick);
+        else if (k === 'Space' || k === 'KeyE' || k === 'Enter') this.djKey?.('cue');
+      }
       return eat();
     }
     if (this.modal === 'dance') {

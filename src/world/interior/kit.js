@@ -589,7 +589,8 @@ export const F = {
     const arm = style === 'modern' ? 0.12 : 0.22;
     const seatTop = style === 'old' ? 0.48 : 0.43;
     const c = C(col);
-    P.box('fabric', -w / 2, 0.09, 0, w / 2, 0.3, d, c);
+    // the base and the back sit between the arms (their ends would be coplanar with the arms' outsides)
+    P.box('fabric', -w / 2 + arm, 0.09, 0, w / 2 - arm, 0.3, d, c);
     const n = w > 1.6 ? 3 : w > 1.2 ? 2 : 1;
     const sw = (w - arm * 2) / n;
     for (let k = 0; k < n; k++) {
@@ -597,8 +598,13 @@ export const F = {
       P.box('fabric', x0 + 0.01, 0.3, 0.22, x0 + sw - 0.01, seatTop, d - 0.02, C(col, 1.05));
       P.box('fabric', x0 + 0.01, 0.3, 0.02, x0 + sw - 0.01, style === 'modern' ? 0.78 : 0.88, 0.24, C(col, 0.95));
     }
-    P.box('fabric', -w / 2, 0.3, 0, w / 2, style === 'modern' ? 0.72 : 0.8, 0.1, c);
-    for (const s of [-1, 1]) P.box('fabric', s < 0 ? -w / 2 : w / 2 - arm, 0.09, 0, s < 0 ? -w / 2 + arm : w / 2, style === 'old' ? 0.66 : 0.6, d, C(col, 0.95));
+    const backTop = style === 'modern' ? 0.72 : 0.8;
+    const armTop = style === 'old' ? 0.66 : 0.6;
+    P.box('fabric', -w / 2 + arm, 0.3, 0, w / 2 - arm, backTop, 0.1, c);
+    for (const s of [-1, 1]) {
+      P.box('fabric', s < 0 ? -w / 2 : w / 2 - arm, 0.09, 0, s < 0 ? -w / 2 + arm : w / 2, armTop, d, C(col, 0.95));
+      P.box('fabric', s < 0 ? -w / 2 : w / 2 - arm, armTop, 0, s < 0 ? -w / 2 + arm : w / 2, backTop, 0.1, c); // the back, over the arm
+    }
     for (const [x, z] of [
       [-w / 2 + 0.05, 0.05],
       [w / 2 - 0.09, 0.05],

@@ -457,6 +457,7 @@ export class StoreJob {
   }
 
   clockIn() {
+    if (this.blocked?.()) return this.ui.toast("You're already working a shift at SUBSTATION.");
     this.J.shift = { start: this.clock.minutes, served: 0, stocked: 0, mopped: 0, trash: 0, tips: 0, docked: 0, notes: [], ids: 0 };
     this.wearUniform(true);
     this.audio.punch?.();

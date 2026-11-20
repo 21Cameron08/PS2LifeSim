@@ -29,8 +29,14 @@ features, controls and the code map.
   the kit, `aFx` in bake.js) recoloured per frame; rooms with the same `zone` share lights.
   Rooms can be stacked (`y0` floor, `h` ceiling) and wall openings can have several vertical
   `gaps`. The player's ground on stairs/balcony/fire escape/roof comes from
-  `club.groundAt(x, z, playerY, base)` (outdoor and club spaces both use it). Phases 1 and 2
-  are built; phase 3 is in the README roadmap.
+  `club.groundAt(x, z, playerY, base)` (outdoor and club spaces both use it). Phases 1-3 are
+  built. Theme nights: `game/clubNights.js` (cover, dress, palettes, looks) and
+  `audio/clubTrack.js` (`setTheme` changes the tempo, so the club music restarts; `sectionAt`
+  is shared by the sound, the lights and the dance game, and `setArrangement` lets a DJ set
+  drive all three). The bar job (`game/barJob.js`) opens `club.setBarFlap`; the DJ set is
+  `game/djSet.js`; the green room is part of the club interior. The Undercurrent
+  (`world/undercurrent.js`) is its own space 30 m under the club, reached at 3:33-3:45 AM;
+  `main.js` stops the clock there (`inUnder`).
 - GULLY'S (`world/gullys.js`, `world/gullyFigure.js`, `render/gullysTextures.js`,
   `actors/diners.js`, `game/gullysMenu.js`, `game/gullysVisit.js`): the menu is plain data
   in gullysMenu.js. Diners owns the crew, customers, orders and the tray/bag meshes (the

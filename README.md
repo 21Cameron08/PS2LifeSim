@@ -20,6 +20,8 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 | Pause / settings | Esc (or P) | MENU |
 | Fast‑forward time | hold T | – |
 | Dance (on the club's floor) | E to start, ← ↑ → ↓ or WASD on the beat, Esc to stop | USE, then the arrow pad |
+| Bartending (SUBSTATION) | ingredients 1-0, Q, W · Enter finish the glass · Backspace tip it out · S serve | the panel's buttons |
+| DJ set (SUBSTATION) | 1-4 pick what plays next · Space cue on the one · Esc end the set | the panel's buttons |
 | City map, routes | M (↑↓ pick a place, Enter set a route) | MAP |
 | Sound on/off | pause menu (Sound) | in the pause menu |
 
@@ -119,12 +121,26 @@ At $9/hour, Loft 4's $2,500 move-in is roughly 280 hours behind the counter. Not
 A 1950s power substation turned club, in Ember Row facing the Lantern Quarter. Like the
 store it's part of the street: no loading screen.
 
+- **Theme nights**: every night has its own sound, colours, cover and door policy, and a lit
+  TONIGHT sign by the door (the map shows it too):
+
+  | Night | Theme | Sound | Cover |
+  | --- | --- | --- | --- |
+  | Mon-Wed | HOUSE NIGHT | the club's own house track, 124 BPM | $15 |
+  | Thu | STATIC | glitch electro at 128: square-wave stabs that stutter, bursts of digital noise, a floor like a dead TV channel, white and cyan lasers | $15 |
+  | Fri | CURRENT | house all night at 124 with piano stabs, orange and gold washes | $20 |
+  | Sat | OVERLOAD | peak-time acid at 130: a squelching 303-ish bassline, an air horn and confetti cannons on every drop, lasers through the groove too | $30 |
+  | Sun | LOW VOLTAGE | deep and slow at 112: soft kicks, rimshots, long pads, an echoing lead, lavender light, no strobes | $10 |
+
 - **The door**: a queue behind a velvet rope, Dmitri on the door, a neon sign buzzing over a
-  steel canopy, and Ray's fries cart on the curb ($4, open 9 PM to 5 AM). Cover is $20 ($30 on
-  Saturdays), cash only; the stamp on your hand lets you come and go until close. From down
-  the street you only hear the kick drum; it opens up when the doors swing open.
-- **Dress code**: no shorts, ever; on Fridays and Saturdays no T-shirts (long sleeves or a
-  jacket). Turned away? Change in the wardrobe (C) and try again.
+  steel canopy, and Ray's fries cart on the curb ($4, open 9 PM to 5 AM). Cover is cash; the
+  stamp on your hand lets you come and go until close. From down the street you only hear the
+  kick drum; it opens up when the doors swing open. On busy nights there's a real line: Dmitri
+  sends you to the back of it (you wait, the clock moves). Make friends with him (pay the
+  cover, ask how the door is, tip him) and he waves you past it; close friends get in free on
+  quiet nights. Staff walk straight in.
+- **Dress code**: no shorts (except at LOW VOLTAGE); on Fridays and Saturdays no T-shirts
+  (long sleeves or a jacket). Turned away? Change in the wardrobe (C) and try again.
 - **Inside**: a lobby with a coat check (it really takes your jacket off you, $2), gig posters,
   an ATM and a photo booth, a strip curtain into one tall concrete hall:
   an 8x8 LED dance floor under a mirror ball and a lighting truss, a DJ on an old transformer
@@ -158,6 +174,37 @@ store it's part of the street: no loading screen.
   music is a far-off thump up here; the lights show from the street.
 - **Photo booth**: $5 for four flashes and four poses. The strip pops up, it's saved (your last
   three), and the newest one is stuck on the fridge at home with a magnet.
+- **Regulars**: everyone has their usual nights (party people on Fridays and Saturdays, the
+  chill ones on Sundays, one random night each). Make friends and they turn up on theirs, come
+  over to say hi when they spot you, and remember what you did together last time. The map
+  lists who's usually in tonight.
+- **Bartending job**: ask Nadia at the bar if they're hiring. $11 an hour plus tips, any
+  night the club's open. She lifts the flap and you work behind the bar with her: people at the
+  bar get a "!" when they want something; stand across from them and make it from the recipe
+  card taped under the bar, glass by glass, in order (ice first). Every drink takes a clean
+  glass, so collect the empties from the tables and booths in a crate and run the glasswasher;
+  fill the ice well from the ice machine; change the keg when the beer runs dry. Leave people
+  waiting and Nadia serves them (and gets the tip). Wrong drinks are docked. A slip at the end.
+- **DJ gig**: talk to DJ Halflife in front of the booth. Once you can move (a good dance combo)
+  or she knows you, she books you a warm-up slot on a house or STATIC night: eight 8-bar
+  phrases where you pick what comes next (groove, breakdown, build, drop) and hit CUE on the
+  "one" as it changes. The music and the lights really follow you. The crowd's energy is the
+  score: build before you drop, give them a breather after, mix cleanly; drop too soon or
+  leave them hanging after a build and the floor empties. $60 plus tips; play well twice and
+  she offers you a Friday prime-time set ($140).
+- **The green room** behind the DJ booth (the STAFF ONLY door): a worn red sofa that gets your
+  energy back, the DJ's rider (help yourself, three times a night), a mirror ringed with bulbs,
+  record crates, a clothes rail and tour laminates. Open to staff, the DJ's friends and anyone
+  who's played a good set.
+- **3:33.** If you're in the hall at 3:33 AM the coil hums and turns violet, and around a
+  little steel hatch behind it a seam of violet light appears. For twelve minutes you can slip
+  through it into **the Undercurrent**: an old cable vault where the clock stops. The Lantern
+  Quarter's tree has grown through the far wall: its roots glow across the floor, lanterns
+  drift under the brick arches, and through the arch you can see it standing in a violet night.
+  The music is the club's song slowed right down with bells in the echo. Vesper behind the
+  cable-drum bar pours a glass of nothing (it wakes you right up), a few strange regulars have
+  been here since 1987, and you can close your eyes on the sofa. Time doesn't pass while you're
+  down there. Once you've found it, it's on the map.
 - **4 AM: lights up.** House lights snap on, the music cuts, everyone files out. At 4:30
   security walks you out.
 - **Flashing lights** (pause menu): FULL adds strobes, REDUCED (default) keeps beat pulses
@@ -277,22 +324,25 @@ src/
   render/                 PS2 post pipeline, procedural textures, sky, time-of-day palette
   world/                  city generator, street props, Lantern Quarter, colliders, particles,
                           apartments (doors, markers, interiors), the HALCYON 24 store,
-                          the SUBSTATION club (club.js), GULLY'S (gullys.js, and the
-                          mascot figure in gullyFigure.js)
+                          the SUBSTATION club (club.js) and the room under it
+                          (undercurrent.js), GULLY'S (gullys.js, and the mascot figure in
+                          gullyFigure.js)
   world/interior/         room/wall builder, furniture kit, baked lighting, apartment layouts
   actors/                 crowd renderer (instanced puppets, walk/carry/dance/sit poses),
                           appearance model, player + camera, pedestrians AI, traffic,
                           clubbers (the club's staff, queue and crowd), diners (GULLY'S
                           crew, customers, orders and trays)
   game/                   clock + save system, needs (needs.js), NPC dialogue data, the
-                          store job, the club's dance game (dance.js) and photo booth
-                          (photobooth.js), GULLY'S menu data (gullysMenu.js) and your
-                          visit there (gullysVisit.js)
+                          store job, the club's dance game (dance.js), photo booth
+                          (photobooth.js), theme nights (clubNights.js), bar job
+                          (barJob.js) and DJ set (djSet.js), GULLY'S menu data
+                          (gullysMenu.js) and your visit there (gullysVisit.js)
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls,
                           the city map (map.js; its places and hours are game/places.js,
                           the route beam is world/waypoint.js)
   audio/                  procedural ambience, sound effects and music; clubTrack.js is the
-                          club song's arrangement, shared with the lights
+                          club's tempo and arrangement per theme night, shared with the
+                          lights (and taken over by a DJ set)
 ```
 
 Performance notes: static scenery is merged into one mesh per material and every
@@ -305,14 +355,7 @@ The big goal: **lots of cool places to hang out**. Every new space (diner, arcad
 rooftop, karaoke bar, record shop, a 2 AM laundromat, the pier) gets a real walk-in
 interior with the same detail, light and sound as the apartments and the store.
 
-1. **SUBSTATION phase 3**: theme nights (the posters: STATIC, CURRENT, OVERLOAD, LOW
-   VOLTAGE), regulars (the people you befriend turn up on their nights and remember you),
-   a bartender job (same setup as the store: a shift, tasks, a pay slip), and a door behind
-   the big copper coil that opens at 3:33 AM into a small after-hours room where the fog
-   glows violet, the music turns slow and strange, and the Lantern Quarter bleeds through.
-   Smaller ideas: skip the queue once you're friends with Dmitri on the door, a DJ gig as a
-   job, and a use for the locked staff room (the green room) behind the DJ.
-   **GULLY'S crew job**: Marco's "come back when the forms are sorted". Early shifts on the
+1. **GULLY'S crew job**: Marco's "come back when the forms are sorted". Early shifts on the
    fryers, the grill or a register (cook to the ticket screen, call numbers, bag to-go
    orders), entry-level pay plus a free meal, using the store's shift system.
 2. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:

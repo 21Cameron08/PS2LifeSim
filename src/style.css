@@ -1251,6 +1251,248 @@ body.touch #map .map-foot {
   }
 }
 
+/* ------------------------------------------------------------------ the bar job */
+#bar {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(880px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  background: linear-gradient(180deg, #24121e, #0e0810);
+  border: 2px solid #ff6aa8;
+  border-radius: 10px;
+  box-shadow: 0 0 30px rgba(255, 90, 170, 0.3);
+  pointer-events: auto;
+  padding: 14px 16px;
+}
+#bar .reg-head {
+  color: #ff9ac8;
+  border-bottom-color: rgba(255, 140, 200, 0.3);
+}
+.bar-body {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 680px) {
+  .bar-body {
+    grid-template-columns: 1fr;
+  }
+}
+.bar-body h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+.bar-glass {
+  min-height: 34px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+}
+.bar-chip {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(90, 200, 255, 0.2);
+  border: 1px solid rgba(140, 220, 255, 0.5);
+  font-weight: 600;
+  font-size: 14px;
+}
+.bar-arrow {
+  color: var(--muted);
+}
+.bar-empty {
+  color: var(--muted);
+}
+.bar-acts {
+  margin-top: 8px;
+}
+.bar-tray .ok {
+  color: #1a6a2a;
+}
+.bar-tray .bad {
+  color: #a01a1a;
+}
+.bar-stock {
+  margin: 8px 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.bar-stock b {
+  color: var(--text);
+}
+.bar-meter {
+  display: inline-block;
+  width: 60px;
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  vertical-align: middle;
+  overflow: hidden;
+}
+.bar-meter i {
+  display: block;
+  height: 100%;
+  background: #5ac8ff;
+}
+.bar-card {
+  font-size: 13px;
+  display: grid;
+  gap: 2px;
+  background: #f2f0e6;
+  color: #1e1e22;
+  border-radius: 4px;
+  padding: 6px 8px;
+  transform: rotate(-0.6deg);
+}
+.bar-card div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bar-card span {
+  color: #4a4a50;
+  text-align: right;
+}
+
+/* ------------------------------------------------------------------ the DJ set */
+#dj {
+  position: absolute;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(660px, calc(100% - 32px));
+  padding: 10px 14px 8px;
+  background: linear-gradient(180deg, rgba(30, 14, 40, 0.92), rgba(10, 6, 16, 0.95));
+  border: 2px solid #b06aff;
+  border-radius: 10px;
+  box-shadow: 0 0 24px rgba(160, 90, 255, 0.4);
+  pointer-events: auto;
+}
+.dj-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.dj-title {
+  color: #d8a8ff;
+}
+#dj-phrase {
+  color: var(--muted);
+  font-size: 14px;
+}
+#dj-text {
+  flex: 1;
+  text-align: right;
+  color: #ffe08a;
+}
+.dj-row {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1.4fr;
+  gap: 12px;
+  align-items: center;
+  margin: 8px 0;
+}
+.dj-row small {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: var(--muted);
+}
+.dj-now b {
+  font-size: 22px;
+  letter-spacing: 0.1em;
+}
+#dj-beats {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#dj-beats i {
+  font-style: normal;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--muted);
+  font-weight: 700;
+}
+#dj-beats i.on {
+  background: rgba(176, 106, 255, 0.4);
+  color: #fff;
+}
+#dj-beats i.one {
+  background: #ffb04a;
+  color: #1a0a20;
+  box-shadow: 0 0 10px #ffb04a;
+}
+#dj-beats em {
+  font-style: normal;
+  font-size: 13px;
+  color: var(--muted);
+  margin-left: 6px;
+}
+.dj-energy {
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+}
+.dj-energy i {
+  display: block;
+  height: 100%;
+  width: 40%;
+  transition: width 0.3s;
+}
+.dj-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dj-picks .reg-btn.on {
+  background: rgba(176, 106, 255, 0.35);
+  border-color: #d8a8ff;
+}
+.dj-picks .reg-btn.locked {
+  background: rgba(255, 176, 74, 0.35);
+  border-color: #ffb04a;
+}
+.dj-cue {
+  margin-left: auto;
+  min-width: 96px;
+}
+.dj-foot {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+body.touch .dj-foot {
+  display: none;
+}
+@media (max-width: 600px) {
+  .dj-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .dj-meter {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ------------------------------------------------------------------ dance game */
 #dance {
   position: absolute;

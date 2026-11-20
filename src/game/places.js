@@ -68,7 +68,11 @@ export function buildPlaces(w) {
     color: () => '#e86aff',
     at: { x: club.outsideSpot.x, z: club.outsideSpot.z },
     name: () => 'SUBSTATION',
-    sub: () => `Nightclub · ${w.clubNight().toLowerCase()} night · cover $${w.clubNight() === 'SAT' ? 30 : 20}`,
+    sub: () => {
+      const th = w.clubTheme();
+      const friends = w.clubFriends();
+      return `${th.name}: ${th.blurb} · cover $${th.cover}${friends.length ? ` · usually in tonight: ${friends.slice(0, 3).join(', ')}` : ''}`;
+    },
     status: () =>
       club.status === 'open'
         ? { text: 'OPEN · until 4 AM', open: true }
@@ -100,6 +104,20 @@ export function buildPlaces(w) {
       status: () => ({ text: 'ALWAYS OPEN', open: true }),
       needs: () => ['fun'],
       big: () => true,
+    });
+  // the room behind the coil: only on the map once you've found it
+  if (club.hatch)
+    P.push({
+      id: 'undercurrent',
+      icon: () => 'lantern',
+      color: () => '#c88aff',
+      at: { x: club.hatch.x, z: club.hatch.z + 1.2 },
+      name: () => 'The Undercurrent',
+      sub: () => 'Behind the coil at SUBSTATION. The clock stops down there.',
+      status: (h) => (club.status === 'open' && h >= 3.55 && h < 3.75 ? { text: 'OPEN · until 3:45', open: true } : { text: 'OPENS 3:33 AM', open: false }),
+      needs: () => ['energy', 'fun'],
+      big: () => true,
+      hidden: () => !state.seen?.undercurrent,
     });
   // the street machines: drawn small, not in the list
   const small = city.interactables.filter((it) => it.type === 'atm' || it.type === 'vending').map((it) => ({ type: it.type, x: it.x, z: it.z }));

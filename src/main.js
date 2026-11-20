@@ -31,6 +31,11 @@ import { defaultPlayerAppearance } from './actors/appearance.js';
 import { Clock, loadSave, writeSave, clearSave, DEFAULT_SETTINGS } from './game/state.js';
 import { greeting, chatLine, cityLine, KEEPER_LINES, relTier, CLUB_GREET, CLUB_CHAT, DRINK_THANKS } from './game/dialogue.js';
 import { DanceGame } from './game/dance.js';
+import { nightTheme, dayName } from './game/clubNights.js';
+import { setTheme } from './audio/clubTrack.js';
+import { BarJob } from './game/barJob.js';
+import { DjSet } from './game/djSet.js';
+import { Undercurrent } from './world/undercurrent.js';
 import { PhotoBooth, stripTexture } from './game/photobooth.js';
 import { Ambience } from './audio/ambience.js';
 import { UI } from './ui/ui.js';
@@ -67,6 +72,14 @@ const state = {
   clubTreat: save?.clubTreat ?? {},
   danceBest: save?.danceBest ?? 0,
   photos: save?.photos ?? [], // photo-booth strips (data URLs), newest first
+  clubMem: save?.clubMem ?? {}, // what you last did with each regular: { night, did }
+  barJob: save?.barJob, // bartending at SUBSTATION: { hired, earned, shifts }
+  djGig: save?.djGig, // a booked DJ set: { night, slot }
+  djRep: save?.djRep ?? 0, // good sets played
+  djSets: save?.djSets ?? 0,
+  doorNight: save?.doorNight, // the last night Dmitri's friendship went up
+  doorChat: save?.doorChat,
+  doorTip: save?.doorTip,
   gullToys: save?.gullToys ?? [], // Gull Box toys collected (ids), on top of the fridge
   gullMeals: save?.gullMeals ?? 0,
   gullOrders: save?.gullOrders ?? 0,
@@ -106,6 +119,7 @@ const peds = new Pedestrians(crowd, city, 72);
 const traffic = new Traffic(scene, tex, 24);
 const clock = new Clock(save?.minutes ?? START.hour * 60);
 const job = new StoreJob({ store, crowd, ui, audio, state, clock, player });
+job.blocked = () => barJob.onShift;
 if (state.job.hired) store.helpWanted.visible = false;
 store.onChime = () => camera.position.distanceTo(store.doorCenter) < 35 && audio.chime();
 const storeSpace = { ...outdoor, indoor: true, ceiling: store.origin.y + store.H };
@@ -113,6 +127,10 @@ let inStore = false;
 let cctvTick = 0;
 const club = new Club(scene, city, tex, apts.tex);
 const clubbers = new Clubbers(crowd, club, city);
+clubbers.bartenders[0].name = 'Nadia';
+const barJob = new BarJob({ scene, club, clubbers, ui, audio, state, clock, player, crowd, tex });
+const under = new Undercurrent(scene, club, crowd, apts.tex, tex);
+let inUnder = false;
 // the club has stairs, a balcony, a fire escape and a roof: the player's ground
 // height depends on which level their feet are on
 const cityGround = outdoor.groundHeight;
@@ -229,6 +247,14 @@ function saveNow(showToast = false) {
     clubTreat: state.clubTreat,
     danceBest: state.danceBest,
     photos: state.photos,
+    clubMem: state.clubMem,
+    barJob: state.barJob,
+    djGig: state.djGig,
+    djRep: state.djRep,
+    djSets: state.djSets,
+    doorNight: state.doorNight,
+    doorChat: state.doorChat,
+    doorTip: state.doorTip,
     gullToys: state.gullToys,
     gullMeals: state.gullMeals,
     gullOrders: state.gullOrders,
@@ -653,6 +679,7 @@ function findInteraction() {
   }
   if (!job.J.shift && near(player.pos, store.customerSpot, 1.0) && job.manager.home === 'counter' && !job.manager.path.length)
     return { label: 'Buy something at the counter', act: storeCounter };
+  if (inUnder) return underInteraction();
   const work = job.findInteraction(player.pos);
   if (work) return work;
   const food = visit.find();
@@ -688,7 +715,9 @@ function findInteraction() {
 const near = (p, q, r) => Math.hypot(p.x - q.x, p.z - q.z) < r;
 const clubNight = () => Clubbers.weekdayOfNight(clock.minutes);
 const weekend = () => ['FRI', 'SAT'].includes(clubNight());
-const coverCharge = () => (clubNight() === 'SAT' ? 30 : 20);
+const tonightTheme = () => nightTheme(clubNight());
+const DMITRI = 'club:staff:dmitri';
+const coverCharge = () => tonightTheme().cover;
 const vipPrice = () => (weekend() ? 150 : 100);
 let seat = null; // the seat the player is sitting in
 
@@ -721,10 +750,33 @@ function clubInteraction() {
     if (club.status !== 'closed' && near(p, club.vipHostSpot, 1.9)) return { label: 'Talk to Celeste (VIP)', act: vipHost };
     return seatOrTalk();
   }
+  const work = barJob.find(p, near);
+  if (work) return work;
+  if (barJob.onShift) {
+    const nadia = clubbers.bartenders[0].c;
+    if (nadia.visible && near(p, nadia, 1.5)) return { label: 'Talk to Nadia', act: nadiaTalk };
+  }
+  // backstage
+  if (club.zoneAt(p) === 'green') {
+    if (near(p, club.greenSpots.inside, 1.0)) return { label: 'Back to the floor', act: () => greenRoom(true) };
+    if (near(p, club.greenSpots.rider, 1.0)) return { label: 'Help yourself to the rider', act: riderGrab };
+    if (near(p, club.greenSpots.mirror, 1.0))
+      return {
+        label: 'Check yourself in the mirror',
+        act: () => ui.toast(needs.get('hygiene') < 30 ? 'The bulbs are not kind. You look like you slept in a skip.' : needs.mood > 70 ? 'Bulbs all round, like a film star. You look great. You know it.' : 'You fix your hair. It un-fixes itself. Good enough.'),
+      };
+    if (near(p, club.greenSpots.records, 1.0)) return { label: "Flick through Halflife's records", act: () => (needs.add('fun', 3), ui.toast(talkRng.pick(['White labels, test pressings, one record that is just a recording of a fridge.', 'A sticker on a sleeve says DO NOT PLAY BEFORE 3AM. You put it back carefully.', 'Every record is filed by colour, then by mood. Respect.']))) };
+    return seatOrTalk();
+  }
+  if (near(p, club.greenSpots.outside, 1.0)) return { label: greenAccess() ? 'Green room' : 'Green room (staff only)', act: () => greenRoom(false) };
   if (near(p, club.coatCounter, 1.3) && club.status !== 'closed') return { label: state.coatCheck ? 'Collect your jacket' : 'Check your jacket ($2)', act: coatCheck };
   if (near(p, club.photoSpot, 1.1)) return { label: 'Photo booth ($5)', act: photoBooth };
-  if (open && club.barSpots.some((b) => near(p, b, 1.0))) return { label: 'Order at the bar', act: () => barOrder('BAR') };
-  if (open && near(p, club.w(11.7, 3.0), 1.3)) return { label: 'Request a song', act: () => ui.toast('The DJ points at their headphones, grins, and plays whatever they want.') };
+  if (open && club.barSpots.some((b) => near(p, b, 1.0))) return barJob.onShift ? { label: 'Talk to Nadia', act: nadiaTalk } : { label: 'Order at the bar', act: () => barOrder('BAR') };
+  if (open && near(p, club.w(11.7, 3.0), 1.3)) {
+    if (club.humOpen) return { label: 'Slip behind the coil (the hatch is glowing)', act: enterUndercurrent };
+    if (djGigTonight() && !dj.active) return { label: `Take the decks (your ${state.djGig.slot === 'prime' ? 'prime-time' : 'warm-up'} set)`, act: startDjSet };
+    return { label: 'Talk to DJ Halflife', act: djTalk };
+  }
   if (open && club.onFloor(p)) return { label: 'Dance', act: () => startDance() };
   return seatOrTalk();
 }
@@ -733,9 +785,10 @@ function clubInteraction() {
 /** Why the bouncer won't let you in dressed like that (or null). */
 function dressCode() {
   const a = state.appearance;
+  const th = tonightTheme();
   if (needs.get('hygiene') < 20) return 'Whoa. No. You smell like the bottom of a gym bag. Go home and shower, then we can talk.';
-  if (a.bottomStyle === 1) return "Shorts? No. It's a club, not a barbecue. Go and change.";
-  if (weekend() && a.topStyle === 0) return `It's ${clubNight() === 'SAT' ? 'Saturday' : 'Friday'}. Long sleeves or a jacket. T-shirts are for Thursdays.`;
+  if (a.bottomStyle === 1 && !th.shorts) return "Shorts? No. It's a club, not a barbecue. Go and change.";
+  if (th.sleeves && a.topStyle === 0) return `It's ${th.name}. Long sleeves or a jacket. T-shirts are for Thursdays.`;
   return null;
 }
 
@@ -746,29 +799,402 @@ function bouncerTalk() {
   player.locked = true;
   if (club.status === 'lightsup') return say("Lights are up, we're done. Go home, drink some water.");
   if (state.clubStamp === tonight) return say(talkRng.pick(["You've got a stamp. Go on in.", 'Back again? Go on.', 'Stamp checks out. In you go.']));
+  if (staffTonight()) {
+    state.clubStamp = tonight;
+    return say(talkRng.pick(['Staff? Go on through. Nadia was asking where you were.', "You're working? In you go. Don't be late again.", 'Ah, the help. In.']));
+  }
+  const rel = state.clubRel[DMITRI] ?? 0;
+  const friend = rel >= 30;
+  const close = rel >= 60;
+  const bump = (n) => (state.clubRel[DMITRI] = Math.min(100, (state.clubRel[DMITRI] ?? 0) + Math.max(1, Math.round(n * needs.charm))));
   const no = dressCode();
   if (no) {
-    say(`He looks you up and down. "${no}"`);
+    say(`He looks you up and down. "${friend ? 'Sorry, mate. Rules are rules. ' : ''}${no}"`);
     ui.hint(input.isTouch ? 'Change your outfit with <b>STYLE</b>.' : 'Change your outfit with <b>C</b> (wardrobe).', 6);
     return;
   }
-  const cover = coverCharge();
+  // a line outside: friends of the door and VIPs walk past it
+  const q = club.status === 'open' ? clubbers.queueLength() : 0;
+  if (q >= 2 && !friend && state.vipNight !== tonight && state.queuedNight !== tonight) {
+    const mins = q * 4;
+    return say(`"There's a line." He nods at the ${q} people behind the rope. "Back of it."`, [
+      {
+        label: `Join the line (about ${mins} min)`,
+        fn: () => {
+          ui.closeDialog();
+          ui.fade(() => {
+            clock.minutes += mins;
+            state.queuedNight = tonight;
+            const sp = clubbers.club.bouncerSpot;
+            player.teleport(player.space, sp.x - 0.9, sp.z + 0.4, -Math.PI / 2);
+            setTimeout(() => bouncerTalk(), 700);
+          }, 'IN THE LINE');
+        },
+      },
+      { label: 'Not tonight', fn: () => ui.closeDialog() },
+    ]);
+  }
+  const th = tonightTheme();
+  const quiet = th.id === 'house' || th.id === 'low';
+  const cover = close && quiet ? 0 : coverCharge();
   const sharp = state.appearance.topStyle === 2 ? 'Nice jacket. ' : '';
-  const greet = talkRng.pick([`${sharp}${cover} to get in. Cash.`, `Evening. ${sharp}It's ${cover} tonight, cash only.`, `You on your own? ${sharp}${cover}, cash.`]);
-  say(greet, [
+  const greet = close
+    ? cover
+      ? talkRng.pick([`There they are. ${th.name} tonight, it'll be wild. ${cover}, cash. Sorry, the boss counts.`, `My favourite regular. ${cover} tonight, I can't do anything about Saturdays.`])
+      : talkRng.pick(["There they are. Put your money away, you're with me tonight.", 'On the house. Go on, before anyone sees.'])
+    : friend
+      ? talkRng.pick([`He unhooks the rope before you even get to the front. "${th.name} tonight. ${cover}, cash."`, `"Hey, you. Skip the line." He waves you up. "${cover}, cash."`])
+      : talkRng.pick([`${sharp}${cover} to get in. Cash. It's ${th.name} tonight.`, `Evening. ${sharp}It's ${th.name}, ${cover}, cash only.`, `You on your own? ${sharp}${cover}, cash.`]);
+  const choices = [
     {
-      label: `Pay $${cover}`,
+      label: cover ? `Pay $${cover}` : 'Go in (on the house)',
       fn: () => {
         if (state.cash < cover) return say("Cash only, friend. Come back when you've got it.");
         state.cash -= cover;
         state.clubStamp = tonight;
-        audio.coin();
+        if (cover) audio.coin();
+        if (state.doorNight !== tonight) {
+          state.doorNight = tonight;
+          bump(4);
+        }
         say('He stamps the back of your hand: a little lightning bolt. "You can come and go till close. Have a good one."');
         saveNow();
       },
     },
-    { label: 'Not tonight', fn: () => ui.closeDialog() },
-  ]);
+  ];
+  if (state.doorChat !== tonight)
+    choices.push({
+      label: "How's the door tonight?",
+      fn: () => {
+        state.doorChat = tonight;
+        bump(3);
+        needs.chat('club:dmitri', clock.minutes, 6);
+        say(
+          talkRng.pick([
+            `${th.name} brings out the best of them. And the worst. Mostly the worst.`,
+            "Turned away a guy in flip-flops who said he knew the DJ. Everyone knows the DJ.",
+            'Cold out here. But I can hear the drop through the wall. That keeps me going.',
+            "Twelve years on this door. You learn to read people. You, you're alright.",
+          ]),
+          choices.filter((c) => !c.label.startsWith('How')),
+        );
+      },
+    });
+  if (state.doorTip !== tonight)
+    choices.push({
+      label: 'Tip him $10',
+      fn: () => {
+        if (state.cash < 10) return say('He laughs. "Keep it. Looks like you need it more than me."');
+        state.cash -= 10;
+        state.doorTip = tonight;
+        audio.coin();
+        bump(8);
+        say('He pockets it without looking. "I never saw you. Which means I always see you. Get it?"', choices.filter((c) => !c.label.startsWith('Tip')));
+      },
+    });
+  choices.push({ label: 'Not tonight', fn: () => ui.closeDialog() });
+  say(greet, choices);
+}
+
+/** Working tonight: on a bar shift, or a DJ set booked. */
+function staffTonight() {
+  return barJob.onShift || djGigTonight();
+}
+function djGigTonight() {
+  return !!state.djGig && state.djGig.night === nightOf(clock.minutes);
+}
+const DJ_KEY = 'club:staff:dj';
+/** Backstage: staff, the DJ's friends, and anyone who's played a good set. */
+function greenAccess() {
+  return staffTonight() || (state.clubRel[DJ_KEY] ?? 0) >= 40 || state.djRep >= 1;
+}
+
+// ---------------------------------------------------------------- the bar job
+function hireTalk() {
+  const close = () => ui.closeDialog();
+  ui.openDialog({
+    name: 'NADIA · BAR',
+    text: "Hiring? Always. Somebody quits every Saturday. Eleven dollars an hour plus tips, any night we're open. You make what's on the card, you keep the glasses coming, you don't pour free drinks for your friends.",
+    choices: [
+      {
+        label: "I'll take it",
+        fn: () => {
+          barJob.J.hired = true;
+          saveNow();
+          ui.openDialog({
+            name: 'NADIA · BAR',
+            text: "Good. Ask me for a shift any night we're open. The flap's at the end of the bar. Ice first, always ice first.",
+            choices: [{ label: 'Got it', fn: close }],
+            onClose: () => (player.locked = false),
+          });
+        },
+      },
+      { label: 'Maybe later', fn: close },
+    ],
+    onClose: () => (player.locked = false),
+  });
+}
+
+function nadiaTalk() {
+  player.locked = true;
+  const close = () => ui.closeDialog();
+  ui.openDialog({
+    name: 'NADIA',
+    text: barJob.nadiaLine(),
+    choices: [
+      { label: 'End my shift', fn: () => (close(), barJob.clockOut()) },
+      { label: 'Back to work', fn: close },
+    ],
+    onClose: () => (player.locked = !!barJob.work),
+  });
+}
+
+// ---------------------------------------------------------------- the DJ
+const dj = new DjSet({
+  ui,
+  audio,
+  getBeat: () => audio.musicBeat() ?? club.beat,
+  onEnd: (r) => endDjSet(r),
+  onCheer: () => audio.ctx && audio.cheer(audio.master, audio.ctx.currentTime),
+});
+
+/** The next night with a warm-up slot (midweek or STATIC), or the next CURRENT Friday for a prime-time set. */
+function nextGigNight(prime) {
+  const now = nightOf(clock.minutes);
+  const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+  for (let k = clock.hour >= 6 && clock.hour < 21 ? 0 : 1; k < 9; k++) {
+    const d = DAYS[(((now + k) % 7) + 7) % 7];
+    const th = nightTheme(d).id;
+    if (prime ? th === 'current' : th === 'house' || th === 'static') return { night: now + k, day: d };
+  }
+  return null;
+}
+
+function djTalk() {
+  player.locked = true;
+  const close = () => ui.closeDialog();
+  const rel = () => state.clubRel[DJ_KEY] ?? 0;
+  if (dj.active) return;
+  needs.chat('club:dj', clock.minutes, 8);
+  const tonight = nightOf(clock.minutes);
+  if (state.djChat !== tonight) {
+    state.djChat = tonight;
+    state.clubRel[DJ_KEY] = Math.min(100, rel() + 3);
+  }
+  const say = (text, choices) => ui.openDialog({ name: 'DJ HALFLIFE', text, choices, onClose: () => (player.locked = false) });
+  const menu = () => {
+    const out = [{ label: 'Request a song', fn: () => say(talkRng.pick(['She points at her headphones, grins, and plays whatever she wants.', '"Ask me again after the drop." She does not ask you again.', '"I play what the room needs. The room needs this."']), menu()) }];
+    if (state.djGig) {
+      const days = state.djGig.night - tonight;
+      out.push({ label: 'About my set...', fn: () => say(days === 0 ? 'Tonight! Come to the booth when you are ready. Build before the drop. I will be right beside you.' : `${days === 1 ? 'Tomorrow' : `In ${days} nights`}. ${state.djGig.slot === 'prime' ? 'Friday prime time. Do not let me down.' : 'Warm-up slot. Keep them moving, save the big stuff.'}`, menu()) });
+    } else
+      out.push({
+        label: 'How do I get a set here?',
+        fn: () => {
+          const ready = (state.danceBest ?? 0) >= 25 || rel() >= 15;
+          if (!ready) return say("Show me you can feel a room first. Get on that floor, get your combo up, come and talk to me more. Then we'll see.", menu());
+          const prime = state.djRep >= 2;
+          const g = nextGigNight(prime);
+          if (!g) return say('Booked solid. Ask me next week.', menu());
+          say(
+            prime
+              ? `You've earned it. ${dayName(g.day)}, CURRENT, prime time. Ten phrases, one hundred forty dollars, and the crowd decides the tips.`
+              : `Alright. Warm-up slot, ${dayName(g.day)} night. Eight phrases: pick what comes next, hit the cue on the one. Sixty bucks plus tips. Build before you drop.`,
+            [
+              {
+                label: 'Book it',
+                fn: () => {
+                  state.djGig = { night: g.night, slot: prime ? 'prime' : 'warmup' };
+                  saveNow();
+                  say(`Booked. ${dayName(g.day)}. Come to the booth any time after ten. The green room's yours that night too.`, [{ label: 'See you then', fn: close }]);
+                },
+              },
+              { label: 'Not yet', fn: close },
+            ],
+          );
+        },
+      });
+    out.push({ label: 'Bye', fn: close });
+    return out;
+  };
+  say(talkRng.pick(["Hey. Make it quick, I'm mixing.", 'You again! Having a good night?', "If you're here to request something, the answer is no. Hi though."]), menu());
+}
+
+function startDjSet() {
+  const g = state.djGig;
+  player.locked = true;
+  if (seat) standUp();
+  dj.start({ phrases: g.slot === 'prime' ? 10 : 8, slot: g.slot });
+  clubbers.djAway = true;
+  rig.yaw = Math.PI;
+  rig.setMode('dj');
+  ui.openDj((k) => (k === 'stop' ? dj.end(true) : k === 'cue' ? dj.cue() : dj.choose(k)));
+  ui.toast('Halflife slides the headphones over to you. "All yours. Build before the drop."');
+}
+
+function updateDj(dt) {
+  if (!dj.active) return;
+  dj.update(dt);
+  ui.setDj(dj.view());
+  const sp = club.djSpot;
+  const c = player.char;
+  player.pos.set(sp.x, sp.y, sp.z);
+  player.yaw = 0;
+  c.x = sp.x;
+  c.z = sp.z;
+  c.y = sp.y;
+  c.ground = sp.y;
+  c.yaw = 0;
+  c.work = true;
+  c.amount = 0;
+  c.nod = 0.15 * Math.pow(Math.abs(Math.cos(Math.PI * club.beat)), 6);
+  if (club.status !== 'open' || !inClub) dj.end(true);
+}
+
+function endDjSet(r) {
+  ui.closeDj();
+  rig.setMode('follow');
+  clubbers.djAway = false;
+  player.char.work = false;
+  player.locked = false;
+  const front = club.w(11.7, 3.4);
+  player.teleport(player.space, front.x, front.z, 0);
+  const g = state.djGig ?? { slot: r.slot };
+  state.djGig = null;
+  state.djSets++;
+  const base = g.slot === 'prime' ? 140 : 60;
+  const phrases = g.slot === 'prime' ? 10 : 8;
+  const done = r.played >= phrases;
+  const pay = done ? base : Math.round(base * Math.max(0.25, r.played / phrases));
+  const tips = Math.round(r.avg * (g.slot === 'prime' ? 1.4 : 0.7));
+  state.cash += pay + tips;
+  audio.coin();
+  const good = r.avg >= 55 && done;
+  if (good) state.djRep++;
+  state.clubRel[DJ_KEY] = Math.min(100, (state.clubRel[DJ_KEY] ?? 0) + (good ? 12 : 4));
+  needs.give({ fun: 20, social: 10, energy: -6 });
+  player.locked = true;
+  const verdict =
+    r.avg >= 75 ? '"Okay. OKAY. They were going mental. You can come back."' : r.avg >= 55 ? '"Not bad at all. You kept them. That\'s the job."' : r.avg >= 35 ? '"Bit rough. You\'ll get there. Builds before drops, remember."' : '"...I\'ll take it from here."';
+  ui.openDialog({
+    name: 'DJ HALFLIFE',
+    text: `${verdict}\n\nCrowd energy ${Math.round(r.avg)}% · ${r.drops} drop${r.drops === 1 ? '' : 's'} · ${r.cleans} clean mix${r.cleans === 1 ? '' : 'es'}${r.wrecks ? ` · ${r.wrecks} trainwreck${r.wrecks > 1 ? 's' : ''}` : ''}\nPaid: $${pay} cash + $${tips} in tips.${good && state.djRep === 2 ? '\n\n"Ask me about a Friday."' : ''}`,
+    choices: [{ label: 'Pocket the cash', fn: () => ui.closeDialog() }],
+    onClose: () => (player.locked = false),
+  });
+  saveNow();
+}
+
+// ---------------------------------------------------------------- the green room
+function greenRoom(inside) {
+  if (!inside && !greenAccess()) return ui.toast('Locked. STAFF ONLY. Behind the door, someone laughs at a joke you will never hear.');
+  ui.fade(() => {
+    const sp = inside ? club.greenSpots.outside : club.greenSpots.inside;
+    player.teleport(player.space, sp.x, sp.z, sp.yaw);
+    rig.yaw = sp.yaw;
+    if (!inside && !state.seen.greenRoom) {
+      state.seen.greenRoom = true;
+      setTimeout(() => ui.hint('The green room: sit on the sofa to get your energy back, and help yourself to the rider.', 8), 600);
+    }
+  }, inside ? 'BACK TO THE FLOOR' : 'BACKSTAGE');
+}
+
+function riderGrab() {
+  const tonight = nightOf(clock.minutes);
+  if (state.riderNight !== tonight) {
+    state.riderNight = tonight;
+    state.riderCount = 0;
+  }
+  if (state.riderCount >= 3) return ui.toast("You've already raided the rider. Halflife's watching you.");
+  state.riderCount++;
+  needs.give({ hunger: 15, fun: 3 });
+  ui.toast(talkRng.pick(['Fancy crisps and a single, perfect grape.', 'A tiny sandwich with the crusts cut off. Rock and roll.', 'Sparkling water with a name you cannot pronounce.']));
+}
+
+// ---------------------------------------------------------------- the Undercurrent
+function enterUndercurrent() {
+  ui.fade(() => {
+    if (seat) standUp();
+    leaveInterior();
+    inUnder = true;
+    state.restedHere = false;
+    under.show(true);
+    const sp = under.spots.spawn;
+    player.teleport(under.space, sp.x, sp.z, sp.yaw);
+    Object.assign(rig, { space: under.space, dist: 3.4, pitch: 0.3, yaw: sp.yaw, curDist: 1.5, mode: 'follow', blend: 1 });
+    audio.startMusic('under');
+    const hm = clock.format().split(' ').filter(Boolean)[1];
+    ui.showLocation('THE UNDERCURRENT', `it is still ${hm}`);
+    if (!state.seen.undercurrent) {
+      state.seen.undercurrent = true;
+      setTimeout(() => ui.hint("Down here the clock doesn't move. Rest, listen, talk to the regulars. The hatch takes you back up whenever you're ready.", 10), 2200);
+      saveNow();
+    }
+  }, '3:33');
+}
+
+function leaveUndercurrent() {
+  ui.fade(() => {
+    if (seat) standUp();
+    inUnder = false;
+    under.show(false);
+    audio.stopMusic();
+    const front = club.w(11.7, 3.4);
+    player.teleport(outdoor, front.x, front.z, 0);
+    Object.assign(rig, { space: outdoor, pitch: 0.28, yaw: 0, curDist: rig.dist, mode: 'follow', blend: 1 });
+    const hm = clock.format().split(' ').filter(Boolean)[1];
+    ui.toast(`You climb back through the hatch. The clock says ${hm}. It has always said ${hm}.`);
+  }, '3:33');
+}
+
+const UNDER_LINES = {
+  Vesper: ["What'll it be? We only have nothing. It's very good.", 'Time is a guest here. It waits outside.', 'You came through the coil. Most people come through the coil.'],
+  'The man in the hat': ['I came in at 3:33 in 1987. Lovely night. Still is.', "Shh. Listen. That's the club, upstairs, played very slowly.", 'The gulls know about this place. Gulls know everything.'],
+  'A woman with lantern eyes': ['The tree grew down here looking for water. It found music instead.', "Every lantern anyone ever let go of comes here eventually. That one's yours.", 'You can feel it, right? The hum.'],
+  'Someone humming': ['Mm-hm-hmm. Hmm. Mmmm.', 'Hmm? Oh. Hi. Hmm-hmm.', "Hmm. (They hum the drop from tonight's set, slower, much sadder.)"],
+  'A sleepy raver': ["I was at OVERLOAD. Then I wasn't. Then I was here.", 'Is it still Saturday? It feels like Saturday.', 'Best afterparty in the city. No queue. No Dmitri.'],
+};
+
+function underInteraction() {
+  const p = player.pos;
+  if (seat) return { label: under.seats.includes(seat) && !state.restedHere ? 'Close your eyes for a while' : 'Stand up', act: under.seats.includes(seat) && !state.restedHere ? underRest : standUp };
+  if (near(p, under.spots.door, 1.1)) return { label: 'Climb back up through the hatch', act: leaveUndercurrent };
+  const a = under.nearest(p, 1.5);
+  const sp = under.freeSeats().find((q) => near(p, q, 0.95));
+  if (a && (!sp || Math.hypot(a.c.x - p.x, a.c.z - p.z) < Math.hypot(sp.x - p.x, sp.z - p.z)))
+    return { label: a.role === 'bar' ? 'Talk to Vesper' : `Talk to ${a.name.toLowerCase().startsWith('the') || a.name.startsWith('A ') || a.name.startsWith('Some') ? a.name.charAt(0).toLowerCase() + a.name.slice(1) : a.name}`, act: () => underTalk(a) };
+  if (sp) return { label: 'Sit down', act: () => sitDown(sp) };
+  if (near(p, under.spots.arch, 1.6)) return { label: 'Look through the arch', act: () => (needs.add('fun', 3), ui.toast('The tree from the Lantern Quarter, in a night with more stars than this one. A lantern drifts past on the other side and waves. Lanterns cannot wave.')) };
+  if (near(p, under.spots.switchboard, 1.2)) return { label: 'Pull the big brass lever', act: () => (needs.add('fun', 4), audio.coilHum(), ui.toast('Clunk. Every dial swings to 3:33 and the lanterns all turn to look at you. Then they go back to drifting.')) };
+  if (near(p, under.spots.record, 1.0)) return { label: 'Look at the record', act: () => ui.toast('The label just says SUBSTATION · 48 BARS · 3:33. It plays at a speed no record player has.') };
+  return null;
+}
+
+function underTalk(a) {
+  player.locked = true;
+  a.talking = true;
+  needs.chat(`under:${a.name}`, clock.minutes, 10);
+  const close = () => ui.closeDialog();
+  const choices = [];
+  if (a.role === 'bar' && state.nothingDrink !== nightOf(clock.minutes))
+    choices.push({
+      label: 'A glass of nothing, please',
+      fn: () => {
+        state.nothingDrink = nightOf(clock.minutes);
+        needs.give({ energy: 25, fun: 6 });
+        ui.openDialog({ name: 'VESPER', text: 'She pours you a glass of something clear that tastes exactly like the moment before a drop. You feel wide awake.', choices: [{ label: 'Thank you', fn: close }], onClose: () => ((a.talking = false), (player.locked = false)) });
+      },
+    });
+  choices.push({ label: 'Goodbye', fn: close });
+  ui.openDialog({ name: a.name.toUpperCase(), text: talkRng.pick(UNDER_LINES[a.name] ?? UNDER_LINES.Vesper), choices, onClose: () => ((a.talking = false), (player.locked = false)) });
+}
+
+function underRest() {
+  state.restedHere = true;
+  ui.fade(() => {
+    needs.give({ energy: 45, fun: 20, social: 5 });
+    ui.toast(`You close your eyes. Somewhere far above, a drop lands, very slowly. When you open them it's still ${clock.format().split(' ').filter(Boolean)[1]}, and you feel new.`);
+  }, '. . .');
 }
 
 function vipHost() {
@@ -865,6 +1291,8 @@ function barOrder(where, forWhom = null) {
     name: where,
     text: forWhom ? `What's ${forWhom.name} having?` : talkRng.pick(['What can I get you?', "What'll it be?", 'Yeah? What are you having?']),
     choices: [
+      ...(where === 'BAR' && !forWhom && !barJob.J.hired ? [{ label: 'Are you hiring?', fn: () => (close(), (player.locked = true), hireTalk()) }] : []),
+      ...(where === 'BAR' && !forWhom && barJob.J.hired && !barJob.onShift && !job.J.shift ? [{ label: 'Start a bar shift', fn: () => (close(), barJob.clockIn(nightOf(clock.minutes))) }] : []),
       ...DRINKS.map((dr) => ({
         label: dr.price ? `${dr.name} ($${dr.price})` : dr.name,
         fn: () => {
@@ -936,6 +1364,7 @@ function clubTalk(a) {
   };
   if (!known) {
     state.clubKnown[a.key] = true;
+    state.clubMem[a.key] = { night: tonight, did: 'chat' };
     return say(`${talkRng.pick(CLUB_GREET[clubWhere(a)])} I'm ${a.name}.`, menu());
   }
   say(talkRng.pick(CLUB_GREET[clubWhere(a)]), menu());
@@ -948,6 +1377,7 @@ function giveDrink(a, dr) {
     state.clubRel[a.key] = Math.min(100, (state.clubRel[a.key] ?? 0) + (dr.price >= 10 ? 10 : 6));
   }
   state.clubKnown[a.key] = true;
+  state.clubMem[a.key] = { night: tonight, did: 'drink' };
   ui.toast(`${a.name}: "${talkRng.pick(DRINK_THANKS)}"`);
   saveNow();
 }
@@ -1038,6 +1468,7 @@ function endDance(r) {
   if (r.partner) {
     const gain = Math.round(rate * 12);
     state.clubRel[r.partner.key] = Math.min(100, (state.clubRel[r.partner.key] ?? 0) + gain);
+    state.clubMem[r.partner.key] = { night: nightOf(clock.minutes), did: 'danced' };
     ui.toast(`Best combo ${r.best} · ${r.perfects} perfect. ${r.partner.name}: "${rate > 0.6 ? 'Okay, you can DANCE.' : 'That was fun!'}"`);
   } else ui.toast(`Best combo ${r.best} · ${r.perfects} perfect, ${r.goods} good. ${verdict}`);
   saveNow();
@@ -1093,8 +1524,42 @@ function clubMix() {
   return [170 + 900 * club.doorOpen, 0.0001 + 0.34 * fall * (0.7 + 0.3 * club.doorOpen)];
 }
 
+/** A regular you've made friends with comes over to say hi. */
+function friendGreets(a) {
+  const tonight = nightOf(clock.minutes);
+  const mem = state.clubMem[a.key];
+  const usual = [...a.nights].find((d) => d === clubNight());
+  const lines = [
+    mem?.did === 'danced' ? 'You! The dancer! Save me a spot on the floor later.' : null,
+    mem?.did === 'drink' ? 'Hey, my favourite person. I still owe you a drink.' : null,
+    usual ? `Told you I'm always here on ${dayName(usual)}s!` : null,
+    mem && tonight - mem.night > 3 ? "Where have you BEEN? It's been ages." : null,
+    'You came! I was hoping you would.',
+    'There you are! This crowd is so much better with you in it.',
+  ].filter(Boolean);
+  ui.toast(`${a.name}: "${talkRng.pick(lines)}"`);
+  needs.chat(`club:${a.key}`, clock.minutes, 8);
+  state.clubRel[a.key] = Math.min(100, (state.clubRel[a.key] ?? 0) + 2);
+  state.clubMem[a.key] = { night: tonight, did: mem?.did ?? 'chat' };
+}
+
 function updateClub(dt) {
   const tonight = nightOf(clock.minutes);
+  barJob.update(dt, { open: club.status === 'open', nightId: club.night.id, inClub, playerPos: player.pos });
+  updateDj(dt);
+  if (inClub && club.humOpen && club.zoneAt(player.pos) === 'hall' && state.humNight !== tonight && playing && !ui.modal) {
+    state.humNight = tonight;
+    audio.coilHum();
+    ui.toast('3:33. The coil hums. Behind it, around a little steel hatch, a seam of violet light.');
+  }
+  // tonight's theme sets the tempo: switching it means restarting the song
+  const th = tonightTheme();
+  if (club.night !== th) {
+    setTheme(th.id);
+    club.setNight(th);
+    clubbers.setNight(th);
+    if (audio.music?.style === 'club') audio.stopMusic();
+  }
   const open = club.status === 'open';
   const allow = inClub || (open && state.clubStamp === tonight);
   const people = clubbers.people();
@@ -1113,6 +1578,11 @@ function updateClub(dt) {
     onRoof: club.aloft(player.pos),
     hype: dance.hype,
     time,
+    rel: state.clubRel,
+    nightIndex: tonight,
+    playerFree: inClub && club.zoneAt(player.pos) === 'hall' && !dance.active && !seat && !ui.modal && !barJob.onShift && !dj.active,
+    crowdBoost: dj.active ? dj.energy / 100 : null,
+    onGreet: friendGreets,
   });
   // dancing and sitting drive the player's puppet
   const pc = player.char;
@@ -1127,7 +1597,7 @@ function updateClub(dt) {
   updateSeat();
   // the sound system
   const dClub = Math.hypot(player.pos.x - club.floorCenter.x, player.pos.z - club.floorCenter.z);
-  const want = playing && !place && open && dClub < 75;
+  const want = playing && !place && !inUnder && open && dClub < 75;
   if (want && audio.music?.style !== 'club') audio.startMusic('club', { beat: club.beat });
   if (!want && audio.music?.style === 'club') audio.stopMusic();
   if (audio.music?.style === 'club') audio.setMusicMix(...clubMix());
@@ -1217,13 +1687,15 @@ function updateNeeds(dt) {
   const dm = clock.minutes - needsLast;
   needsLast = clock.minutes;
   const mult = {};
-  if (job.J.shift) Object.assign(mult, { energy: 1.6, hygiene: 1.4, fun: 1.4 });
+  if (job.J.shift || barJob.onShift) Object.assign(mult, { energy: 1.6, hygiene: 1.4, fun: 1.4 });
   if (dm > 0 && dm < 30) needs.tick(dm, mult);
 
   // things that fill them while you're doing them (per real second)
   const home = place && !touring;
   if (home && place.tvOn) needs.add('fun', 0.25 * dt);
   if (home && audio.music) needs.add('fun', 0.08 * dt);
+  if (seat?.green) needs.add('energy', 0.1 * dt);
+  if (inUnder) needs.give({ energy: 0.06 * dt, fun: 0.1 * dt, social: 0.03 * dt });
   if (env.magic > 0.1) needs.add('fun', 0.12 * env.magic * dt);
   if (!place && city.blockAt(player.pos.x, player.pos.z)?.kind === 'park') needs.add('fun', 0.05 * dt);
   if (inClub && club.status === 'open') needs.give({ fun: 0.04 * dt, social: 0.05 * dt });
@@ -1272,6 +1744,8 @@ function passOut() {
     if (seat) standUp();
     visit.interrupt();
     if (job.J.shift) job.clockOut();
+    if (barJob.onShift) barJob.clockOut();
+    if (dj.active) dj.end(true);
     const home = apts.byId[state.home];
     const atHome = place === home && !touring;
     const fare = 20;
@@ -1349,10 +1823,15 @@ function leaveInterior() {
   inStore = false;
   inClub = false;
   inGullys = false;
+  if (inUnder) {
+    inUnder = false;
+    under.show(false);
+  }
   district = '';
 }
 
 function warpOutside(spot) {
+  if (dj.active) dj.end(true);
   ui.fade(() => {
     leaveInterior();
     if (seat) standUp();
@@ -1469,7 +1948,13 @@ const park = city.blocks.find((b) => b.kind === 'park');
 
 // ----------------------------------------------------------------------------
 // The map (M) and routes
-const places = buildPlaces({ city, apts, state, store, job, gullys, club, lantern, park, clubNight });
+const places = buildPlaces({ city, apts, state, store, job, gullys, club, lantern, park, clubNight, clubTheme: tonightTheme, clubFriends });
+
+/** Friends whose usual night it is tonight (for the map). */
+function clubFriends() {
+  const d = clubNight();
+  return clubbers.pool.filter((a) => (state.clubRel[a.key] ?? 0) >= 20 && a.nights.has(d)).map((a) => a.name);
+}
 const cityMap = new CityMap(ui, city);
 ui.mapView = cityMap;
 const waypoint = new Waypoint(scene, tex);
@@ -1494,7 +1979,7 @@ function openMap() {
   player.locked = true;
   audio.blip(true);
   cityMap.open({
-    places,
+    places: { list: places.list.filter((p) => !p.hidden?.()), small: places.small },
     player,
     camYaw: () => rig.yaw,
     hour: () => clock.hour,
@@ -1525,7 +2010,7 @@ function updateRoute(dt) {
 }
 
 function openWardrobe() {
-  if (job.J.shift) return ui.toast("You're in uniform. Clock out first.");
+  if (job.J.shift || barJob.onShift) return ui.toast("You're in uniform. Clock out first.");
   player.locked = true;
   rig.setMode('wardrobe');
   ui.openWardrobe(
@@ -1585,7 +2070,7 @@ function frame(now) {
   const free = playing && !ui.modal && !ui.fading;
   input.enabled = free;
   if (free) handleKeys();
-  clock.update(dt, free && input.keys.has('KeyT') && !job.J.shift);
+  if (!inUnder) clock.update(dt, free && input.keys.has('KeyT') && !job.J.shift && !barJob.onShift);
   if (playing) payRent();
 
   player.update(dt, input, rig.yaw, (p, r) => {
@@ -1594,7 +2079,7 @@ function frame(now) {
   });
   job.push(player.pos, player.radius);
   // walking into the shop: tighter camera, shop music, shop lighting
-  if (!place) {
+  if (!place && !inUnder) {
     const nowIn = store.contains(player.pos, -0.05);
     if (nowIn !== inStore) {
       inStore = nowIn;
@@ -1619,7 +2104,7 @@ function frame(now) {
       if (nowInClub) {
         outdoorDist = rig.dist;
         rig.dist = 4.2;
-        if (playing) ui.showLocation('SUBSTATION', club.status === 'open' ? `${Clubbers.weekdayOfNight(clock.minutes).toLowerCase()} night` : 'lights up');
+        if (playing) ui.showLocation('SUBSTATION', club.status === 'open' ? `${tonightTheme().name.toLowerCase()} · ${dayName(clubNight()).toLowerCase()} night` : 'lights up');
       } else {
         rig.dist = outdoorDist;
         district = '';
@@ -1645,7 +2130,8 @@ function frame(now) {
     }
   }
   job.update(dt, time, { playerPos: player.pos });
-  if (!place) clubbers.push(player.pos, inClub ? 0.28 : player.radius);
+  if (!place && !inUnder) clubbers.push(player.pos, inClub ? 0.28 : player.radius);
+  under.update(dt, time);
   if (!place && (inGullys || gullys.onPatio(player.pos))) diners.push(player.pos, player.radius);
   updateClub(dt);
   updateGullys(dt);
@@ -1663,15 +2149,16 @@ function frame(now) {
   // in tight rooms the camera can end up in your head: hide yourself then
   player.char.visible = rig.mode === 'title' || camera.position.distanceTo(rig.focus) > 0.75;
   env.magic = lantern.influence(playing ? player.pos : camera.position);
+  if (inUnder) env.magic = Math.max(env.magic, 0.5);
   const aloft = !place && !inClub && club.aloft(player.pos);
-  env.indoor = place ? 1 : inStore || inGullys ? 0.6 : inClub ? 0.9 : 0;
+  env.indoor = place || inUnder ? 1 : inStore || inGullys ? 0.6 : inClub ? 0.9 : 0;
   if (inClub) env.magic *= 0.25;
   env.update(clock.hour, time, player.pos);
   city.update(dt);
   city.updateLampLights(
     playing ? player.pos : camera.position,
     env.night,
-    place ? { list: place.fixtures, on: apts.lampOn } : inStore ? { list: store.fixtures, on: 1 } : inClub ? { list: club.fixtures, on: 1 } : inGullys ? { list: gullys.fixtures, on: 1 } : aloft && club.status === 'open' ? { list: club.roofFixtures, on: 1 } : null,
+    place ? { list: place.fixtures, on: apts.lampOn } : inUnder ? { list: under.fixtures, on: 1 } : inStore ? { list: store.fixtures, on: 1 } : inClub ? { list: club.fixtures, on: 1 } : inGullys ? { list: gullys.fixtures, on: 1 } : aloft && club.status === 'open' ? { list: club.roofFixtures, on: 1 } : null,
   );
   store.update(dt, time, env, job.people(player.pos), camera);
   apts.update(dt, time, env, place);
@@ -1685,7 +2172,7 @@ function frame(now) {
     ui.setPrompt(current?.label ?? null);
     ui.setClock(clock.format(), clock.day);
     ui.setMoney(state.cash, state.bank);
-    if (!place && (districtTimer -= dt) <= 0) {
+    if (!place && !inUnder && (districtTimer -= dt) <= 0) {
       districtTimer = 0.5;
       const d = city.districtAt(player.pos.x, player.pos.z);
       if (d !== district) {
@@ -1702,7 +2189,7 @@ function frame(now) {
 
   const parkD = park ? Math.hypot(player.pos.x - park.cx, player.pos.z - park.cz) : 999;
   const green = Math.max(smoothstep(45, 15, parkD), smoothstep(0.6, 1.0, Math.hypot(player.pos.x, player.pos.z) / 160));
-  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place ? 1 : inStore || inGullys ? 0.5 : inClub ? 0.85 : 0, store: inStore ? 1 : 0, kitchen: inGullys && gullys.open ? 1 : 0 });
+  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place || inUnder ? 1 : inStore || inGullys ? 0.5 : inClub ? 0.85 : 0, store: inStore ? 1 : 0, kitchen: inGullys && gullys.open ? 1 : 0 });
 
   // the shop's security cameras (only when you're close enough to see a monitor)
   if (!place && cctvTick++ % 4 === 0 && camera.position.distanceTo(store.doorCenter) < 30) store.renderCCTV(renderer, scene);
@@ -1739,6 +2226,15 @@ window.game = {
   diners,
   visit,
   needs,
+  barJob,
+  dj,
+  under,
+  places,
+  enterUndercurrent,
+  startDjSet,
+  get inUnder() {
+    return inUnder;
+  },
   crowd,
   audio,
   dance,

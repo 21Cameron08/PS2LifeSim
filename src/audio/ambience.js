@@ -1,4 +1,4 @@
-import { SPB, sectionAt, CHORDS, ROOTS, chordAt, hz as noteHz } from './clubTrack.js';
+import { SPB, sectionAt, CHORDS, ROOTS, chordAt, hz as noteHz, theme } from './clubTrack.js';
 
 // All sound is synthesised at runtime with WebAudio: no audio files needed yet.
 // Layers: city rumble, wind, night crickets, a mystical pad near the Lantern
@@ -278,10 +278,10 @@ export class Ambience {
     if (style === 'club') return this.startClub(opts.beat ?? 0);
     const out = ctx.createGain();
     out.gain.value = 0.0001;
-    out.gain.setTargetAtTime(style === 'piano' ? 0.16 : style === 'muzak' ? 0.07 : style === 'gullys' ? 0.075 : 0.12, ctx.currentTime, 0.4);
+    out.gain.setTargetAtTime(style === 'piano' ? 0.16 : style === 'muzak' ? 0.07 : style === 'gullys' ? 0.075 : style === 'under' ? 0.14 : 0.12, ctx.currentTime, 0.4);
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = style === 'radio' ? 2400 : style === 'records' ? 4200 : style === 'muzak' ? 1800 : style === 'gullys' ? 2800 : 9000;
+    lp.frequency.value = style === 'radio' ? 2400 : style === 'records' ? 4200 : style === 'muzak' ? 1800 : style === 'gullys' ? 2800 : style === 'under' ? 2200 : 9000;
     out.connect(lp);
     let tail = lp;
     if (style === 'radio') {
@@ -293,7 +293,20 @@ export class Ambience {
     }
     tail.connect(this.master);
     const nodes = [];
-    if (style === 'radio' || style === 'records') {
+    let echo = null;
+    if (style === 'under') {
+      // everything down here comes back off the bricks
+      echo = ctx.createDelay(2);
+      echo.delayTime.value = 0.64;
+      const fb = ctx.createGain();
+      fb.gain.value = 0.55;
+      const ef = ctx.createBiquadFilter();
+      ef.type = 'lowpass';
+      ef.frequency.value = 1800;
+      echo.connect(ef).connect(fb).connect(echo);
+      ef.connect(out);
+    }
+    if (style === 'radio' || style === 'records' || style === 'under') {
       const crackle = ctx.createBufferSource();
       crackle.buffer = this.white;
       crackle.loop = true;
@@ -301,12 +314,12 @@ export class Ambience {
       cf.type = 'highpass';
       cf.frequency.value = 3500;
       const cg = ctx.createGain();
-      cg.gain.value = style === 'radio' ? 0.05 : 0.025;
+      cg.gain.value = style === 'radio' ? 0.05 : style === 'under' ? 0.03 : 0.025;
       crackle.connect(cf).connect(cg).connect(out);
       crackle.start();
       nodes.push(crackle);
     }
-    this.music = { style, out, nodes, bar: 0, next: ctx.currentTime + 0.15, len: style === 'piano' ? 2.6 : style === 'muzak' ? 2.8 : style === 'gullys' ? 2.0 : 2.2 };
+    this.music = { style, out, echo, nodes, bar: 0, next: ctx.currentTime + 0.15, len: style === 'piano' ? 2.6 : style === 'muzak' ? 2.8 : style === 'gullys' ? 2.0 : style === 'under' ? (4 * 60) / 70 : 2.2 };
   }
 
   // ---------------------------------------------------------------- club
@@ -372,40 +385,89 @@ export class Ambience {
 
   playClubBar(m, t) {
     const S = sectionAt(m.bar);
+    const th = theme().id;
     const sb = SPB;
     const ci = chordAt(m.bar);
     const chord = CHORDS[ci];
     const root = ROOTS[ci];
     const D = m.out;
     const P = m.pump.gain;
+    const kickVol = th === 'low' ? 0.36 : th === 'overload' ? 0.66 : 0.55;
     // the stab filter opens through the build
-    const open = S.name === 'build' ? 900 + (S.bar / S.len) * 3600 : S.name === 'breakdown' ? 800 : 2600;
+    const open = S.name === 'build' ? 900 + (S.bar / S.len) * 3600 : S.name === 'breakdown' ? 800 : th === 'low' ? 1400 : 2600;
     m.stabF.frequency.setValueAtTime(open, t);
     for (let k = 0; k < 4; k++) {
       const tb = t + k * sb;
       if (S.kick) {
-        this.clubKick(D, tb);
-        P.setValueAtTime(0.3, tb);
+        this.clubKick(D, tb, kickVol);
+        P.setValueAtTime(th === 'low' ? 0.55 : 0.3, tb);
         P.linearRampToValueAtTime(1, tb + sb * 0.6);
       }
-      if (S.clap && (k === 1 || k === 3)) this.clap(D, tb);
-      if (S.hats) {
-        this.noiseAt(D, tb + sb / 2, 9000, 0.05, 0.04, 'highpass');
-        if (S.name === 'drop' || S.name === 'build') for (const q of [0.25, 0.75]) this.noiseAt(D, tb + sb * q, 10000, 0.018, 0.025, 'highpass');
+      if (S.clap && (k === 1 || k === 3)) {
+        if (th === 'low') this.noiseAt(D, tb, 3400, 0.05, 0.03); // a rimshot, not a clap
+        else this.clap(D, tb);
       }
-      if (S.open) this.noiseAt(D, tb + sb / 2, 7000, 0.035, 0.22, 'highpass');
-      if (S.bass) {
-        this.voice(m.bassF, noteHz(root - 12), tb + sb / 2, sb * 0.42, 'sawtooth', 0.16, 0.005);
+      if (S.hats) {
+        this.noiseAt(D, tb + sb / 2, 9000, th === 'low' ? 0.03 : 0.05, 0.04, 'highpass');
+        const sixteenths = S.name === 'drop' || S.name === 'build' || th === 'static' || th === 'overload';
+        if (sixteenths)
+          for (const q of [0.25, 0.75]) if (th !== 'static' || Math.random() < 0.8) this.noiseAt(D, tb + sb * q, 10000, 0.018, 0.025, 'highpass');
+      }
+      if (S.open || (th === 'overload' && S.name === 'groove')) this.noiseAt(D, tb + sb / 2, 7000, 0.035, 0.22, 'highpass');
+      if (S.bass && th !== 'overload') {
+        const wave = th === 'static' ? 'square' : 'sawtooth';
+        this.voice(m.bassF, noteHz(root - 12), tb + sb / 2, sb * (th === 'static' ? 0.22 : 0.42), wave, th === 'low' ? 0.12 : 0.16, 0.005);
         this.voice(m.bassF, noteHz(root - 24), tb + sb / 2, sb * 0.42, 'sine', 0.14, 0.005);
+        if (th === 'low') this.voice(m.bassF, noteHz(root - 24), tb, sb * 0.3, 'sine', 0.08, 0.01);
       }
     }
-    if (S.stabs)
-      for (const q of [0.75, 1.5, 2.75, 3.5])
-        for (const n of chord) this.voice(m.stabF, noteHz(n), t + q * sb, 0.2, 'sawtooth', 0.028, 0.004);
-    if (S.pad) for (const n of chord) this.voice(m.padF, noteHz(n - 12), t, 4 * sb * 1.05, 'triangle', 0.045, 0.6);
-    if (S.lead) {
+    // OVERLOAD's acid line: sixteen squelchy notes a bar through a resonant filter
+    if (S.bass && th === 'overload') {
+      const seq = [0, 0, 12, 0, 3, 0, 7, 12, 0, 10, 0, 12, 3, 0, 15, 7];
+      const f = m.bassF.frequency;
+      for (let k = 0; k < 16; k++) {
+        const tn = t + (k * sb) / 4;
+        if (k % 4 === 3 && m.bar % 2) continue;
+        this.voice(m.bassF, noteHz(root - 12 + seq[k]), tn, sb * 0.22, 'sawtooth', 0.12, 0.003);
+        f.setValueAtTime(seq[k] > 6 ? 2400 : 1300, tn);
+        f.exponentialRampToValueAtTime(260, tn + sb * 0.22);
+      }
+      this.voice(m.bassF, noteHz(root - 24), t, 4 * sb * 0.95, 'sine', 0.1, 0.01);
+    } else m.bassF.frequency.setValueAtTime(420, t);
+    if (S.stabs) {
+      if (th === 'low') {
+        // soft chords on the one and the three, with a long tail
+        for (const q of [0, 2]) for (const n of chord) this.voice(m.stabF, noteHz(n), t + q * sb, 1.6 * sb, 'triangle', 0.03, 0.02);
+      } else if (th === 'current') {
+        // piano-ish stabs: a bright attack and a ringing decay
+        for (const q of [0.75, 1.5, 2.75, 3.5])
+          for (const n of chord) {
+            this.voice(m.stabF, noteHz(n + 12), t + q * sb, 0.42, 'triangle', 0.034, 0.002);
+            this.voice(m.stabF, noteHz(n), t + q * sb, 0.3, 'sine', 0.02, 0.002);
+          }
+      } else {
+        const wave = th === 'static' ? 'square' : 'sawtooth';
+        for (const q of [0.75, 1.5, 2.75, 3.5]) for (const n of chord) this.voice(m.stabF, noteHz(n), t + q * sb, th === 'static' ? 0.08 : 0.2, wave, 0.028, 0.004);
+        // STATIC stutters: the last stab of every other bar repeats on sixteenths
+        if (th === 'static' && m.bar % 2) for (let r = 1; r < 4; r++) for (const n of chord) this.voice(m.stabF, noteHz(n), t + (3.5 + r * 0.125) * sb, 0.05, 'square', 0.02, 0.002);
+      }
+    }
+    // STATIC: a random burst of digital noise somewhere in the bar
+    if (th === 'static' && S.name !== 'breakdown' && Math.random() < 0.6) {
+      const tg = t + Math.floor(Math.random() * 16) * (sb / 4);
+      this.glitch(D, tg, 0.04);
+    }
+    if (S.pad || (th === 'low' && S.name !== 'intro')) for (const n of chord) this.voice(m.padF, noteHz(n - 12), t, 4 * sb * 1.05, 'triangle', th === 'low' && !S.pad ? 0.025 : 0.045, 0.6);
+    if (S.lead || (th === 'current' && S.name === 'groove' && m.bar % 4 >= 2)) {
       const arp = [chord[0] + 12, chord[2] + 12, chord[3] + 12, chord[1] + 24];
-      for (let k = 0; k < 16; k++) if (k % 4 !== 3) this.voice(m.pump, noteHz(arp[k % 4]), t + (k * sb) / 4, sb * 0.2, 'square', 0.016, 0.004);
+      const wave = th === 'low' ? 'sine' : 'square';
+      const vol = th === 'current' && S.name === 'groove' ? 0.01 : 0.016;
+      for (let k = 0; k < 16; k++)
+        if (k % 4 !== 3) {
+          this.voice(m.pump, noteHz(arp[k % 4]), t + (k * sb) / 4, sb * 0.2, wave, vol, 0.004);
+          // LOW VOLTAGE's lead has an echo
+          if (th === 'low') this.voice(m.pump, noteHz(arp[k % 4]), t + (k * sb) / 4 + sb * 0.75, sb * 0.2, wave, vol * 0.4, 0.004);
+        }
     }
     if (S.riser && S.bar === 0) {
       // noise riser over the whole build, snare roll over its last two bars
@@ -421,26 +483,105 @@ export class Ambience {
       f.frequency.exponentialRampToValueAtTime(6000, t + len);
       const g = ctx.createGain();
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.09, t + len);
+      g.gain.exponentialRampToValueAtTime(th === 'low' ? 0.05 : 0.09, t + len);
       g.gain.exponentialRampToValueAtTime(0.0001, t + len + 0.1);
       src.connect(f).connect(g).connect(D);
       src.start(t);
       src.stop(t + len + 0.2);
     }
-    if (S.riser && S.bar >= S.len - 2) {
+    if (S.riser && S.bar >= S.len - 2 && th !== 'low') {
       const n = S.bar === S.len - 1 ? 16 : 8;
       for (let k = 0; k < n; k++) this.noiseAt(D, t + (k * 4 * sb) / n, 1800, 0.05 + (k / n) * 0.05, 0.08);
     }
-    if (S.name === 'drop' && S.bar === 0) this.cheer(D, t);
+    if (S.name === 'drop' && S.bar === 0) {
+      this.cheer(D, t);
+      if (th === 'overload') this.airHorn(D, t);
+    }
+    m.onBar?.(m.bar, t, S);
   }
 
-  clubKick(dest, t) {
+  /** A burst of bit-crushed-sounding noise (STATIC's glitches, a DJ's trainwreck). */
+  glitch(dest, t, vol = 0.05) {
+    for (let k = 0; k < 6; k++) this.noiseAt(dest, t + k * 0.018, 600 + Math.random() * 6000, vol, 0.015);
+    this.voice(dest, 80 + Math.random() * 400, t, 0.08, 'square', vol * 0.5, 0.001);
+  }
+
+  /** OVERLOAD's air horn on the drop. */
+  airHorn(dest, t) {
+    for (const [f, d] of [
+      [466, 0],
+      [466, 0.18],
+      [466, 0.36],
+    ])
+      for (const det of [1, 1.006, 1.5])
+        this.voice(dest, f * det, t + d, 0.16, 'sawtooth', 0.022, 0.005);
+    this.voice(dest, 466, t + 0.56, 0.7, 'sawtooth', 0.025, 0.005);
+  }
+
+  /** The DJ game's mix sounds: a filter sweep for a clean cue, a scratch for a trainwreck. */
+  djCue(clean) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    if (clean) {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.white;
+      const f = this.ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 3;
+      f.frequency.setValueAtTime(5000, t);
+      f.frequency.exponentialRampToValueAtTime(400, t + 0.5);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.05, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+      src.connect(f).connect(g).connect(this.master);
+      src.start(t, Math.random());
+      src.stop(t + 0.6);
+    } else {
+      this.glitch(this.master, t, 0.09);
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(300, t);
+      o.frequency.exponentialRampToValueAtTime(60, t + 0.35);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.06, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+      o.connect(g).connect(this.master);
+      o.start(t);
+      o.stop(t + 0.45);
+    }
+  }
+
+  /** The coil at 3:33: a deep hum that swells and shimmers. */
+  coilHum() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (const [f, v] of [
+      [55, 0.09],
+      [110.4, 0.04],
+      [330.8, 0.015],
+    ]) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f, t);
+      o.frequency.linearRampToValueAtTime(f * 1.012, t + 6);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v, t + 2.5);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 7);
+      o.connect(g).connect(this.master);
+      o.start(t);
+      o.stop(t + 7.1);
+    }
+    for (let k = 0; k < 5; k++) this.voice(this.chimeBus ?? this.master, [987.8, 1174.7, 1318.5, 1567.98, 1760][k], t + 1.5 + k * 0.6, 2.5, 'sine', 0.025, 0.2);
+  }
+
+  clubKick(dest, t, vol = 0.55) {
     const ctx = this.ctx;
     const o = ctx.createOscillator();
     o.frequency.setValueAtTime(160, t);
     o.frequency.exponentialRampToValueAtTime(46, t + 0.09);
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0.55, t);
+    g.gain.setValueAtTime(vol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.36);
     o.connect(g).connect(dest);
     o.start(t);
@@ -508,6 +649,7 @@ export class Ambience {
   playBar(m, t) {
     if (m.style === 'club') return this.playClubBar(m, t);
     if (m.style === 'gullys') return this.playGullysBar(m, t);
+    if (m.style === 'under') return this.playUnderBar(m, t);
     const prog = [
       [62, 65, 69, 72],
       [55, 59, 62, 65],
@@ -566,6 +708,67 @@ export class Ambience {
     else {
       const scale = [72, 74, 76, 79, 81, 84];
       for (let i = 0; i < 4; i++) if (Math.random() < 0.45) this.voice(m.out, hz(scale[Math.floor(Math.random() * scale.length)]), t + (i * L) / 4 + 0.02, 0.35, 'sine', 0.035, 0.01);
+    }
+  }
+
+  // The Undercurrent: SUBSTATION's chords, slowed to 70 BPM and pitched down, detuned
+  // pads, a heartbeat for a kick, bells in the echo and swells that play backwards.
+  playUnderBar(m, t) {
+    const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const sb = 60 / 70;
+    const ci = Math.floor((m.bar % 8) / 2);
+    const chord = CHORDS[ci].map((n) => n - 5);
+    const root = ROOTS[ci] - 5;
+    for (const n of chord)
+      for (const det of [0.996, 1.004]) {
+        const o = this.ctx.createOscillator();
+        o.type = 'triangle';
+        o.frequency.value = hz(n) * det;
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.022, t + 1.4);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 4 * sb * 1.08);
+        o.connect(g).connect(m.out);
+        o.start(t);
+        o.stop(t + 4 * sb * 1.1);
+      }
+    this.voice(m.out, hz(root - 24), t, 4 * sb, 'sine', 0.09, 0.4);
+    // lub-dub
+    for (const q of [0, 0.32]) {
+      const o = this.ctx.createOscillator();
+      o.frequency.setValueAtTime(70, t + q);
+      o.frequency.exponentialRampToValueAtTime(38, t + q + 0.12);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(q ? 0.12 : 0.18, t + q);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + q + 0.3);
+      o.connect(g).connect(m.out);
+      o.start(t + q);
+      o.stop(t + q + 0.35);
+    }
+    // bells into the echo
+    const bells = [72, 74, 76, 79, 81, 84].map((n) => n - 5);
+    for (let k = 0; k < 4; k++)
+      if (Math.random() < 0.4) {
+        const f = hz(bells[Math.floor(Math.random() * bells.length)]);
+        this.voice(m.echo ?? m.out, f, t + k * sb + 0.05, 1.8, 'sine', 0.03, 0.005);
+        this.voice(m.out, f, t + k * sb + 0.05, 1.8, 'sine', 0.025, 0.005);
+      }
+    // a reversed swell every fourth bar
+    if (m.bar % 4 === 3) {
+      const o = this.ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = hz(chord[2] + 12);
+      const f = this.ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.setValueAtTime(300, t + 2 * sb);
+      f.frequency.exponentialRampToValueAtTime(2400, t + 4 * sb);
+      const g = this.ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t + 2 * sb);
+      g.gain.exponentialRampToValueAtTime(0.03, t + 4 * sb - 0.02);
+      g.gain.linearRampToValueAtTime(0.0001, t + 4 * sb);
+      o.connect(f).connect(g).connect(m.out);
+      o.start(t + 2 * sb);
+      o.stop(t + 4 * sb + 0.05);
     }
   }
 

@@ -95,17 +95,20 @@ export const CLUB_CHAT = {
     "Have you tried the Live Wire? Don't. Actually, do.",
     'The bouncer looked at my shoes for a full ten seconds. A full ten.',
     'They play the same track every night and I lose it every time the drop hits.',
+    "Saturdays are OVERLOAD. Bring earplugs and a spare shirt. You'll see.",
   ],
   friendly: [
     "Oh hey, it's you again! The usual crowd's here.",
     'You dance better than you think you do. Trust me.',
     "We should get fries from Ray's cart after. It's the law.",
     'The DJ winked at me. Or had something in their eye. Both count.',
+    "They say if you're in the hall at 3:33 the coil hums. I've never stayed that late.",
+    'Nadia behind the bar is always hiring. She also scares me. Both things are true.',
   ],
   close: [
     "Honestly, it's not a proper night until you show up.",
     'You, me, the floor, the drop. That is the plan. That has always been the plan.',
-    "If they ever open that door behind the big coil, we're going in together.",
+    "If they ever open that door behind the big coil, we're going in together. 3:33, someone said. Exactly then.",
     "Some nights I think the music down here and the lanterns over the road are the same song.",
   ],
 };
