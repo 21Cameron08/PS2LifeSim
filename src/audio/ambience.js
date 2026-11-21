@@ -278,11 +278,11 @@ export class Ambience {
     if (style === 'club') return this.startClub(opts.beat ?? 0);
     const out = ctx.createGain();
     out.gain.value = 0.0001;
-    const GAIN = { piano: 0.16, muzak: 0.07, gullys: 0.075, under: 0.14, mall: 0.075, street: 0.09, lounge: 0.085 };
+    const GAIN = { piano: 0.16, muzak: 0.07, gullys: 0.075, under: 0.14, mall: 0.075, street: 0.09, lounge: 0.085, bossa: 0.09 };
     out.gain.setTargetAtTime(GAIN[style] ?? 0.12, ctx.currentTime, 0.4);
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    const CUT = { radio: 2400, records: 4200, muzak: 1800, gullys: 2800, under: 2200, mall: 3200, street: 3600, lounge: 2600 };
+    const CUT = { radio: 2400, records: 4200, muzak: 1800, gullys: 2800, under: 2200, mall: 3200, street: 3600, lounge: 2600, bossa: 3400 };
     lp.frequency.value = CUT[style] ?? 9000;
     out.connect(lp);
     let tail = lp;
@@ -321,7 +321,7 @@ export class Ambience {
       crackle.start();
       nodes.push(crackle);
     }
-    const LEN = { piano: 2.6, muzak: 2.8, gullys: 2.0, under: (4 * 60) / 70, mall: (4 * 60) / 96, street: (4 * 60) / 88, lounge: (4 * 60) / 104 };
+    const LEN = { piano: 2.6, muzak: 2.8, gullys: 2.0, under: (4 * 60) / 70, mall: (4 * 60) / 96, street: (4 * 60) / 88, lounge: (4 * 60) / 104, bossa: (4 * 60) / 128 };
     this.music = { style, out, echo, nodes, bar: 0, next: ctx.currentTime + 0.15, len: LEN[style] ?? 2.2 };
   }
 
@@ -656,6 +656,7 @@ export class Ambience {
     if (m.style === 'mall') return this.playMallBar(m, t);
     if (m.style === 'street') return this.playStreetBar(m, t);
     if (m.style === 'lounge') return this.playLoungeBar(m, t);
+    if (m.style === 'bossa') return this.playBossaBar(m, t);
     const prog = [
       [62, 65, 69, 72],
       [55, 59, 62, 65],
@@ -770,6 +771,34 @@ export class Ambience {
     [0, 0.25, 0.5, 0.75].forEach((b, i) => this.voice(m.out, hz(chord[[0, 2, 1, 3][i]] - 24), t + b * L, L * 0.22, 'sine', 0.1, 0.01));
     for (let i = 0; i < 4; i++) this.noiseAt(m.out, t + (i * L) / 4, 140, 0.05, 0.12, 'lowpass');
     for (let i = 0; i < 8; i++) this.noiseAt(m.out, t + (i * L) / 8 + 0.01, 9000, 0.008, 0.09, 'highpass');
+  }
+
+  // ROOMSET (and the jukebox's B-side): bossa nova. Nylon-string comping on the
+  // syncopated pattern, a bass on the root and fifth, rim clicks, a shaker, a breathy flute.
+  playBossaBar(m, t) {
+    const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const L = m.len;
+    const prog = [
+      [57, 60, 64, 67, 71],
+      [62, 66, 69, 72, 76],
+      [55, 59, 62, 66, 69],
+      [60, 64, 67, 71, 74],
+    ];
+    const roots = [45, 50, 43, 48];
+    const k = m.bar % 4;
+    const chord = prog[k];
+    const r = roots[k];
+    for (const s of [0, 3, 6, 10, 13]) chord.slice(1).forEach((n, i) => this.voice(m.out, hz(n), t + (s * L) / 16 + i * 0.009, L * 0.16, 'triangle', 0.013, 0.003));
+    [
+      [0, 0],
+      [0.375, 7],
+      [0.5, 0],
+      [0.875, 7],
+    ].forEach(([b, iv]) => this.voice(m.out, hz(r - 12 + iv), t + b * L, L * 0.32, 'sine', 0.11, 0.012));
+    for (const s of m.bar % 2 ? [2, 6, 10, 13] : [0, 3, 6, 10, 12]) this.noiseAt(m.out, t + (s * L) / 16, 2600, 0.03, 0.025);
+    for (let i = 0; i < 16; i++) this.noiseAt(m.out, t + (i * L) / 16, 7500, i % 2 ? 0.007 : 0.012, 0.04, 'highpass');
+    const flute = [76, 79, 81, 83, 86, 88];
+    if (m.bar % 8 > 3) for (let i = 0; i < 3; i++) if (Math.random() < 0.55) this.voice(m.out, hz(flute[Math.floor(Math.random() * flute.length)]), t + ((i * 5 + 2) * L) / 16, L * 0.28, 'sine', 0.022, 0.06);
   }
 
   // The Undercurrent: SUBSTATION's chords, slowed to 70 BPM and pitched down, detuned

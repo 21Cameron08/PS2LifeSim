@@ -6,6 +6,9 @@ import { InteriorKit, F, C } from './interior/kit.js';
 import { makeInteriorUniforms } from './interior/bake.js';
 import { createGalleriaTextures, msignUV } from '../render/galleriaTextures.js';
 import { additive } from '../render/materials.js';
+import { FURN, FishTank } from '../game/furniture.js';
+import { ITEMS } from '../game/fashion.js';
+import { TOYS } from '../game/gullysMenu.js';
 
 // The Halcyon Galleria, Downtown: a two-storey mall around a skylit atrium. Like
 // GULLY'S it's part of the street (no loading screen) and builds its own shell.
@@ -14,10 +17,11 @@ import { additive } from '../render/materials.js';
 //  x 0      8.5        17.5       26      x 0   6.5 8.5       17.5 19.5    26
 //   ┌────────┬──────────┬────────┐          ┌─────┬─┬──────────┬─┬───────┐
 //   │ RACK & │ concourse│ SPLIT- │ z 0      │     │ │ back walk│ │ROOMSET│
-//   │ RUIN   ├──────────┤ GRAIN  │ z 2.5    │MAIS-│w├──────────┤e│(soon) │
-//   │        │  atrium  │        │          │ ON  │a│  open to │a│BRIGHT-│
-//   │(thrift)│ escalator│(street-│          │VELL-│l│  below   │l│WIRE   │
-//   │        │ fountain │ wear)  │          │ ARD │k│          │k│(refit)│
+//   │ RUIN   ├──────────┤ GRAIN  │ z 2.5    │MAIS-│w├──────────┤e│(furni-│
+//   │        │  atrium  │        │          │ ON  │a│  open to │a│ture)  │
+//   │(thrift)│ escalator│(street-│          │VELL-│l│  below   │l├───────┤ z 12.2
+//   │        │ fountain │ wear)  │          │ ARD │k│          │k│BRIGHT-│
+//   │        │          │        │          │     │ │          │ │WIRE   │
 //   └────────┴─[doors]──┴────────┘ z 17     └─────┴─┴──────────┴─┴───────┘
 //
 // Local coordinates: x along the street (0..W), z from the back wall (0) to the
@@ -40,6 +44,7 @@ const RUN = ESC.zBot - ESC.zTop;
 export const slopeY = (z) => clamp((UP * (ESC.zBot - z)) / RUN, 0, UP);
 const TREAD = 0.035; // the moving steps' tops sit this far above the slope
 const FOUNT = { x: 13, z: 14.45, r: 1.15 };
+const PART = 12.2; // the wall between ROOMSET and BRIGHTWIRE (upstairs, east)
 const R90 = Math.PI / 2;
 const PI = Math.PI;
 
@@ -108,6 +113,7 @@ export class Galleria {
     const { x, z, y } = this.local(p);
     if (y > UP - 0.6) {
       if (x < 6.5) return 'mv';
+      if (x > 19.5 && z < PART) return 'rs';
       return 'mall';
     }
     if (x < 8.5) return 'rr';
@@ -139,7 +145,7 @@ export class Galleria {
       if (h <= reach && h > best) best = h;
     };
     // the upper floor: everything but the atrium void
-    if (x < 19.5 && !(x > 8.5 && x < 17.5 && z > 2.5)) take(UP);
+    if ((x < 19.5 && !(x > 8.5 && x < 17.5 && z > 2.5)) || (x >= 19.5 && z < PART)) take(UP);
     // the escalators
     if (x > ESC.lanes[0].x0 - 0.05 && x < ESC.lanes[1].x1 + 0.05 && z > ESC.zTop - 0.02 && z < ESC.zBot + 0.3) take(Math.min(UP, slopeY(z) + TREAD));
     return o.y + best;
@@ -186,6 +192,7 @@ export class Galleria {
       y0: UP,
       zone: 'mv',
     });
+    kit.room('rs', 19.5, 0, W, PART, { floor: 'woodOak', floorColor: '#d8c8b0', wall: 'plaster', wallColor: '#ece6dc', ceil: '#f2efe8', ceilKey: 'plaster', base: '#b8aa94', trim: '#e8dcc8', y0: UP, zone: 'rs' });
 
     // ---------------------------------------------------------------- walls
     const upperCut = { y0: GH, y1: H, noTrim: true }; // ground-floor walls stop at the slab
@@ -216,7 +223,9 @@ export class Galleria {
       t: 0.2,
       open: spans([[0, 0.6], [0.6, 6.4, win(UP + 0.4, UP + 3.2, '#a8844a')], [6.4, 7.0], [7.0, 9.0, { y0: UP, y1: UP + 2.9, kind: 'opening', trim: '#a8844a' }], [9.0, 9.6], [9.6, 16.4, win(UP + 0.4, UP + 3.2, '#a8844a')], [16.4, D]], lowerCut),
     });
-    kit.wall('z', 19.5, 0, D, { t: 0.2, open: spans([[0, D]], lowerCut) });
+    // ROOMSET: a display window and an open doorway; BRIGHTWIRE behind its shutter
+    kit.wall('z', 19.5, 0, D, { t: 0.2, open: spans([[0, 0.8], [0.8, 4.4, win(UP + 0.4, UP + 3.0, '#e8dcc8')], [4.4, 5.0], [5.0, 7.2, { y0: UP, y1: UP + 2.9, kind: 'opening', trim: '#e8dcc8' }], [7.2, D]], lowerCut) });
+    kit.wall('x', PART, 19.6, W, { t: 0.2, open: spans([[19.6, W]], lowerCut) });
 
     // daylight from the glass roof, and spilling across the balconies
     const o = this.origin;
@@ -230,6 +239,7 @@ export class Galleria {
     this.buildRackAndRuin(kit, P);
     this.buildSplitgrain(kit, P);
     this.buildVellard(kit, P);
+    this.buildRoomset(kit, P);
     this.buildClosedFronts(kit, P);
   }
 
@@ -629,13 +639,11 @@ export class Galleria {
     const Dp = P(21.0, 5.6);
     Dp.geo('solid', new THREE.CylinderGeometry(0.45, 0.5, 0.95, 16), 0, 0.475, 0, C('#a8a8a4'));
     Dp.box('glass', -0.32, 0.95, -0.32, 0.32, 1.55, 0.32, C('#ffffff'));
-    Dp.box('solid', -0.2, 0.985, -0.08, 0.2, 1.08, 0.12, C('#17a2a8'));
-    Dp.box('solid', -0.205, 0.95, -0.085, 0.205, 0.985, 0.125, C('#ff8a2a'));
     Dp.box('glow', -0.34, 0.9, -0.34, 0.34, 0.93, 0.34, C('#ff8a2a'));
     Dp.collide(-0.5, -0.5, 0.5, 0.5, 1.55);
     Dp.light(0, 3.2, 0, '#fff0e0', 0.6, true);
     P(21.0, 5.6 + 0.51).panel('mSigns', -0.45, 0.3, 0.45, 0.48, 0.0, msignUV('drop'));
-    disp('sg-drop', 'The drop case', 21.0, 6.6, PI, ['sg:gr9']);
+    disp('sg-drop', 'The drop case', 21.0, 6.6, PI, ['sg:gr9']); // (shopping.itemsAt swaps in this week's colourway)
     this.dropCase = this.w(21.0, 5.6, 1.0);
     // a concrete table of folded tees
     const Tt = P(22.0, 10.0);
@@ -644,7 +652,7 @@ export class Galleria {
     for (let k = 0; k < 6; k++) for (let s = 0; s < 3; s++) Tt.box('fabric', -0.85 + k * 0.3, 0.8 + s * 0.035, 0.05, -0.62 + k * 0.3, 0.83 + s * 0.035, 0.35, C(k % 2 ? '#e8322a' : '#ece8df'));
     Tt.collide(-1.0, -0.55, 1.0, 0.55, 0.95);
     Tt.shadow(-1.0, -0.55, 1.0, 0.55, 0.3);
-    disp('sg-tees', 'The tee table', 22.0, 11.1, PI, ['sg:box', 'sg:split']);
+    disp('sg-tees', 'The tee table', 22.0, 11.1, PI, ['sg:box', 'sg:boxh', 'sg:boxo', 'sg:split', 'sg:splitb']);
     // hoodies and jackets on wall rails along the back
     const rail = (x0, x1, cols, long, id, label, items) => {
       const R = P(0, 0.02);
@@ -653,7 +661,7 @@ export class Galleria {
       R.collide(x0, 0, x1, 0.6, 1.9);
       disp(id, label, (x0 + x1) / 2, 1.35, PI, items);
     };
-    rail(18.6, 21.9, ['#3a4450', '#ff6a2a', '#3a4450', '#9aa0a8'], false, 'sg-hoodies', 'The hoodie rail', ['sg:hoodie', 'sg:hoodieo']);
+    rail(18.6, 21.9, ['#3a4450', '#ff6a2a', '#1c1c20', '#e8e0cc', '#5a6a3a'], false, 'sg-hoodies', 'The hoodie rail', ['sg:hoodie', 'sg:hoodieo', 'sg:hoodieb', 'sg:hoodiec', 'sg:hoodiem']);
     rail(22.4, 25.2, ['#4a5a3a', '#1c1c20'], true, 'sg-outer', 'The jacket rail', ['sg:bomber', 'sg:bomberb']);
     // cargos stacked on plywood cubes
     const Cg = P(19.8, 13.6);
@@ -718,8 +726,8 @@ export class Galleria {
     for (let k = 0; k < 4; k++) Cs.box('solid', -1.5 + k * 0.3, 0.92, 0.3, -1.3 + k * 0.3, 0.94, 0.36, C(k % 2 ? '#d8b46a' : '#1a1a1e'));
     Cs.collide(-1.9, 0, 1.9, 0.62, 1.2);
     Cs.light(0, 2.0, 0.6, '#fff0d8', 0.55, true);
-    disp('mv-watch', 'The watch case', 3.8, 1.25, PI, ['mv:meridian', 'mv:noir']);
-    disp('mv-acc', 'Sunglasses, chains and caps', 1.8, 1.25, PI, ['mv:riviera', 'mv:cuban', 'mv:cap']);
+    disp('mv-watch', 'The watch case', 3.8, 1.25, PI, ['mv:meridian', 'mv:noir', 'mv:grand']);
+    disp('mv-acc', 'Sunglasses, chains and caps', 1.8, 1.25, PI, ['mv:riviera', 'mv:cuban', 'mv:diamond', 'mv:cap']);
     P(2.8, 0.02, 0, y).panel('mPosters', -0.45, 1.5, 0.45, 3.4, 0.0, [0, 0, 0.25, 1]);
     // mannequins on plinths along the west wall, and one in the street window
     for (const [z, wear] of [
@@ -732,7 +740,7 @@ export class Galleria {
       P(1.2, z, 0, y).light(0.6, 3.0, 0, '#fff0d8', 0.4, true);
       this.mannequins.push({ ...xz(this.w(1.2, z)), y: this.origin.y + y + 0.27, yaw: R90, shop: 'mv', wear });
     }
-    disp('mv-outer', 'The coats and jackets', 2.4, 6.2, -R90, ['mv:monogram', 'mv:coat', 'mv:coatn']);
+    disp('mv-outer', 'The coats and jackets', 2.4, 6.2, -R90, ['mv:monogram', 'mv:coat', 'mv:coatn', 'mv:coatb', 'mv:coatg', 'mv:coatr', 'mv:shearling']);
     this.mannequins.push({ ...xz(this.w(1.7, 16.25)), y: this.origin.y + y + 0.27, yaw: 0, shop: 'mv', wear: { top: 'mv:knit', outer: 'mv:coatn', bottom: 'mv:trousers', shoes: 'mv:loafers', watch: 'mv:noir' } });
     P(1.7, 16.25, 0, y).box('solid', -0.42, 0, -0.42, 0.42, 0.27, 0.42, black);
     P(1.7, 16.25, 0, y).collide(-0.42, -0.42, 0.42, 0.42, 1.9);
@@ -747,7 +755,7 @@ export class Galleria {
         for (let s = 0; s < 3; s++) N.box('fabric', x + 0.12, yy + s * 0.05, 0.386, x + 0.68, yy + 0.045 + s * 0.05, 0.62, C(['#efe6d2', '#26262c', '#c9a878'][(r + c) % 3]));
       }
     N.collide(-1.5, 0, 1.5, 0.65, 2.6);
-    disp('mv-tops', 'Shirts and knits', 1.4, 11.0, -R90, ['mv:shirt', 'mv:knit']);
+    disp('mv-tops', 'Shirts and knits', 1.4, 11.0, -R90, ['mv:shirt', 'mv:knit', 'mv:knitc', 'mv:knitw']);
     // a low marble table of folded trousers, and a round shoe plinth
     const Tb = P(3.8, 9.2, 0, y);
     Tb.box('marble', -0.8, 0, -0.4, 0.8, 0.55, 0.4, C('#ece6da'));
@@ -803,30 +811,128 @@ export class Galleria {
       }
   }
 
-  // ---------------------------------------------------------------- the closed shops upstairs
+  // ---------------------------------------------------------------- ROOMSET (furniture, upstairs east)
+  // A furniture showroom staged like rooms you could live in. Every piece on the floor
+  // is the real catalog piece (game/furniture.js), built with the same kit.
+  buildRoomset(kit, P) {
+    const y = UP;
+    const disp = (id, label, x, z, yaw, items) => this.displays.push({ id, shop: 'rs', label, stand: { ...xz(this.w(x, z)), y: this.origin.y + y }, yaw, items });
+    // the collection pieces are dressed with stock: the best sneakers, the best watches, every toy
+    const demo = {
+      shoes: ITEMS.filter((it) => it.slot === 'shoes' && !it.basic && !it.gem).sort((a, b) => b.price - a.price).slice(0, 12),
+      jewels: ITEMS.filter((it) => it.slot === 'watch' || it.slot === 'chain').sort((a, b) => b.price - a.price).slice(0, 8),
+      toys: TOYS,
+    };
+    const put = (id, x, z, r = 0, variant = 0) => {
+      const ctx = { variant, dyn: [], ...demo };
+      FURN[id].build(P(x, z, r, y), ctx);
+      return ctx;
+    };
+    // a living room against the back wall: the cloud sofa under two prints, a rug, glass, an arc lamp
+    put('rugModern', 23.9, 1.9);
+    put('cloud', 23.9, 0.04);
+    put('coffeeGlass', 23.9, 2.0);
+    put('arcLamp', 25.55, 1.75, -R90);
+    put('fig', 25.6, 0.4);
+    put('armchair', 22.2, 1.9, R90);
+    put('floorLamp', 22.2, 0.45);
+    put('sideTable', 25.4, 2.7);
+    put('print', 23.2, 0.004, 0, 1);
+    put('print', 24.6, 0.004, 0, 3);
+    const So = P(23.9, 0.04, 0, y);
+    for (const sx of [-0.8, 0, 0.8]) {
+      const s = So.point(sx, 0, 0.5);
+      const out = So.point(sx, 0, 1.35);
+      this.seats.push({ x: s.x, z: s.z, y: this.origin.y + y, yaw: 0, out: xz(out), mall: true, showroom: 'the cloud sofa' });
+    }
+    {
+      const A = P(22.2, 1.9, R90, y);
+      this.seats.push({ ...xz(A.point(0, 0, 0.45)), y: this.origin.y + y, yaw: R90, out: xz(A.point(-0.9, 0, 0.5)), mall: true, showroom: 'the armchair' });
+    }
+    disp('rs-seating', 'Sofas and chairs', 23.2, 3.6, PI, ['beanbag', 'armchair', 'sofa', 'cloud', 'lounger']);
+    disp('rs-tables', 'Tables, lamps and plants', 25.0, 3.55, PI, ['sideTable', 'coffeeGlass', 'dining', 'floorLamp', 'arcLamp', 'plant', 'fig', 'olive']);
+    // the collectors' corner, in the window
+    put('sneakerWall', 20.65, 0.02);
+    put('watchCase', 20.2, 2.0, R90);
+    put('sculpture', 20.25, 3.5);
+    disp('rs-collect', 'Collectors\' corner', 21.25, 2.0, -R90, ['sneakerWall', 'watchCase', 'trophyShelf', 'photoWall']);
+    // the big ticket wall: the arcade, the aquarium (with fish), the jukebox; the hot tub in the corner
+    put('arcade', 25.99, 4.6, -R90);
+    this.tankDyn = put('aquarium', 25.99, 6.3, -R90).dyn.find((d) => d.type === 'fish');
+    put('jukebox', 25.99, 8.1, -R90);
+    put('hotTub', 24.65, 10.85, PI);
+    put('oil', 24.65, PART - 0.104, PI);
+    disp('rs-big', 'The big ticket', 24.2, 7.2, R90, ['aquarium', 'homeBar', 'arcade', 'jukebox', 'hotTub']);
+    // the home bar against the back wall of the room, the art wall by the door
+    put('homeBar', 21.4, PART - 0.11, PI);
+    put('neon', 19.604, 8.0, R90);
+    put('print', 19.604, 9.35, R90, 5);
+    put('print', 19.604, 10.25, R90, 6);
+    put('poster', 19.604, 11.3, R90, 1);
+    disp('rs-art', 'The art wall', 20.85, 9.4, -R90, ['print', 'poster', 'oil', 'neon', 'sculpture']);
+    // rugs piled on a low platform
+    const Rg = P(22.6, 7.7, 0, y);
+    Rg.box('wood', -1.05, 0, -0.75, 1.05, 0.1, 0.75, C('#3a2a1e'));
+    Rg.collide(-1.05, -0.75, 1.05, 0.75, 0.5).shadow(-1.05, -0.75, 1.05, 0.75, 0.35);
+    for (const [key, w, l, rot, yy, dx, dz] of [
+      ['rugStripe', 1.9, 1.3, 0.12, 0.104, -0.05, 0.05],
+      ['rugModern', 1.8, 1.2, -0.08, 0.112, 0.05, -0.03],
+      ['rugPersian', 1.7, 1.12, 0.03, 0.12, 0, 0],
+    ])
+      P(22.6 + dx, 7.7 + dz, rot, y + yy).quad(key, [-w / 2, 0, l / 2], [w / 2, 0, l / 2], [w / 2, 0, -l / 2], [-w / 2, 0, -l / 2], [0, 1, 0], [0, 0, 1, 1]);
+    disp('rs-rugs', 'Rugs', 22.6, 6.45, 0, ['rugStripe', 'rugModern', 'rugPersian']);
+    // the desk: Ines, a tablet, fabric swatches, a vase of eucalyptus
+    const T = P(23.6, 5.4, 0, y);
+    T.box('wood', -0.65, 0, -0.25, 0.65, 0.95, 0.25, C('#d8ccb8'));
+    T.box('solid', -0.68, 0.95, -0.28, 0.68, 0.98, 0.28, C('#2a3a4a'), { bottom: true });
+    T.box('solid', 0.2, 0.98, -0.12, 0.5, 1.2, -0.09, C('#1a1a1e'));
+    T.box('glow', 0.22, 1.0, -0.125, 0.48, 1.18, -0.12, C('#6a8aa8', 0.7));
+    for (let k = 0; k < 4; k++) T.box('fabric', -0.55 + k * 0.012, 0.98 + k * 0.008, 0.02 - k * 0.03, -0.25 + k * 0.012, 0.986 + k * 0.008, 0.2 - k * 0.03, C(['#c8b89a', '#4a2e1e', '#2a3a4a', '#8a2a2a'][k]));
+    T.geo('glass', new THREE.CylinderGeometry(0.06, 0.05, 0.22, 10), -0.05, 1.09, -0.1, C('#ffffff'));
+    for (const a of [-0.3, 0, 0.35]) T.geo('solid', new THREE.CylinderGeometry(0.006, 0.006, 0.42, 4), -0.05 + Math.sin(a) * 0.08, 1.3, -0.1, C('#6a8a6a'), 0, 1, 1, 1, 0, a);
+    T.panel('mSigns', -0.45, 0.45, 0.45, 0.67, 0.256, msignUV('till'));
+    T.collide(-0.68, -0.28, 0.68, 0.28, 1.0);
+    this.tills.rs = { stand: xz(this.w(23.6, 6.1)), yaw: PI };
+    this.staffSpots.ines = { ...xz(this.w(23.6, 4.72)), y: this.origin.y + y, yaw: 0 };
+    // signs: the fascia over the door, the delivery promise over the window
+    const uv = msignUV('roomset');
+    const mid = (uv[1] + uv[3]) / 2;
+    P(19.4, 6.1, -R90, y).panel('mSigns', -1.5, 3.05, 1.5, 3.61, 0.006, [uv[0], mid, uv[2], uv[3]]);
+    P(19.4, 2.6, -R90, y).panel('mSigns', -1.5, 3.15, 1.5, 3.71, 0.006, [uv[0], uv[1], uv[2], mid]);
+    // light: warm downlights, a pendant over the sofa
+    for (const x of [20.8, 23.0, 25.0])
+      for (const z of [1.6, 4.6, 7.6, 10.6]) {
+        const L = P(x, z, 0, y);
+        L.geo('glow', new THREE.CylinderGeometry(0.09, 0.09, 0.012, 12), 0, H - y - 0.012, 0, C('#fff2e0'));
+        L.light(0, H - y - 0.3, 0, '#ffe8c8', 0.22, true);
+      }
+    const Pd = P(23.9, 2.0, 0, y);
+    Pd.box('solid', -0.005, 2.75, -0.005, 0.005, H - y, 0.005, C('#2a2a2a'));
+    Pd.geo('solid', new THREE.SphereGeometry(0.3, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2), 0, 2.45, 0, C('#2a3a4a'));
+    Pd.geo('glow', new THREE.CircleGeometry(0.26, 14).rotateX(R90), 0, 2.445, 0, C('#fff0d8'));
+    Pd.light(0, 2.3, 0, '#ffe2b8', 0.45, true);
+  }
+
+  // ---------------------------------------------------------------- the closed shop upstairs
   buildClosedFronts(kit, P) {
     const y = UP;
-    // ROOMSET: papered-over windows, opening soon
-    const R = P(19.4, 4.4, -R90, y);
-    R.box('solid', -3.7, 0.2, 0, 3.7, 3.1, 0.06, C('#2a3a4a'));
-    R.panel('mSigns', -3.5, 0.35, 3.5, 2.95, 0.066, msignUV('soon'));
-    R.panel('mSigns', -1.6, 3.2, 1.6, 3.62, 0.006, [msignUV('soon')[0], msignUV('soon')[1] + 0.12, msignUV('soon')[2], msignUV('soon')[3] - 0.05]);
     // BRIGHTWIRE: shutters down over a wall of TVs, still on
-    const B = P(19.4, 12.7, -R90, y);
-    B.box('solid', -3.7, 0.2, 0, 3.7, 3.1, 0.05, C('#0a0e14'));
+    const B = P(19.4, 14.6, -R90, y);
+    B.box('solid', -2.05, 0.2, 0, 2.05, 3.1, 0.05, C('#0a0e14'));
     for (let r = 0; r < 3; r++)
-      for (let c = 0; c < 5; c++) {
-        const x = -3.3 + c * 1.35;
+      for (let c = 0; c < 3; c++) {
+        const x = -1.78 + c * 1.2;
         const yy = 0.45 + r * 0.85;
         B.box('solid', x, yy, 0.05, x + 1.15, yy + 0.7, 0.1, C('#1a1a1e'));
         B.quad('tv', [x + 0.05, yy + 0.05, 0.106], [x + 1.1, yy + 0.05, 0.106], [x + 1.1, yy + 0.65, 0.106], [x + 0.05, yy + 0.65, 0.106], [0, 0, 1], [0, 0, 1, 1]);
       }
-    for (let k = 0; k < 16; k++) B.box('solid', -3.7, 0.2 + k * 0.18, 0.16, 3.7, 0.24 + k * 0.18, 0.2, C('#8a8c90'));
-    B.panel('mSigns', -1.6, 3.2, 1.6, 3.62, 0.006, msignUV('bright'));
-    B.panel('mSigns', 2.6, 1.6, 3.5, 2.3, 0.205, msignUV('refit'));
+    for (let k = 0; k < 16; k++) B.box('solid', -2.05, 0.2 + k * 0.18, 0.16, 2.05, 0.24 + k * 0.18, 0.2, C('#8a8c90'));
+    B.panel('mSigns', -1.5, 3.2, 1.5, 3.62, 0.006, msignUV('bright'));
+    B.panel('mSigns', 1.05, 1.6, 1.9, 2.3, 0.205, msignUV('refit'));
     B.light(0, 1.5, 0.5, '#5ae8ff', 0.4);
     // people stop to look in the windows
-    this.lookouts.push({ ...xz(this.w(18.6, 12.7)), y: this.origin.y + UP, yaw: R90 });
+    this.lookouts.push({ ...xz(this.w(18.6, 14.6)), y: this.origin.y + UP, yaw: R90 });
+    this.lookouts.push({ ...xz(this.w(18.6, 2.6)), y: this.origin.y + UP, yaw: R90 });
     this.lookouts.push({ ...xz(this.w(7.4, 3.5)), y: this.origin.y + UP, yaw: -R90 });
   }
 
@@ -856,6 +962,25 @@ export class Galleria {
     sheet.renderOrder = 4;
     this.waterMat = sheet.material;
     this.group.add(sheet);
+    // ROOMSET's aquarium has real fish in it
+    if (this.tankDyn) this.tank = new FishTank(this.group, this.tankDyn);
+    // SPLITGRAIN's drop case: this week's Grain Runner 9 (setDropLook recolours it)
+    const shoe = new GeoBuilder();
+    shoe.box(-0.2, 0.035, -0.08, 0.2, 0.13, 0.12, { color: [1, 1, 1], bottom: false });
+    const sole = new GeoBuilder();
+    sole.box(-0.205, 0, -0.085, 0.205, 0.035, 0.125, { color: [1, 1, 1], bottom: false });
+    this.dropShoe = new THREE.Group();
+    this.dropShoe.add(new THREE.Mesh(shoe.build(), new THREE.MeshLambertMaterial({ color: '#17a2a8', vertexColors: true })));
+    this.dropShoe.add(new THREE.Mesh(sole.build(), new THREE.MeshLambertMaterial({ color: '#ff8a2a', vertexColors: true })));
+    this.dropShoe.position.copy(this.w(21.0, 5.6, 0.95));
+    this.group.add(this.dropShoe);
+  }
+
+  /** The shoe in SPLITGRAIN's drop case: this week's colourway. */
+  setDropLook(look) {
+    const [upper, sole] = this.dropShoe.children;
+    upper.material.color.set(look.shoes);
+    sole.material.color.set(look.sole);
   }
 
   buildExterior() {
@@ -1076,6 +1201,11 @@ export class Galleria {
     add('mv1', 3.6, 6.0, UP);
     add('mv2', 3.4, 2.4, UP);
     add('mv3', 3.0, 12.6, UP);
+    add('rsOut', 18.6, 6.1, UP);
+    add('rsIn', 20.4, 6.1, UP);
+    add('rs1', 22.0, 4.2, UP);
+    add('rs2', 24.7, 4.2, UP);
+    add('rs3', 21.0, 9.4, UP);
     const id = Object.fromEntries(N.map((n, k) => [n.id, k]));
     const link = (a, b, kind = 'walk') => {
       N[id[a]].links.push({ to: id[b], kind });
@@ -1121,6 +1251,12 @@ export class Galleria {
       ['mvIn', 'mv1'],
       ['mv1', 'mv2'],
       ['mvIn', 'mv3'],
+      ['ue1', 'rsOut'],
+      ['ue2', 'rsOut'],
+      ['rsOut', 'rsIn'],
+      ['rsIn', 'rs1'],
+      ['rs1', 'rs2'],
+      ['rsIn', 'rs3'],
     ])
       link(a, b);
     link('escUp', 'uTop', 'up');
@@ -1201,6 +1337,7 @@ export class Galleria {
     dp.needsUpdate = true;
     this.drops.visible = open;
     this.waterMat.opacity = 0.3 + 0.06 * Math.sin(time * 2.1);
+    this.tank?.update(time);
   }
 }
 

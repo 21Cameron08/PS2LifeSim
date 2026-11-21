@@ -22,7 +22,7 @@ import { GullysVisit } from './game/gullysVisit.js';
 import { CrewJob } from './game/crewJob.js';
 import { Galleria } from './world/galleria.js';
 import { Shoppers } from './actors/shoppers.js';
-import { Shopping } from './game/shopping.js';
+import { Shopping, lookup } from './game/shopping.js';
 import { Needs, NEEDS } from './game/needs.js';
 import { additive } from './render/materials.js';
 import { buildPlaces } from './game/places.js';
@@ -43,7 +43,10 @@ import { Undercurrent } from './world/undercurrent.js';
 import { PhotoBooth, stripTexture } from './game/photobooth.js';
 import { Ambience } from './audio/ambience.js';
 import { UI } from './ui/ui.js';
-import { baseWear, statusOf, dress, outerOn, ITEM, TIERS, showpiece } from './game/fashion.js';
+import { baseWear, statusOf, dress, outerOn, ITEM, TIERS, showpiece, extraStatus } from './game/fashion.js';
+import { HomeDecor } from './world/homeDecor.js';
+import { HomeLife } from './game/homeLife.js';
+import { FURN } from './game/furniture.js';
 
 // ----------------------------------------------------------------------------
 // Boot
@@ -99,6 +102,10 @@ const state = {
   spent: save?.spent ?? 0, // everything you've ever spent at the Galleria
   spentDay: save?.spentDay, // today's spend at MAISON VELLARD (for the champagne)
   champagneDay: save?.champagneDay,
+  furniture: save?.furniture ?? { pieces: [], next: 1 }, // what you've bought at ROOMSET, placed or in storage
+  arcadeBest: save?.arcadeBest ?? 0, // NIGHT RUNNER high score
+  fishFed: save?.fishFed,
+  homeBar: save?.homeBar,
 };
 // saves from before clothes could be owned: what you had on becomes basics
 if (!state.appearance.wear) state.appearance.wear = baseWear(state.appearance);
@@ -191,10 +198,14 @@ visit.statusTier = () => statusOf(state.appearance, state.home).tier;
 /** On the clock at any job. */
 const onClock = () => !!job.J.shift || barJob.onShift || crew.onShift;
 if (state.gullToys.length) apts.setToys(state.gullToys);
+// your furniture, placed at home or in storage (built into the room and its lighting)
+const decor = new HomeDecor({ apts, state });
+decor.rebuild(apts.byId[state.home]);
+extraStatus.decor = decor.score(state.home);
 let gullysKick = 0;
 let lightsUpNight = -1;
 const rig = new CameraRig(camera, player.space);
-const shopping = new Shopping({ galleria, shoppers, ui, audio, state, clock, player, crowd, needs, input, rig, saveNow: () => saveNow() });
+const shopping = new Shopping({ galleria, shoppers, ui, audio, state, clock, player, crowd, needs, input, rig, decor, saveNow: () => saveNow() });
 rig.yaw = player.yaw;
 let outdoorDist = 6.2;
 if (place) {
@@ -305,6 +316,10 @@ function saveNow(showToast = false) {
     champagneDay: state.champagneDay,
     owned: state.owned,
     wish: state.wish,
+    furniture: state.furniture,
+    arcadeBest: state.arcadeBest,
+    fishFed: state.fishFed,
+    homeBar: state.homeBar,
     ledger: state.ledger.slice(-60),
     gullMeals: state.gullMeals,
     gullOrders: state.gullOrders,
@@ -549,9 +564,11 @@ function enterApartment(apt, tour = false) {
 }
 
 function moveIntoApartment(apt, tour) {
+  if (seat) standUp();
   place = apt;
   touring = tour;
   apts.show(apt);
+  if (!tour && apt.id === state.home) decor.refresh(apt);
   player.teleport(apt.space, apt.spawn.x, apt.spawn.z, apt.spawn.yaw);
   outdoorDist = rig.dist;
   Object.assign(rig, { space: apt.space, dist: 3.4, pitch: 0.42, yaw: apt.spawn.yaw, curDist: 1.5, mode: 'follow', blend: 1 });
@@ -593,11 +610,20 @@ function signLease(apt, inside) {
   state.bank -= L.moveIn;
   state.home = apt.id;
   apts.setHome(apt.id);
+  let packed = 0;
+  for (const p of decor.pieces)
+    if (p.home && p.home !== apt.id) {
+      p.home = null;
+      packed++;
+    }
+  if (old && old !== apt) decor.rebuild(old);
+  decor.rebuild(apt);
+  extraStatus.decor = decor.score(state.home);
   audio.coin();
   if (inside) touring = false;
   ui.openDialog({
     name: 'LETTING AGENT',
-    text: `Signed! Welcome home to ${L.name}.${old && old !== apt ? ` Your lease on ${old.L.name} has ended.` : ''} Rent of ${money(L.rent)} comes out of your bank every Monday morning.`,
+    text: `Signed! Welcome home to ${L.name}.${old && old !== apt ? ` Your lease on ${old.L.name} has ended.` : ''}${packed ? ` The movers packed your furniture: it's in storage here (F to place it).` : ''} Rent of ${money(L.rent)} comes out of your bank every Monday morning.`,
     choices: [
       {
         label: inside ? 'Make yourself at home' : 'Go inside',
@@ -721,6 +747,9 @@ function useApt(it) {
     case 'fire':
       needs.add('fun', 2);
       return ui.toast('The fire crackles. It is gas, but it tries its best.');
+    case 'decor':
+      if (!home) return null;
+      return homeLife.use(it, place);
     default:
       return null;
   }
@@ -734,7 +763,9 @@ function aptLabel(it) {
 }
 
 function findInteraction() {
+  if (decor.carry) return carryPrompt();
   if (place) {
+    if (seat) return { label: 'Stand up', act: standUp };
     let best = null;
     let bd = Infinity;
     for (const it of place.interactables) {
@@ -744,7 +775,10 @@ function findInteraction() {
         bd = d;
       }
     }
-    return best ? { label: aptLabel(best), act: () => useApt(best) } : visit.anywhere();
+    if (best) return { label: aptLabel(best) + (best.decor && atHome() ? ' <small>F move</small>' : ''), act: () => useApt(best) };
+    const piece = atHome() && decor.nearest(place, player);
+    if (piece) return { label: `Move the ${FURN[piece.id].name.toLowerCase()}`, key: 'F', act: () => startCarry(piece) };
+    return visit.anywhere();
   }
   if (!job.J.shift && near(player.pos, store.customerSpot, 1.0) && job.manager.home === 'counter' && !job.manager.path.length)
     return { label: 'Buy something at the counter', act: storeCounter };
@@ -1582,7 +1616,7 @@ function photoBooth() {
   const done = () => {
     const url = booth.finish();
     needs.give({ fun: 14, social: 3 });
-    state.photos = [url, ...(state.photos ?? [])].slice(0, 3);
+    state.photos = [url, ...(state.photos ?? [])].slice(0, 4);
     stripTexture(url, (t) => apts.setPhoto(t));
     saveNow();
     ui.modal = null;
@@ -1749,6 +1783,7 @@ const MALL_LINES = {
   kez: ['The drop is Saturday, ten sharp. People camp. I am not joking.', "Resellers buy six pairs and sell them for triple. I hate it here. I love it here.", 'Cargos are back. Cargos never left. Cargos are forever.'],
   celeste: ['Everything here is made by hand, in very small numbers, for very particular people.', 'The Meridian has a waiting list. The Noir has a waiting list for the waiting list.', 'We do not have sales. We have seasons.'],
   anton: ['Good afternoon.', 'Mind the step. It is a very expensive step.', 'Welcome to Maison Vellard.'],
+  ines: ['People come in for a lamp and leave with a hot tub. I never push. I just let them sit in it.', 'Everything on the floor is in stock. The boys deliver the same day, up any stairs.', "The aquarium fish are real. They have names. Don't ask me the names, I'll cry when they sell.", 'A rug ties a room together. People laugh, but it does.'],
   guard: ['No running, no skateboards, no feeding the pigeons. They get in through the doors.', "Mall's open ten to ten. I'm here eleven to eleven. Do the math.", 'Somebody tried to fish the coins out of the fountain once. Once.'],
   pretzel: ['Pretzel? Salt, cinnamon, or "the works". The works is both. Do not get the works.', "Twenty years at this kiosk. I've seen three escalators break and one wedding.", 'Cash only. The card machine broke in 2003 and honestly, good.'],
   shopper: ["I came in for socks. I have four bags. Help.", 'Have you been in the fancy one upstairs? I touched a coat and a man appeared.', 'The pretzel guy remembers my order. That is a kind of love.', "My partner's in RACK & RUIN. I'll see them in three hours.", 'They say the drop sells out in eleven minutes.'],
@@ -1762,6 +1797,7 @@ function outfitLine(a) {
   return talkRng.pick(MALL_LINES.shopper);
 }
 function mallSeatOrTalk() {
+  if (seat) return { label: 'Stand up', act: standUp };
   const p = player.pos;
   const a = shoppers.nearest(p, 1.5);
   let sp = null;
@@ -1778,10 +1814,14 @@ function mallSeatOrTalk() {
   if (a && da <= sd) return { label: `Talk to ${a.name ?? 'shopper'}`, act: () => mallTalk(a) };
   if (sp)
     return {
-      label: sp.mall ? 'Sit on the bench' : 'Sit down',
+      label: sp.showroom ? `Try ${sp.showroom}` : sp.mall ? 'Sit on the bench' : 'Sit down',
       act: () => {
         shoppers.seatTaken.add(sp);
         sitDown(sp);
+        if (sp.showroom) {
+          needs.add('energy', 1);
+          return ui.toast(talkRng.pick(['You sink in. Then you sink in a bit more. Ines gives you a knowing look.', 'Oh no. Oh, this is very comfortable.', 'You sit, and for a second you can see it in your place.']));
+        }
         if (sp.y > galleria.origin.y + 2) ui.toast(talkRng.pick(['You sit and watch the escalators. People going up with nothing, coming down with bags.', 'The whole atrium below you. A kid drops a coin in the fountain and makes a face like it worked.']));
       },
     };
@@ -1799,10 +1839,21 @@ function mallTalk(a) {
   if (key === 'anton') text = st.tier >= 5 ? talkRng.pick(['A pleasure to see you again.', 'He opens the door before you reach it, with a small bow.']) : st.tier <= 1 ? 'He looks at your shoes for a long second. "...Welcome."' : talkRng.pick(MALL_LINES.anton);
   if (key === 'celeste' && st.tier <= 2) text = 'She keeps folding the scarf. "If you need anything, I\'ll be... here."';
   const choices = [];
-  const shopOf = { dot: 'rr', kez: 'sg', celeste: 'mv' }[key];
+  const shopOf = { dot: 'rr', kez: 'sg', celeste: 'mv', ines: 'rs' }[key];
   if (shopOf && shopping.unpaid(shopOf)) choices.push({ label: 'I\'d like to pay for these', fn: () => (close(), setTimeout(() => shopping.checkout(shopOf), 0)) });
   if (key === 'pretzel') choices.push({ label: 'A pretzel ($4.50)', fn: () => (close(), shopping.pretzel()) });
-  if (key === 'kez') choices.push({ label: 'When is the next drop?', fn: () => ui.openDialog({ name: 'Kez', text: `Saturday, ten AM. Grain Runner 9 'Harbour'. ${state.drop?.stock ?? 12} pairs. The line starts on the plaza before nine. Bring a chair.`, choices: [{ label: 'Okay', fn: close }], onClose: done }) });
+  if (key === 'ines')
+    choices.push({
+      label: 'How does delivery work?',
+      fn: () =>
+        ui.openDialog({
+          name: 'Ines',
+          text: 'Pay here and it goes on the van. By the time you get home it\'s in your storage, unpacked. Then you just put it where you want it: press F at home. Move it as often as you like. Free.',
+          choices: [{ label: 'Great', fn: close }],
+          onClose: done,
+        }),
+    });
+  if (key === 'kez') choices.push({ label: 'When is the next drop?', fn: () => ui.openDialog({ name: 'Kez', text: `Saturday, ten AM. This week it's the ${shopping.dropItem().name}. ${state.drop?.stock ?? 12} pairs, and a new colourway every week. The line starts on the plaza before nine. Bring a chair.`, choices: [{ label: 'Okay', fn: close }], onClose: done }) });
   choices.push({ label: 'Bye', fn: close });
   const done = () => {
     a.talking = false;
@@ -1823,8 +1874,8 @@ function updateGalleria(dt) {
   shopping.update(dt);
   // the music follows you from shop to shop
   const zone = inGalleria && galleria.open ? galleria.zoneAt(player.pos) : null;
-  const style = zone && { rr: 'radio', sg: 'street', mv: 'lounge', mall: 'mall' }[zone];
-  const mallStyles = ['radio', 'street', 'lounge', 'mall'];
+  const style = zone && { rr: 'radio', sg: 'street', mv: 'lounge', rs: 'bossa', mall: 'mall' }[zone];
+  const mallStyles = ['radio', 'street', 'lounge', 'bossa', 'mall'];
   if (style && audio.music?.style !== style) audio.startMusic(style);
   if (!style && mallStyles.includes(audio.music?.style) && !place) audio.stopMusic();
   // 10 PM: the guard walks the last shoppers out
@@ -1875,7 +1926,7 @@ function updateNeeds(dt) {
   const home = place && !touring;
   if (home && place.tvOn) needs.add('fun', 0.25 * dt);
   if (home && audio.music) needs.add('fun', 0.08 * dt);
-  if (seat?.green) needs.add('energy', 0.1 * dt);
+  if (seat?.green || seat?.rest) needs.add('energy', 0.1 * dt);
   if (inUnder) needs.give({ energy: 0.06 * dt, fun: 0.1 * dt, social: 0.03 * dt });
   if (env.magic > 0.1) needs.add('fun', 0.12 * env.magic * dt);
   if (!place && city.blockAt(player.pos.x, player.pos.z)?.kind === 'park') needs.add('fun', 0.05 * dt);
@@ -1923,6 +1974,7 @@ function passOut() {
   if (ui.modal === 'dance') ui.closeDance();
   ui.fade(() => {
     if (seat) standUp();
+    if (decor.carry) decor.cancel();
     visit.interrupt();
     if (job.J.shift) job.clockOut();
     if (barJob.onShift) barJob.clockOut();
@@ -1993,6 +2045,7 @@ window.addEventListener('keydown', (e) => {
 
 /** Leave whatever interior you're in (apartment or shop) without moving yet. */
 function leaveInterior() {
+  if (decor.carry) decor.cancel();
   audio.stopMusic();
   if (touring) ui.clearHint();
   if (place) {
@@ -2226,8 +2279,8 @@ function updateStatus() {
       needs.give({ fun: 1.5, social: 1 });
     }
   }
-  const it = state.wish && ITEM[state.wish];
-  ui.setStatus(st, it && !state.owned.includes(it.id) ? { name: it.name, have: state.cash + Math.max(0, state.bank), price: it.price } : null, shopping.unpaidText());
+  const it = state.wish && lookup(state.wish);
+  ui.setStatus(st, it && !state.owned.includes(state.wish) ? { name: it.name, have: state.cash + Math.max(0, state.bank), price: it.price } : null, shopping.unpaidText());
   // (the climb only counts once you've paid: trying things on just previews it)
   const wear = state.appearance.wear;
   const paid = Object.values(wear).every((id) => !id || ITEM[id]?.basic || state.owned.includes(id));
@@ -2273,6 +2326,15 @@ function payRent() {
 }
 
 function handleKeys() {
+  if (decor.carry) {
+    if (input.hit('Escape', 'KeyF')) return cancelCarry();
+    if (input.hit('KeyR')) {
+      if (decor.rotate()) audio.tone(700, 'square', 0.02, 0.05);
+      return;
+    }
+    if (input.hit('KeyE')) dropCarry();
+    return;
+  }
   if (input.hit('Escape', 'KeyP')) {
     player.locked = true;
     ui.openPause(
@@ -2292,7 +2354,104 @@ function handleKeys() {
   }
   if (input.hit('KeyC')) return openWardrobe();
   if (input.hit('KeyM')) return openMap();
+  if (input.hit('KeyF') && atHome()) {
+    const near = !seat && decor.nearest(place, player);
+    return near ? startCarry(near) : openDecorPanel();
+  }
   if (input.hit('KeyE') && current) current.act();
+}
+
+// ----------------------------------------------------------------------------
+// Home: placing furniture (world/homeDecor.js) and using it (game/homeLife.js)
+const atHome = () => !!(place && !touring && place.id === state.home);
+const homeLife = new HomeLife({ ui, audio, needs, clock, state, player, decor, sitDown, timeSkipped: () => (needsLast = clock.minutes), save: () => saveNow(), talk: talkRng });
+
+function carryPrompt() {
+  const c = decor.carry;
+  const touch = input.isTouch;
+  const keys = touch ? 'TURN turns · DECOR cancels' : 'R turn · F cancel';
+  const turn = c.def.kind === 'wall' ? (touch ? 'DECOR cancels' : 'F cancel') : keys;
+  return { label: c.valid ? `Set down the ${c.def.name.toLowerCase()} <small>${turn}</small>` : `<span class="no">${c.why}</span> <small>${turn}</small>`, act: dropCarry };
+}
+
+function startCarry(piece) {
+  if (!piece || !atHome()) return;
+  if (seat) standUp();
+  decor.pickUp(piece, place, player);
+  audio.tone(520, 'sine', 0.04, 0.1);
+  if (!state.seen.decor) {
+    state.seen.decor = true;
+    ui.hint(input.isTouch ? 'Walk it where you want it. <b>TURN</b> turns it, <b>USE</b> sets it down (green means it fits), <b>DECOR</b> puts it back.' : 'Walk it where you want it. <b>R</b> turns it, <b>E</b> sets it down (green means it fits), <b>F</b> puts it back.', 9);
+  }
+}
+
+function dropCarry() {
+  const c = decor.carry;
+  if (!c) return;
+  const why = decor.drop();
+  if (why) {
+    audio.tone(170, 'square', 0.04, 0.14);
+    return ui.toast(why);
+  }
+  audio.tone(150, 'sine', 0.1, 0.18);
+  const before = extraStatus.decor;
+  extraStatus.decor = decor.score(state.home);
+  if (extraStatus.decor > before) ui.toast(`${c.def.name} in place. Your home: +${extraStatus.decor} status.`);
+  saveNow();
+}
+
+function cancelCarry() {
+  decor.cancel();
+  audio.tone(400, 'sine', 0.03, 0.08);
+  extraStatus.decor = decor.score(state.home);
+}
+
+function openDecorPanel() {
+  if (!atHome() || seat) return;
+  const apt = place;
+  player.locked = true;
+  ui.openDecor({
+    title: `${apt.L.name.toUpperCase()} · YOUR THINGS`,
+    sub: () => `your home: +${decor.score(state.home)} status`,
+    rows: () => {
+      const rows = [];
+      const groups = new Map();
+      for (const p of decor.stored()) {
+        const g = groups.get(p.id);
+        if (g) g.n++;
+        else groups.set(p.id, { p, n: 1 });
+      }
+      if (groups.size) rows.push({ head: true, name: 'In storage', desc: 'Delivered by ROOMSET. Pick something up and find it a spot.' });
+      for (const { p, n } of groups.values()) {
+        const def = FURN[p.id];
+        rows.push({ piece: p, name: def.name, desc: def.desc, chip: def.chip, tags: n > 1 ? [`<em>×${n}</em>`] : [], right: `+${def.decor}`, rightSub: 'status', acts: [{ id: 'place', label: def.kind === 'wall' ? 'Hang it' : 'Place it', key: 'E', go: true }] });
+      }
+      const here = decor.placedIn(apt.id);
+      if (here.length) rows.push({ head: true, name: 'In this home', desc: 'Move things around, or pack them away.' });
+      for (const p of here) {
+        const def = FURN[p.id];
+        rows.push({ piece: p, name: def.name, desc: def.desc, chip: def.chip, right: `+${def.decor}`, rightSub: 'status', acts: [{ id: 'move', label: 'Move it', key: 'E', go: true }, { id: 'store', label: 'Put in storage', key: 'X' }] });
+      }
+      return rows;
+    },
+    empty: 'Nothing to place yet. ROOMSET, upstairs at the Halcyon Galleria, delivers.',
+    foot: input.isTouch ? 'tap a row, then a button' : '↑↓ pick · Enter place or move · X put in storage · Esc done',
+    onAct: (row, id) => {
+      if (id === 'place' || id === 'move') {
+        ui.closeDecor();
+        startCarry(row.piece);
+        return;
+      }
+      if (id === 'store') {
+        row.piece.home = null;
+        decor.rebuild(apt);
+        extraStatus.decor = decor.score(state.home);
+        saveNow();
+        return `${FURN[row.piece.id].name} packed away.`;
+      }
+    },
+    onClose: () => (player.locked = false),
+  });
 }
 
 function frame(now) {
@@ -2418,6 +2577,10 @@ function frame(now) {
   );
   store.update(dt, time, env, job.people(player.pos), camera);
   apts.update(dt, time, env, place);
+  if (decor.carry) decor.updateCarry(player, dt);
+  decor.update(dt, time, place);
+  document.body.classList.toggle('at-home', playing && atHome() && !ui.modal);
+  document.body.classList.toggle('carrying', !!decor.carry);
   lantern.update(dt, time, env.night);
   effects.update(time, env);
   sky.update(camera, time);
@@ -2425,7 +2588,7 @@ function frame(now) {
 
   if (playing) {
     current = ui.modal ? null : findInteraction();
-    ui.setPrompt(current?.label ?? null);
+    ui.setPrompt(current?.label ?? null, current?.key);
     ui.setClock(clock.format(), clock.day);
     ui.setMoney(state.cash, state.bank);
     updateStatus();
@@ -2460,6 +2623,12 @@ requestAnimationFrame(frame);
 
 // handy for debugging from the console
 window.game = {
+  decor,
+  homeLife,
+  startCarry,
+  dropCarry,
+  openDecorPanel,
+  extraStatus,
   scene,
   camera,
   renderer,

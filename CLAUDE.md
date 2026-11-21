@@ -64,7 +64,21 @@ features, controls and the code map.
   `galleria.groundAt` is chained into the city's ground like the club's, and
   `escalatorFlow` carries the player. Displays, tills, mirrors, seats and staff spots are
   data on the galleria object; shoppers walk a small waypoint graph (`buildGraph`) with
-  'up'/'down' escalator legs. RACK & RUIN's stock is seeded by the day.
+  'up'/'down' escalator legs. RACK & RUIN's stock is seeded by the day. The Saturday drop
+  is `dropFor(week)` (a Grain Runner 9 colourway per week, `GR9` in fashion.js); one-off
+  pieces carry `oneOff` (never on NPCs).
+- Furniture (`game/furniture.js` catalog, `world/homeDecor.js` placing, `game/homeLife.js`
+  using, `game/nightRunner.js` the arcade game): `state.furniture.pieces` are
+  `{ uid, id, home, x, z, r, variant }` (home null = storage; x/z apartment-local, r quarter
+  turns). Each piece's `build(P, ctx)` uses the interior kit (local +z is its front;
+  `box`/`h` are its footprint and height; wall pieces hang with their back at z = 0).
+  `decor.rebuild(apt)` builds everything placed into one mesh per texture, adds its
+  colliders and interactables (`use: 'decor'`) to the apartment, and re-bakes the room
+  with the placed lamps and shadows. Fit tests: colliders, `kit.doorways`, other pieces,
+  and a triangle index of the room (`TriIndex`) for built-in clutter and wall support.
+  ROOMSET (`galleria.buildRoomset`, zone 'rs') builds the same catalog pieces as its
+  displays; its orders go through `shopping.delivered` into storage. `extraStatus.decor`
+  in fashion.js is the home's status. Wishes for furniture are `'f:<id>'` (`lookup`).
 - Needs (`game/needs.js`, `updateNeeds`/`passOut` in main.js, HUD in `ui.setNeeds`): decay
   comes from game time each frame (`needs.tick`); jumps of 30+ minutes are skipped there, so
   anything that skips time on purpose (sleep, shower, fridge, passing out) applies its own

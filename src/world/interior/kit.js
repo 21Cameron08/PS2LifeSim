@@ -32,6 +32,7 @@ export class InteriorKit {
     this.interactables = [];
     this.fans = [];
     this.fxLights = []; // lights whose colour is driven at runtime (see bake.js: aFx)
+    this.doorways = []; // world rects in front of and behind every walk-through opening (placed furniture keeps clear)
   }
 
   b(key) {
@@ -262,6 +263,11 @@ export class InteriorKit {
     };
     const mid = (o.from + o.to) / 2;
     const ym = (o.y0 + o.y1) / 2;
+    if (o.kind !== 'window' && !(o.y0 > 0.05)) {
+      const [x0, , z0] = this.wp(axis, o.from - 0.05, 0, lo - 0.8);
+      const [x1, , z1] = this.wp(axis, o.to + 0.05, 0, hi + 0.8);
+      this.doorways.push({ x0: this.o.x + Math.min(x0, x1), z0: this.o.z + Math.min(z0, z1), x1: this.o.x + Math.max(x0, x1), z1: this.o.z + Math.max(z0, z1) });
+    }
     const outer = this._outside && { f: { trim: o.frame ?? this._outside.f.trim } };
     const sides = [
       [-1, lo, this.faceRoom(axis, mid, ym, lo, -1) || outer],
@@ -1023,8 +1029,9 @@ export const F = {
     const u0 = (idx % 4) / 4;
     const v0 = 1 - (Math.floor(idx / 4) + 1) / 2;
     P.box('solid', -w / 2 - 0.04, y - h / 2 - 0.04, 0, w / 2 + 0.04, y + h / 2 + 0.04, 0.03, C(frame));
-    if (mat) P.panel('solid', -w / 2 - 0.01, y - h / 2 - 0.01, w / 2 + 0.01, y + h / 2 + 0.01, 0.031, [0, 0, 1, 1], C('#f2f0ea'));
-    P.panel('art', -w / 2 + (mat ? 0.05 : 0), y - h / 2 + (mat ? 0.05 : 0), w / 2 - (mat ? 0.05 : 0), y + h / 2 - (mat ? 0.05 : 0), 0.032, [u0, v0, u0 + 0.25, v0 + 0.5]);
+    // the mat and the picture each sit 5 mm proud of what's behind them (no z-fighting)
+    if (mat) P.panel('solid', -w / 2 - 0.01, y - h / 2 - 0.01, w / 2 + 0.01, y + h / 2 + 0.01, 0.035, [0, 0, 1, 1], C('#f2f0ea'));
+    P.panel('art', -w / 2 + (mat ? 0.05 : 0), y - h / 2 + (mat ? 0.05 : 0), w / 2 - (mat ? 0.05 : 0), y + h / 2 - (mat ? 0.05 : 0), mat ? 0.04 : 0.035, [u0, v0, u0 + 0.25, v0 + 0.5]);
   },
   poster(P, { idx = 4, w = 0.45, h = 0.6, y = 1.5 } = {}) {
     const u0 = (idx % 4) / 4;

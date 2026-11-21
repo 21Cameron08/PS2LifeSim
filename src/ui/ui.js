@@ -1,6 +1,6 @@
 import { SKIN, HAIR_COLORS, CLOTH, SHOES, HAIR_STYLES } from '../actors/appearance.js';
 import { NEEDS } from '../game/needs.js';
-import { ITEM, BRANDS, SLOTS, SLOT_NAMES, itemsFor } from '../game/fashion.js';
+import { ITEM, BRANDS, SLOTS, SLOT_NAMES, itemsFor, WATCH_COL, chainCol } from '../game/fashion.js';
 
 // little icons for the needs bars (16x16, drawn in currentColor)
 export const NEED_ICONS = {
@@ -212,17 +212,17 @@ export class UI {
     el.classList.add('show');
     this.locTimer = 3.2;
   }
-  setPrompt(text) {
+  setPrompt(text, key = 'E') {
     const el = $('prompt');
     if (!text) {
       el.classList.remove('show');
       this._prompt = null;
       return;
     }
-    if (text !== this._prompt) {
-      const key = this.touchInput?.isTouch ? 'USE' : 'E';
-      el.innerHTML = `<b>${key}</b>${text}`;
-      this._prompt = text;
+    if (text + key !== this._prompt) {
+      const k = this.touchInput?.isTouch ? ({ E: 'USE', F: 'DECOR' }[key] ?? key) : key;
+      el.innerHTML = `<b>${k}</b>${text}`;
+      this._prompt = text + key;
     }
     el.classList.add('show');
   }
@@ -810,21 +810,23 @@ export class UI {
     const rows = r.rows();
     r.sel = Math.min(r.sel, Math.max(0, rows.length - 1));
     const chip = (it) => {
+      if (r.chip) return r.chip(it);
       const L = it.look;
-      if (L.watch) return ['', '#f0c858', '#d0d4dc', '#1e1a1c'][L.watch];
-      if (L.chain) return L.chain === 1 ? '#f0c858' : '#d0d4dc';
+      if (L.watch) return WATCH_COL[L.watch];
+      if (L.chain) return chainCol(L.chain);
       return L.jacket ?? L.top ?? L.bottom ?? L.shoes ?? L.hatColor ?? L.glassesColor ?? '#888';
     };
     const html = rows
-      .map(({ it, owned, tryingOn, inBag, wish, note, gain, afford }, i) => {
-        const tags = [owned && '<em class="own">YOURS</em>', tryingOn && '<em>TRYING ON</em>', inBag && '<em>IN YOUR BAG</em>', wish && '<em class="want">WANT</em>', note && `<em class="note">${note}</em>`, it.gem && !owned && '<em class="gem">ONE OF A KIND</em>'].filter(Boolean).join('');
+      .map(({ it, owned, have, tryingOn, inBag, wish, note, gain, afford }, i) => {
+        const [bagOn, bagOff] = r.bagLabels ?? ['Put back', 'Bag it'];
+        const tags = [owned && '<em class="own">YOURS</em>', have && `<em class="own">YOU HAVE ${have}</em>`, tryingOn && '<em>TRYING ON</em>', inBag && `<em>${r.bagTag ?? 'IN YOUR BAG'}</em>`, wish && '<em class="want">WANT</em>', note && `<em class="note">${note}</em>`, (it.gem || it.oneOff) && !owned && '<em class="gem">ONE OF A KIND</em>'].filter(Boolean).join('');
         const acts = owned || note
           ? ''
-          : `<button class="reg-btn" data-act="try" data-i="${i}"><span>T</span>${tryingOn ? 'Take off' : 'Try on'}</button><button class="reg-btn go" data-act="bag" data-i="${i}"><span>↵</span>${inBag ? 'Put back' : 'Bag it'}</button><button class="reg-btn${wish ? ' on' : ''}" data-act="wish" data-i="${i}"><span>␣</span>${wish ? 'Unwant' : 'I want this'}</button>`;
+          : `${r.noTry ? '' : `<button class="reg-btn" data-act="try" data-i="${i}"><span>T</span>${tryingOn ? 'Take off' : 'Try on'}</button>`}<button class="reg-btn go" data-act="bag" data-i="${i}"><span>↵</span>${inBag ? bagOn : bagOff}</button><button class="reg-btn${wish ? ' on' : ''}" data-act="wish" data-i="${i}"><span>␣</span>${wish ? 'Unwant' : 'I want this'}</button>`;
         return `<div class="shop-item${i === r.sel ? ' sel' : ''}" data-sel="${i}">
           <span class="chip" style="background:${chip(it)}"></span>
           <div class="shop-name"><b>${it.name}</b>${tags}<small>${it.desc}</small></div>
-          <div class="shop-price${afford ? '' : ' dear'}">${it.price ? money(it.price) : 'free'}<small>+${gain} status</small></div>
+          <div class="shop-price${afford ? '' : ' dear'}">${it.price ? money(it.price) : 'free'}<small>+${gain} ${r.gainLabel ?? 'status'}</small></div>
           <div class="shop-acts">${acts}</div>
         </div>`;
       })
@@ -833,7 +835,7 @@ export class UI {
       <div class="shop-list">${html || `<div class="shop-empty">${r.empty}</div>`}</div>
       <div class="reg-note">${r.note || r.cartText()}</div>
       ${r.payText?.() ? `<div class="reg-btns shop-pay"><button class="reg-btn go" data-pay="1"><span>P</span>${r.payText()}</button></div>` : ''}
-      <div class="reg-foot">↑↓ pick · T try on · Enter bag it · Space I want this · P pay now · Esc done</div>`;
+      <div class="reg-foot">${r.foot ?? '↑↓ pick · T try on · Enter bag it · Space I want this · P pay now · Esc done'}</div>`;
     const el = $('shop');
     el.querySelectorAll('[data-sel]').forEach((b) => b.addEventListener('click', () => ((r.sel = Number(b.dataset.sel)), this.renderShop())));
     el.querySelector('[data-pay]')?.addEventListener('click', () => this.shopPay());
@@ -850,6 +852,7 @@ export class UI {
     const r = this.shopS;
     const row = r.rows()[r.sel];
     if (!row || row.owned || row.note) return;
+    if (kind === 'try' && r.noTry) return;
     const fn = { try: r.onTry, bag: r.onBag, wish: r.onWish }[kind];
     r.note = fn(row.it) ?? '';
     this.audio.blip(kind !== 'wish');
@@ -865,6 +868,78 @@ export class UI {
     const r = this.shopS;
     this.shopS = null;
     if (this.modal === 'shop') this.modal = null;
+    $('shop').classList.add('hidden');
+    document.body.classList.remove('in-menu');
+    r?.onClose?.();
+  }
+
+  // ---------------------------------------------------------------- home: what you own, what's placed
+  /**
+   * o: { title, sub() -> text, rows() -> [{ name, desc, chip, tags: [html], right, rightSub, acts: [{ id, label, key: 'E'|'X', go }] }],
+   *      onAct(row, actId) -> note text | undefined, empty, foot, onClose }
+   */
+  openDecor(o) {
+    this.modal = 'decor';
+    this.decorS = { ...o, sel: 0, note: '' };
+    const first = o.rows();
+    if (first[0]?.head && first.length > 1) this.decorS.sel = 1;
+    const el = $('shop');
+    el.classList.remove('hidden');
+    el.dataset.shop = 'home';
+    document.body.classList.add('in-menu');
+    this.setPrompt(null);
+    this.renderDecor();
+  }
+  renderDecor() {
+    const r = this.decorS;
+    const rows = r.rows();
+    r.sel = Math.min(r.sel, Math.max(0, rows.length - 1));
+    const keyName = { E: '↵', X: 'X' };
+    const html = rows
+      .map(
+        (row, i) => `<div class="shop-item${i === r.sel ? ' sel' : ''}${row.head ? ' head' : ''}" data-sel="${i}">
+          <span class="chip" style="background:${row.chip ?? 'transparent'}"></span>
+          <div class="shop-name"><b>${row.name}</b>${(row.tags ?? []).join('')}<small>${row.desc ?? ''}</small></div>
+          <div class="shop-price">${row.right ?? ''}<small>${row.rightSub ?? ''}</small></div>
+          <div class="shop-acts">${(row.acts ?? []).map((a) => `<button class="reg-btn${a.go ? ' go' : ''}" data-act="${a.id}" data-i="${i}"><span>${keyName[a.key] ?? a.key}</span>${a.label}</button>`).join('')}</div>
+        </div>`,
+      )
+      .join('');
+    $('shop').innerHTML = `<div class="reg-head"><span>${r.title}</span><span>${r.sub?.() ?? ''}</span></div>
+      <div class="shop-list">${html || `<div class="shop-empty">${r.empty}</div>`}</div>
+      <div class="reg-note">${r.note}</div>
+      <div class="reg-foot">${r.foot}</div>`;
+    const el = $('shop');
+    el.querySelectorAll('[data-sel]').forEach((b) => b.addEventListener('click', () => ((r.sel = Number(b.dataset.sel)), (r.note = ''), this.renderDecor())));
+    el.querySelectorAll('[data-act]').forEach((b) =>
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        r.sel = Number(b.dataset.i);
+        this.decorAct(b.dataset.act);
+      }),
+    );
+    el.querySelector('.shop-item.sel')?.scrollIntoView({ block: 'nearest' });
+  }
+  decorAct(id) {
+    const r = this.decorS;
+    const row = r.rows()[r.sel];
+    if (!row?.acts?.some((a) => a.id === id)) return;
+    const note = r.onAct(row, id);
+    if (this.modal !== 'decor') return;
+    r.note = note ?? '';
+    this.audio.blip(true);
+    this.renderDecor();
+  }
+  decorKey(key) {
+    const r = this.decorS;
+    const row = r.rows()[r.sel];
+    const a = row?.acts?.find((x) => x.key === key);
+    if (a) this.decorAct(a.id);
+  }
+  closeDecor() {
+    const r = this.decorS;
+    this.decorS = null;
+    if (this.modal === 'decor') this.modal = null;
     $('shop').classList.add('hidden');
     document.body.classList.remove('in-menu');
     r?.onClose?.();
@@ -1169,6 +1244,20 @@ export class UI {
       else if (k === 'KeyP') this.shopPay();
       return eat();
     }
+    if (this.modal === 'decor') {
+      const r = this.decorS;
+      const n = r.rows().length;
+      if (k === 'Escape' || k === 'KeyF') this.closeDecor();
+      else if ((k === 'ArrowUp' || k === 'KeyW' || k === 'ArrowDown' || k === 'KeyS') && n) {
+        r.sel = (r.sel + (k === 'ArrowUp' || k === 'KeyW' ? -1 : 1) + n) % n;
+        r.note = '';
+        this.audio.blip(false);
+        this.renderDecor();
+      } else if (k === 'Enter' || k === 'KeyE' || k === 'NumpadEnter') this.decorKey('E');
+      else if (k === 'KeyX' || k === 'Backspace' || k === 'Delete') this.decorKey('X');
+      return eat();
+    }
+    if (this.modal === 'arcade') return;
     if (this.modal === 'pos') {
       const r = this.posS;
       const i = r.keys.findIndex((key) => k === `Digit${key}` || k === `Key${key}` || k === `Numpad${key}`);

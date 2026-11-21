@@ -3,7 +3,7 @@ import { makeCanvas, makeTex } from './textures.js';
 import { sgMark, vvMark } from './fashionTextures.js';
 
 // Procedural textures for the Halcyon Galleria: shop signs, the mall directory,
-// ads and posters, the papered-over ROOMSET window. All brands are made up.
+// ads and posters, ROOMSET's fascia. All brands are made up.
 
 const SERIF = 'Georgia, "Times New Roman", serif';
 const SANS = '"Arial Black", Impact, sans-serif';
@@ -26,7 +26,7 @@ export const MSIGN = {
   split: [512, 128, 512, 96],
   vellard: [0, 224, 512, 96],
   bright: [512, 224, 512, 96],
-  soon: [0, 320, 512, 192],
+  roomset: [0, 320, 512, 192],
   pretzel: [512, 320, 512, 96],
   wc: [512, 416, 256, 64],
   hours: [768, 416, 256, 64],
@@ -100,19 +100,24 @@ function signs() {
     g.fillStyle = '#5ae8ff';
     g.fillRect(70, 78, w - 140, 3);
   });
-  slot('soon', (g, w, h) => {
+  // ROOMSET: the fascia (top half) and the delivery sign (bottom half)
+  slot('roomset', (g, w, h) => {
     const rng = new Rng(1203);
-    g.fillStyle = '#d8ccb0';
-    g.fillRect(0, 0, w, h);
-    for (let k = 0; k < 300; k++) {
-      g.fillStyle = `rgba(120,100,70,${rng.float(0.02, 0.08)})`;
-      g.fillRect(rng.float(0, w), rng.float(0, h), rng.float(10, 60), rng.float(1, 3));
+    g.fillStyle = '#ece4d4';
+    g.fillRect(0, 0, w, 96);
+    for (let k = 0; k < 120; k++) {
+      g.fillStyle = `rgba(120,100,70,${rng.float(0.02, 0.05)})`;
+      g.fillRect(rng.float(0, w), rng.float(0, 96), rng.float(10, 60), rng.float(1, 2));
     }
-    t(g, 'ROOMSET', w / 2, 62, 60, '#2a3a4a', { font: SERIF, spacing: 8 });
-    t(g, 'furniture for the life you want', w / 2, 104, 20, '#4a5a6a', { font: SERIF, weight: 'normal' });
-    g.fillStyle = '#c4483a';
-    g.fillRect(140, 128, w - 280, 40);
-    t(g, 'OPENING SOON', w / 2, 149, 26, '#ffffff', { spacing: 4 });
+    t(g, 'ROOMSET', w / 2, 40, 50, '#2a3a4a', { font: SERIF, spacing: 12 });
+    t(g, 'furniture for the life you want', w / 2, 76, 17, '#5a6a7a', { font: SERIF, weight: 'normal', spacing: 1 });
+    g.fillStyle = '#2a3a4a';
+    g.fillRect(0, 96, w, 96);
+    g.fillStyle = '#d8b46a';
+    g.fillRect(30, 102, w - 60, 2);
+    g.fillRect(30, 184, w - 60, 2);
+    t(g, 'SAME-DAY DELIVERY', w / 2, 132, 30, '#f4efe6', { spacing: 4 });
+    t(g, 'to your door, unpacked, ready to place', w / 2, 164, 17, '#c8d0d8', { font: SERIF, weight: 'normal' });
   });
   slot('pretzel', (g, w, h) => {
     g.fillStyle = '#7a3a1a';
@@ -143,7 +148,7 @@ function signs() {
   slot('drop', (g, w, h) => {
     g.fillStyle = '#ff6a2a';
     g.fillRect(0, 0, w, h);
-    t(g, "GRAIN RUNNER 9 'HARBOUR'", w / 2, 32, 32, '#1c1c20', { max: w - 20 });
+    t(g, 'GRAIN RUNNER 9 · NEW COLOURWAY', w / 2, 32, 30, '#1c1c20', { max: w - 20 });
     t(g, 'DROP · SATURDAY 10 AM · LIMIT ONE', w / 2, 70, 22, '#1c1c20', { max: w - 20 });
   });
   slot('returns', (g, w, h) => {
@@ -302,7 +307,7 @@ function posters() {
     sgMark(g, 150, 220, 30, '#f4f2ec', '#17a2a8');
     t(g, 'GRAIN', 128, 60, 52, '#1c1c20');
     t(g, 'RUNNER 9', 128, 110, 40, '#1c1c20');
-    t(g, "'HARBOUR'", 128, 350, 30, '#ff8a2a');
+    t(g, 'NEW EVERY WEEK', 128, 350, 24, '#ff8a2a');
     t(g, 'SAT 10 AM', 128, 400, 38, '#f4f2ec');
     t(g, '12 PAIRS. NO RESTOCK.', 128, 452, 16, '#f4f2ec');
   });

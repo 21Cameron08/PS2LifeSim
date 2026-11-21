@@ -22,7 +22,9 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 | Dance (on the club's floor) | E to start, ← ↑ → ↓ or WASD on the beat, Esc to stop | USE, then the arrow pad |
 | Bartending (SUBSTATION) | ingredients 1-0, Q, W · Enter finish the glass · Backspace tip it out · S serve | the panel's buttons |
 | DJ set (SUBSTATION) | 1-4 pick what plays next · Space cue on the one · Esc end the set | the panel's buttons |
-| Shopping (Galleria) | ↑ ↓ pick · T try on · Enter bag it · P pay now · Space "I want this" · Esc done | the panel's buttons |
+| Shopping (Galleria) | ↑ ↓ pick · T try on · Enter bag it (or order it at ROOMSET) · P pay now · Space "I want this" · Esc done | the panel's buttons |
+| Furniture at home | F: your things (or pick up the piece in front of you) · R turn it · E set it down · F put it back | DECOR, TURN, USE |
+| NIGHT RUNNER (the arcade cabinet) | Space / E / ↑ jump (hold for higher) · Esc leave | tap to jump |
 | Register 2 (GULLY'S crew) | items 1-0, Q, W, R, T · Space eat here / to go · Backspace void last · Enter send · Esc step away | the panel's buttons |
 | City map, routes | M (↑↓ pick a place, Enter set a route) | MAP |
 | Sound on/off | pause menu (Sound) | in the pause menu |
@@ -60,8 +62,11 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 - **A burger joint**: **GULLY'S** in Greenway, a little harbour-town fast food chain
   ("Snatch a bite!" since 1987). Open 6 AM to 2 AM. See below.
 - **A mall**: the **Halcyon Galleria** Downtown: a skylit two-storey atrium, escalators,
-  a fountain, a thrift shop, a streetwear and sneaker shop and a luxury boutique.
-  Open 10 AM to 10 PM. See below.
+  a fountain, a thrift shop, a streetwear and sneaker shop, a luxury boutique and a
+  furniture showroom. Open 10 AM to 10 PM. See below.
+- **Furniture and collections**: buy furniture at ROOMSET, place it anywhere at home,
+  use it (sofas, a hot tub, a home bar, an aquarium, an arcade cabinet with a real game,
+  a jukebox), and fill display pieces with what you own. See below.
 - **Clothes you own and status**: what you wear (and where you live) gives you a status,
   shown under your money. People notice. See below.
 - **Needs**: hunger, energy, hygiene, fun and social, shown under your money with your
@@ -72,7 +77,8 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   and what you wear: the free basics in any colour (tee, long sleeve, jacket, trousers or
   shorts, shoes), plus every piece you've bought.
 - **Save**: autosaves to localStorage ("memory card"): position, time, money,
-  looks, friendships, needs, what's in your fridge, Gull Box toys, settings.
+  looks, friendships, needs, what's in your fridge, Gull Box toys, your furniture and
+  where it stands, settings.
 - **Sound**: all synthesised with WebAudio: city rumble, wind, crickets, footsteps,
   horns, distant sirens, UI blips, typewriter ticks.
 
@@ -234,9 +240,9 @@ day is about 16 minutes, which is about two meals, one sleep and one shower.
 | Need | Drains | Fills from |
 | --- | --- | --- |
 | Hunger | ~5.5 an hour | the fridge at home (one meal per portion; groceries at HALCYON 24, $18 for 5), GULLY'S (every item has its own value, filled bite by bite), hot dogs and candy at HALCYON 24, fries outside SUBSTATION, vending machines |
-| Energy | ~4.5 an hour, faster on a shift and when hungry | sleeping (until 7 AM, or a two-hour nap), coffee (GULLY'S, HALCYON 24), sodas |
-| Hygiene | ~3.5 an hour, faster on a shift and dancing | a shower (or the penthouse bath), washing up at GULLY'S |
-| Fun | ~4.5 an hour, faster on a shift | TV and music at home, dancing, the club, drinks, the photo booth, the kiddie ride, Gull Box toys, lanterns, fortunes and just being in the Lantern Quarter |
+| Energy | ~4.5 an hour, faster on a shift and when hungry | sleeping (until 7 AM, or a two-hour nap), coffee (GULLY'S, HALCYON 24), sodas, sitting on your own sofa, the hot tub |
+| Hygiene | ~3.5 an hour, faster on a shift and dancing | a shower (or the penthouse bath), washing up at GULLY'S, the hot tub |
+| Fun | ~4.5 an hour, faster on a shift | TV and music at home, dancing, the club, drinks, the photo booth, the kiddie ride, Gull Box toys, lanterns, fortunes and just being in the Lantern Quarter, shopping, your own furniture (the fish, the home bar, NIGHT RUNNER, the jukebox, the hot tub, admiring your collections) |
 | Social | ~3 an hour | talking to anyone (a first chat in a while counts most), dancing with someone, the club and GULLY'S crowds |
 
 When they run low: a warning tells you what would help. Below 15 energy you can't run,
@@ -344,16 +350,26 @@ ten the guard, Pruitt, walks the last shoppers out.
   $3 to $30. The stock changes every morning and every piece is one of a kind; some days
   the bin hides a gem (a 1994 VELLARD jacket for $40, a SPLITGRAIN sample hoodie).
 - **SPLITGRAIN** (streetwear, ground floor, Kez): concrete and plywood, a backlit sneaker
-  wall, the tee table, hoodie and jacket rails, cargos, caps, shades and chains, a heavy
-  slow beat. $28 to $165. **Saturday 10 AM: the Grain Runner 9 'Harbour' drop**: twelve
-  pairs, a line on the plaza from 8:45 (join it with E), first come first served.
+  wall, the tee table (five colours), the hoodie rail (five colours), jackets, cargos,
+  caps, shades and chains, a heavy slow beat. $28 to $165. **Saturday 10 AM: the Grain
+  Runner 9 drop**: a new colourway every week ('Harbour', 'Ember', 'Static', 'Moss',
+  'Ultraviolet', 'Bone', then round again), twelve pairs, a line on the plaza from 8:45
+  (join it with E), first come first served. The shoe in the drop case is this week's.
 - **MAISON VELLARD** (luxury, upper floor, Céleste, with Anton on the door): marble,
   mannequins on plinths, lit niches, a black marble till, the watch and jewellery case,
-  a salon with a velvet sofa and a gold-framed mirror, lounge music. $480 to $48,000: the
-  silk shirt, the cashmere coats, the monogram jacket, loafers, the 18k Cuban link chain,
-  the **Meridian Chronograph** ($14,500) and the **Meridian Noir** ($48,000).
-- Upstairs across the atrium: ROOMSET (furniture, "opening soon") and BRIGHTWIRE (closed
-  for refit, a wall of TVs still on behind the shutter).
+  a salon with a velvet sofa and a gold-framed mirror, lounge music. $480 to $250,000: the
+  silk shirt, cashmere knits and overcoats in five colours, the monogram jacket, loafers,
+  the 18k Cuban link chain, the **Meridian Chronograph** ($14,500), the **Meridian Noir**
+  ($48,000), and three one-of-a-kind pieces: the **Shearling Greatcoat** ($18,000), the
+  **Diamond Cuban Link** ($95,000) and the **Meridian Grand Complication** ($250,000).
+- **ROOMSET** (furniture, upper floor across the atrium, Ines): a showroom staged like a
+  flat you'd want: a living room under two prints with the cloud sofa, an arc lamp and a
+  rug; a collectors' corner in the window (a stocked sneaker wall, a watch case); a
+  wall of big tickets (an arcade cabinet, an aquarium with real fish, a jukebox) and a
+  hot tub in the corner; an art wall with a neon palm; a home bar; rugs piled on a
+  platform; bossa nova. Sit on the sofas. Order anything (several if you like), pay Ines
+  or press P, and it's delivered the same day to your storage at home.
+- BRIGHTWIRE, next door, is closed for refit: a wall of TVs still on behind the shutter.
 - **Shopping**: browse any rack, wall, table or case (E). Each piece shows its price and
   how much status it gives. **Try it on** (you really wear it round the shop; the
   mirrors turn the camera on you) or **bag it**, then **Pay now** (P, or the button in any
@@ -366,14 +382,48 @@ ten the guard, Pruitt, walks the last shoppers out.
   Céleste asks a Nobody if they're lost and brings champagne to the salon for anyone
   Flashy or better (or who spent $1,000 there today).
 
+## Home: furniture, collections, things to do
+
+- **ROOMSET's catalog** (`src/game/furniture.js`, ~30 pieces, $40 to $22,000): seating
+  (a beanbag, a reading armchair, a leather sofa, the designer cloud sofa, a leather
+  lounge chair), tables (side, glass coffee, a marble dining set), lamps and plants (a
+  floor lamp, an arc lamp, a potted plant, a fiddle-leaf fig, a forty-year-old olive
+  tree, a neon sign), rugs, art (prints, a gig poster, an original oil, a gold
+  sculpture), big tickets (an aquarium, a home bar, an arcade cabinet, a jukebox, a hot
+  tub) and collection pieces (a sneaker wall, a watch case, a trophy shelf, a photo wall).
+- **Placing it** (F at home): the panel lists what's in storage and what's in this home.
+  Pick something and you carry a see-through copy of it in front of you, snapped to a
+  grid: green where it fits, red (with the reason) where it doesn't (walls, other
+  furniture, doorways, shelves and lamps already in the room). Things you put near a
+  wall back up against it. R turns it, E sets it down, F puts it back. Wall art and the
+  neon sign hang on whatever wall you face, and only where there's clear wall behind
+  them (not over a window, a door or another picture). Walk up to anything you've placed
+  and press F to move it again, or store it from the panel. Moving house: the movers pack
+  everything into storage at the new place.
+- Placed furniture is **built into the room's baked lighting** like the built-in pieces:
+  your lamps light the room (and switch off with the light switch), and everything casts
+  a soft shadow on the floor.
+- **Collections fill themselves**: the sneaker wall shows every pair you own (the best
+  up top), the watch case your watches and chains, the trophy shelf your Gull Box toys
+  (they move off the fridge), the photo wall your last four photo-booth strips. Press E
+  to look them over (how many, what they're worth).
+- **Using it** (everything feeds a need): sit on any sofa or chair (rests you); watch or
+  feed the fish; mix a drink at the home bar; play **NIGHT RUNNER** on the arcade cabinet
+  (a rooftop runner on a chunky 320×180 screen, with a high score); pick a record on the
+  jukebox (bossa nova, lounge, a slow beat, lo-fi, or the GULLY'S jingle extended mix);
+  45 minutes in the hot tub.
+- **Your home adds to your status**: every placed piece has a decor value (up to +45 in
+  all), on top of the address.
+
 ## Clothes and status
 
 - Every piece is data in `src/game/fashion.js` (all brands made up): basics (free,
   any colour), RACK & RUIN, SPLITGRAIN and MAISON VELLARD. New things to wear: hoodies,
-  long coats, caps and beanies, sunglasses, gold and steel chains, watches, logo prints
-  on the chest or across the back of a jacket, two-tone soles.
-- **Status** adds up what you're wearing and where you live (the loft and the penthouse
-  count): Nobody, Regular, Put-Together, Fresh, Sharp, Flashy, Rich, Untouchable.
+  long coats, caps and beanies, sunglasses, gold, steel and diamond chains, watches,
+  logo prints on the chest or across the back of a jacket, two-tone soles.
+- **Status** adds up what you're wearing, where you live (the loft and the penthouse
+  count) and what's in your home: Nobody, Regular, Put-Together, Fresh, Sharp, Flashy,
+  Rich, Untouchable.
   It sits under your money as gold pips; the wardrobe shows it as you change.
 - **The world notices**: people turn their heads as you pass (more of them the higher you
   climb) and now and then say something about your Meridian; Jo at GULLY'S asks if you're
@@ -417,7 +467,8 @@ src/
                           apartments (doors, markers, interiors), the HALCYON 24 store,
                           the SUBSTATION club (club.js) and the room under it
                           (undercurrent.js), GULLY'S (gullys.js, and the mascot figure in
-                          gullyFigure.js), the Halcyon Galleria (galleria.js)
+                          gullyFigure.js), the Halcyon Galleria (galleria.js), furniture
+                          placed at home (homeDecor.js)
   world/interior/         room/wall builder, furniture kit, baked lighting, apartment layouts
   actors/                 crowd renderer (instanced puppets, walk/carry/dance/sit poses),
                           appearance model, player + camera, pedestrians AI, traffic,
@@ -429,8 +480,10 @@ src/
                           (photobooth.js), theme nights (clubNights.js), bar job
                           (barJob.js) and DJ set (djSet.js), GULLY'S menu data
                           (gullysMenu.js), your visit there (gullysVisit.js), the
-                          crew job (crewJob.js), clothes and status (fashion.js) and
-                          shopping at the Galleria (shopping.js)
+                          crew job (crewJob.js), clothes and status (fashion.js),
+                          shopping at the Galleria (shopping.js), ROOMSET's furniture
+                          catalog (furniture.js), using it at home (homeLife.js) and the
+                          arcade cabinet's game (nightRunner.js)
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls,
                           the city map (map.js; its places and hours are game/places.js,
                           the route beam is world/waypoint.js)
@@ -449,24 +502,20 @@ The big goal: **lots of cool places to hang out**. Every new space (diner, arcad
 rooftop, karaoke bar, record shop, a 2 AM laundromat, the pier) gets a real walk-in
 interior with the same detail, light and sound as the apartments and the store.
 
-1. **Being rich, phase 2: home and collections**: ROOMSET opens upstairs at the
-   Galleria (a furniture showroom); a placement mode for your apartment; display walls
-   for sneakers, art and the Gull Box toys; deliveries to your door; penthouse upgrades
-   (an aquarium, a home bar, a hot tub on the terrace).
-2. **Being rich, phase 3: getting rich**: promotions (shift manager at GULLY'S, then
+1. **Being rich, phase 3: getting rich**: promotions (shift manager at GULLY'S, then
    franchisee), investing (a ticker of made-up companies at the bank), buying property
    and collecting rent, reselling limited sneaker drops.
-3. **Being rich, phase 4: the high life**: BRIGHTWIRE reopens, a car dealership and
+2. **Being rich, phase 4: the high life**: BRIGHTWIRE reopens, a car dealership and
    cars, a members' club and pool on the Meridian tower's roof, fine dining, hired help,
    bottle service at SUBSTATION.
-4. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
+3. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
    noodle bar cook, courier, office temp. Promotions and raises at the store.
-5. **Economy**: bills, shop inventories.
-6. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
-7. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
-8. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
-9. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
-10. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
+4. **Economy**: bills, shop inventories.
+5. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
+6. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
+7. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
+8. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
+9. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
     streets, chat and visiting apartments; the bank must move server‑side then.
 
 All names, shops and brands in the game are made up.

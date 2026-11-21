@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GeoBuilder } from '../core/geo.js';
-import { dress } from '../game/fashion.js';
+import { dress, WATCH_COL, chainCol } from '../game/fashion.js';
 import { printAtlas } from '../render/fashionTextures.js';
 
 // Renders every person in the game (player + NPCs) with ~20 instanced meshes,
@@ -112,7 +112,7 @@ const GEOS = {
 };
 const SINGLE = ['torso', 'jacket', 'head', 'hairCap', 'hairBack', 'hood', 'coatTail', 'cap', 'beanie', 'shades', 'chain', 'watch', 'print'];
 const DOUBLE = ['upperArm', 'foreArm', 'hand', 'thigh', 'shin', 'shoe', 'sole', 'bag'];
-const WATCH = [null, '#f0c858', '#d0d4dc', '#1e1a1c'];
+const WATCH = WATCH_COL;
 const _h = new THREE.Vector3();
 
 // hair style -> [cap scale y, cap lift, back length, cap width]
@@ -247,7 +247,7 @@ export class Crowd {
     set('cap', id, app.hatColor || '#1c1c20');
     set('beanie', id, app.hatColor || '#1c1c20');
     set('shades', id, app.glassesColor || '#1c1c20');
-    set('chain', id, app.chain === 1 ? '#f0c858' : '#d0d4dc');
+    set('chain', id, chainCol(app.chain));
     set('watch', id, WATCH[app.watch] || '#d0d4dc');
     // a print on the chest, or on the back of a jacket
     const tile = outer ? (app.printBack ?? -1) : (app.print ?? -1);

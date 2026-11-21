@@ -1325,6 +1325,32 @@ body.touch #map .map-foot {
   grid-row: 2;
   grid-column: 3;
 }
+/* at home: DECOR top left; carrying furniture: TURN takes the map's place */
+.tbtn.decor-btn,
+.tbtn.turn-btn {
+  display: none;
+}
+body.at-home .tbtn.decor-btn {
+  display: block;
+  grid-row: 1;
+  grid-column: 1;
+}
+body.carrying .tbtn.turn-btn {
+  display: block;
+  grid-row: 2;
+  grid-column: 1;
+}
+body.carrying .tbtn.map-btn {
+  display: none;
+}
+#prompt .no {
+  color: #ff9a8a;
+}
+#prompt small {
+  margin-left: 8px;
+  opacity: 0.75;
+  font-size: 0.8em;
+}
 @media (max-width: 760px) {
   .map-body {
     grid-template-columns: 1fr;
@@ -1489,6 +1515,66 @@ body.in-menu #hint {
   background: linear-gradient(180deg, #14110c, #070605);
   border-color: #d8b46a;
   box-shadow: 0 0 40px rgba(216, 180, 106, 0.25);
+}
+#shop[data-shop='home'] {
+  background: linear-gradient(180deg, #1e1a16, #0e0c0a);
+  border-color: #c8b89a;
+}
+#shop[data-shop='rs'] {
+  background: linear-gradient(180deg, #24201c, #12100e);
+  border-color: #e8dcc8;
+}
+#shop[data-shop='rs'] .reg-head {
+  letter-spacing: 0.3em;
+  font-weight: 500;
+}
+.shop-item.head {
+  cursor: default;
+  padding-top: 12px;
+  color: #e8dcc8;
+}
+.shop-item.head .chip {
+  border-color: transparent;
+}
+#arcade {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+  pointer-events: auto;
+}
+#arcade.hidden {
+  display: none;
+}
+.arcade-cab {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #2a1a4a, #140c26);
+  border: 3px solid #ff6ac8;
+  box-shadow: 0 0 40px rgba(90, 232, 255, 0.35);
+  width: min(960px, calc(100% - 24px));
+}
+.arcade-cab canvas {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  image-rendering: pixelated;
+  border-radius: 6px;
+  background: #000;
+  touch-action: none;
+}
+.arcade-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  color: #9fe0ff;
+  font-size: 13px;
 }
 #shop[data-shop='mv'] .reg-head {
   color: #e8cc88;

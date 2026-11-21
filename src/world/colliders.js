@@ -26,6 +26,20 @@ export class Colliders {
     return b;
   }
 
+  /** Take a box back out (placed furniture that gets moved). */
+  remove(b) {
+    const i = this.boxes.indexOf(b);
+    if (i < 0) return;
+    this.boxes.splice(i, 1);
+    const c = this.cell;
+    for (let cx = Math.floor(b.x0 / c); cx <= Math.floor(b.x1 / c); cx++)
+      for (let cz = Math.floor(b.z0 / c); cz <= Math.floor(b.z1 / c); cz++) {
+        const arr = this.map.get(this.key(cx, cz));
+        const j = arr ? arr.indexOf(b) : -1;
+        if (j >= 0) arr.splice(j, 1);
+      }
+  }
+
   /** Add a box centred at (x,z). */
   addC(x, z, w, d, h = 100, tag = null) {
     return this.add(x - w / 2, z - d / 2, x + w / 2, z + d / 2, 0, h, tag);

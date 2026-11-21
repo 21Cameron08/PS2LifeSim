@@ -1,6 +1,7 @@
 import { Rng } from '../core/rng.js';
-import { ITEM, ITEMS, BRANDS, statusOf, price as priceText } from './fashion.js';
+import { ITEM, ITEMS, BRANDS, statusOf, dropFor, price as priceText } from './fashion.js';
 import { UP } from '../world/galleria.js';
+import { FURN } from './furniture.js';
 
 // Shopping at the Halcyon Galleria:
 //  - browse a rack, wall, table or case (E): see what's there, the price and what
@@ -12,12 +13,19 @@ import { UP } from '../world/galleria.js';
 //  - RACK & RUIN's stock changes every morning (and a gem turns up now and then)
 //  - "I want this": pin something you can't afford; the HUD tracks it
 //  - Saturday 10 AM: the Grain Runner 9 drop at SPLITGRAIN (twelve pairs, a line)
+//  - ROOMSET sells furniture: you order it, pay, and it's delivered to your storage
+//    at home (place it with F, see world/homeDecor.js)
 
 const SHOPS = {
   rr: { name: 'RACK & RUIN', staff: 'dot', bag: BRANDS.thrift.bag },
   sg: { name: 'SPLITGRAIN', staff: 'kez', bag: BRANDS.splitgrain.bag },
   mv: { name: 'MAISON VELLARD', staff: 'celeste', bag: BRANDS.vellard.bag },
+  rs: { name: 'ROOMSET', staff: 'ines', bag: null, furniture: true },
 };
+const UPSTAIRS = ['mv', 'rs'];
+/** Clothes are ITEMs; ROOMSET's stock is furniture. Wishes for furniture are 'f:<id>'. */
+export const lookup = (id) => (id?.startsWith('f:') ? FURN[id.slice(2)] : ITEM[id]);
+const itemOf = (id, shop) => (shop === 'rs' ? FURN[id] : ITEM[id]);
 const SLOT_OF_DISPLAY = { 'rr-tops': ['top'], 'rr-outer': ['outer'], 'rr-bottoms': ['bottom'], 'rr-shoes': ['shoes'], 'rr-acc': ['hat', 'glasses'] };
 const DROP_STOCK = 12;
 const near = (p, q, r) => Math.hypot(p.x - q.x, p.z - q.z) < r && Math.abs((p.y ?? 0) - (q.y ?? p.y ?? 0)) < 1.3;
@@ -25,8 +33,8 @@ const money = (n) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, m
 const cents = (n) => Math.round(n * 100) / 100;
 
 export class Shopping {
-  constructor({ galleria, shoppers, ui, audio, state, clock, player, crowd, needs, input, rig, saveNow }) {
-    Object.assign(this, { G: galleria, S: shoppers, ui, audio, state, clock, player, crowd, needs, input, rig, saveNow });
+  constructor({ galleria, shoppers, ui, audio, state, clock, player, crowd, needs, input, rig, decor, saveNow }) {
+    Object.assign(this, { G: galleria, S: shoppers, ui, audio, state, clock, player, crowd, needs, input, rig, decor, saveNow });
     this.rng = new Rng(Date.now() & 0xfff);
     this.cart = []; // item ids, all from one shop
     this.cartShop = null;
@@ -77,7 +85,13 @@ export class Shopping {
 
   itemsAt(d) {
     if (d.shop === 'rr') return (this.thriftStock()[d.id] ?? []).filter((id) => !this.state.thrift.sold.includes(id));
+    if (d.id === 'sg-drop') return [this.dropItem().id];
     return d.items;
+  }
+
+  /** This week's Grain Runner 9 colourway (a new one every Saturday). */
+  dropItem() {
+    return dropFor(this.dropWeek());
   }
 
   // ---------------------------------------------------------------- the drop
@@ -118,7 +132,7 @@ export class Shopping {
     if (!G.open) return null;
     // tills
     for (const [shop, t] of Object.entries(G.tills)) {
-      if (!near(p, { ...t.stand, y: shop === 'mv' ? G.origin.y + UP : G.origin.y }, 1.7)) continue;
+      if (!near(p, { ...t.stand, y: UPSTAIRS.includes(shop) ? G.origin.y + UP : G.origin.y }, 1.7)) continue;
       const st = this.S.staff[SHOPS[shop].staff];
       if (!st.c.visible) continue;
       const mine = this.cart.length && this.cartShop === shop;
@@ -144,13 +158,14 @@ export class Shopping {
       if (p.y < G.origin.y + 1) return { label: 'Toss a coin in the fountain (25¢)', act: () => this.coin() };
     }
     if (near(p, { ...G.kiosk.stand, y: G.origin.y }, 1.0)) return { label: 'PRETZEL PILOT: a pretzel ($4.50)', act: () => this.pretzel() };
-    if (near(p, { ...G.directory, y: G.origin.y }, 0.9)) return { label: 'Read the directory', act: () => this.ui.toast("STREET LEVEL: RACK & RUIN (thrift), SPLITGRAIN (streetwear), PRETZEL PILOT, restrooms. UPPER LEVEL: MAISON VELLARD, ROOMSET (opening soon), BRIGHTWIRE (closed for refit). Open 10 AM - 10 PM.") };
+    if (near(p, { ...G.directory, y: G.origin.y }, 0.9)) return { label: 'Read the directory', act: () => this.ui.toast('STREET LEVEL: RACK & RUIN (thrift), SPLITGRAIN (streetwear), PRETZEL PILOT, restrooms. UPPER LEVEL: MAISON VELLARD (luxury), ROOMSET (furniture, same-day delivery), BRIGHTWIRE (closed for refit). Open 10 AM - 10 PM.') };
     if (G.salon && near(p, G.salon.seat, 1.1) && this.zone === 'mv') return { label: 'Sink into the velvet sofa', act: () => this.salon() };
     return null;
   }
 
   // ---------------------------------------------------------------- browsing
   browse(d) {
+    if (d.shop === 'rs') return this.browseFurniture(d);
     const items = this.itemsAt(d).map((id) => ITEM[id]);
     const dr = this.dropState();
     this.player.locked = true;
@@ -181,6 +196,47 @@ export class Shopping {
       onWish: (it) => this.toggleWish(it),
       payText: () => (this.unpaid(d.shop) ? `Pay now · ${money(this.total(d.shop))}` : ''),
       onPay: () => setTimeout(() => this.checkout(d.shop), 0),
+      onClose: () => (this.player.locked = false),
+    });
+  }
+
+  /** ROOMSET: furniture to order (delivered home), several of anything if you like. */
+  browseFurniture(d) {
+    const items = d.items.map((id) => FURN[id]);
+    this.player.locked = true;
+    if (!this.seen.has(d.id)) {
+      this.seen.add(d.id);
+      this.needs.add('fun', 1.5);
+    }
+    const have = (id) => this.decor?.pieces.filter((p) => p.id === id).length ?? 0;
+    this.ui.openShop({
+      title: `ROOMSET · ${d.label}`,
+      shop: 'rs',
+      noTry: true,
+      bagLabels: ['Cancel', 'Order it'],
+      bagTag: 'ORDERED',
+      gainLabel: 'home status',
+      chip: (it) => it.chip ?? '#888',
+      foot: '↑↓ pick · Enter order it · Space I want this · P pay now · Esc done',
+      empty: 'Nothing here.',
+      rows: () =>
+        items.map((it) => ({
+          it,
+          owned: false,
+          have: have(it.id),
+          inBag: this.cartShop === 'rs' && this.cart.includes(it.id),
+          wish: this.state.wish === `f:${it.id}`,
+          note: '',
+          gain: it.decor,
+          afford: this.state.cash + Math.max(0, this.state.bank) >= it.price,
+        })),
+      cash: () => this.state.cash,
+      bank: () => this.state.bank,
+      cartText: () => (this.cartShop === 'rs' && this.cart.length ? `Your order: ${this.cart.length} piece${this.cart.length > 1 ? 's' : ''}, ${money(this.total('rs'))}. Delivered today, to your storage at home.` : 'Order something, then pay Ines at the desk (or press P). Delivery is free.'),
+      onBag: (it) => this.toggleBag(it, 'rs'),
+      onWish: (it) => this.toggleWish(it, `f:${it.id}`),
+      payText: () => (this.unpaid('rs') ? `Pay now · ${money(this.total('rs'))}` : ''),
+      onPay: () => setTimeout(() => this.checkout('rs'), 0),
       onClose: () => (this.player.locked = false),
     });
   }
@@ -222,6 +278,19 @@ export class Shopping {
   }
 
   toggleBag(it, shop) {
+    if (SHOPS[shop].furniture) {
+      const i = this.cart.indexOf(it.id);
+      if (i >= 0 && this.cartShop === shop) {
+        this.cart.splice(i, 1);
+        if (!this.cart.length) this.cartShop = null;
+        return 'Taken off your order.';
+      }
+      if (this.cartShop && this.cartShop !== shop) return `Pay for your ${SHOPS[this.cartShop].name} stuff first (one shop at a time).`;
+      this.cart.push(it.id);
+      this.cartShop = shop;
+      this.audio.tone(1320, 'square', 0.02, 0.05);
+      return `On your order: ${it.name}. Pay Ines at the desk, or press P to pay now.`;
+    }
     if (this.state.owned.includes(it.id)) return "You've already got that.";
     if (it.drop && !this.dropState().on) return 'Not until Saturday, 10 AM.';
     if (it.drop && this.S.dropLine.length && !this.lineDone) return 'Kez: "There\'s a line outside, fam. Back of it."';
@@ -245,9 +314,9 @@ export class Shopping {
     this.ui.hint(`To buy it: <b>Pay now</b> (P) in any display here, or pay ${st.name} at the till. Walking out without paying sets off the alarm.`, 8);
   }
 
-  toggleWish(it) {
-    if (this.state.owned.includes(it.id)) return "It's already yours.";
-    this.state.wish = this.state.wish === it.id ? null : it.id;
+  toggleWish(it, id = it.id) {
+    if (this.state.owned.includes(id)) return "It's already yours.";
+    this.state.wish = this.state.wish === id ? null : id;
     this.wishNoted = null;
     if (this.state.wish) this.audio.blip(true);
     return this.state.wish ? `Saving up for the ${it.name}. It's under your money now.` : 'Not saving for it any more.';
@@ -260,7 +329,7 @@ export class Shopping {
   /** What's due at a shop's till: the bag, plus anything you're wearing from there. */
   total(shop, bagOnly = false) {
     let t = 0;
-    if (this.cartShop === shop) for (const id of this.cart) t += ITEM[id].price;
+    if (this.cartShop === shop) for (const id of this.cart) t += itemOf(id, shop).price;
     if (!bagOnly && this.tryShop === shop) for (const s of Object.keys(this.trying)) t += ITEM[this.state.appearance.wear[s]]?.price ?? 0;
     return cents(t);
   }
@@ -272,11 +341,11 @@ export class Shopping {
     const worn = this.tryShop === shop ? Object.keys(this.trying).map((s) => this.state.appearance.wear[s]).filter(Boolean) : [];
     const bag = this.cartShop === shop ? [...this.cart] : [];
     const ids = [...worn, ...bag];
-    const total = cents(ids.reduce((s, id) => s + ITEM[id].price, 0));
+    const total = cents(ids.reduce((s, id) => s + itemOf(id, shop).price, 0));
     const st = this.S.staff[sh.staff];
     const line = (a, b) => `${a.length > 22 ? `${a.slice(0, 21)}…` : a.padEnd(22, '.')} ${b}`;
     if (!ids.length) return;
-    const text = [`${sh.name} · ${this.clock.format()}`, '', ...ids.map((id) => line(ITEM[id].name, priceText(ITEM[id]))), '', line('TOTAL', money(total)), worn.length ? `(${worn.length} you're wearing)` : ''].join('\n');
+    const text = [`${sh.name} · ${this.clock.format()}`, '', ...ids.map((id) => line(itemOf(id, shop).name, sh.furniture ? money(itemOf(id, shop).price) : priceText(ITEM[id]))), '', line('TOTAL', money(total)), worn.length ? `(${worn.length} you're wearing)` : '', sh.furniture ? 'FREE SAME-DAY DELIVERY · TO YOUR STORAGE' : ''].join('\n');
     const caughtLine = { rr: 'Dot: "Sweetie! You forgot to pay!"', sg: 'BEEP BEEP BEEP. Kez: "Nah nah nah. Pay or put it back, fam."', mv: 'A soft, expensive chime. Anton steps in front of you. "I believe these are ours."' }[shop];
     this.player.locked = true;
     st.serving = true;
@@ -332,6 +401,7 @@ export class Shopping {
   paid(shop, ids, total, worn) {
     const S = this.state;
     const sh = SHOPS[shop];
+    if (sh.furniture) return this.delivered(ids, total);
     for (const id of ids) if (!S.owned.includes(id)) S.owned.push(id);
     if (shop === 'rr') S.thrift.sold.push(...ids);
     for (const id of ids)
@@ -367,6 +437,23 @@ export class Shopping {
     this.saveNow?.();
   }
 
+  /** Paid at ROOMSET: it all goes to your storage at home. */
+  delivered(ids, total) {
+    const S = this.state;
+    for (const id of ids) this.decor.add(id);
+    this.cart = [];
+    this.cartShop = null;
+    S.spent = cents(S.spent + total);
+    this.needs.add('fun', Math.min(30, 5 + Math.log10(Math.max(1, total)) * 6));
+    this.audio.coin();
+    setTimeout(() => this.audio.tone(2400, 'sine', 0.05, 0.25), 120);
+    const big = ids.some((id) => FURN[id].price >= 5000);
+    this.ui.toast(`Ka-ching! ${big ? 'Ines: "Wonderful. I\'ll have the boys bring it up this afternoon. Mind the doorframe."' : 'Ines: "Lovely. It\'ll be waiting at your place when you get home."'}`);
+    setTimeout(() => this.ui.hint('Delivered to your storage at home. At home, press <b>F</b> to place it.', 7), 1400);
+    if (S.wish && ids.some((id) => S.wish === `f:${id}`)) S.wish = null;
+    this.saveNow?.();
+  }
+
   ledger(what, amt) {
     const L = this.state.ledger;
     L.push({ t: Math.round(this.clock.minutes), what, amt: cents(amt) });
@@ -392,7 +479,7 @@ export class Shopping {
     const close = () => this.ui.closeDialog();
     const wait = Math.max(0, (10 - dr.h) * 60) + ahead * 1.2;
     this.ui.openDialog({
-      name: "SPLITGRAIN · GRAIN RUNNER 9 'HARBOUR'",
+      name: `SPLITGRAIN · ${this.dropItem().name.toUpperCase()}`,
       text: `${ahead} people ahead of you. ${D.stock} pairs. Doors at 10. Someone in a camping chair has been here since six.`,
       choices: [
         {
@@ -448,7 +535,7 @@ export class Shopping {
     this.audio.coin();
     setTimeout(() => this.audio.noiseHit?.(0.05, 2600, 0.3), 380);
     this.needs.add('fun', 3);
-    const it = this.state.wish && ITEM[this.state.wish];
+    const it = this.state.wish && lookup(this.state.wish);
     this.ui.toast(
       it
         ? `Plink. You wish for the ${it.name}. The fountain gurgles noncommittally.`
@@ -484,8 +571,12 @@ export class Shopping {
     const zone = this.G.zoneAt(p);
     // leaving a shop with things you haven't paid for
     if (this.zone && ['rr', 'sg', 'mv'].includes(this.zone) && zone !== this.zone) this.alarm(this.zone);
+    if (this.zone === 'rs' && zone !== 'rs' && this.unpaid('rs')) {
+      this.handBack('rs');
+      this.ui.toast('You walk out without paying. Ines cancels your order with one sad click.');
+    }
     // walking into a shop: the staff notice you (and what you're wearing)
-    if (zone !== this.zone && ['rr', 'sg', 'mv'].includes(zone) && this.G.open && !this.greeted.has(zone)) {
+    if (zone !== this.zone && ['rr', 'sg', 'mv', 'rs'].includes(zone) && this.G.open && !this.greeted.has(zone)) {
       this.greeted.add(zone);
       this.greet(zone);
     }
@@ -499,14 +590,19 @@ export class Shopping {
       if (!this.ui.modal && Math.hypot(mv.x, mv.y) > 0.6) this.endMirror();
     }
     // the thing you're saving for
-    const it = this.state.wish && ITEM[this.state.wish];
-    if (it && this.wishNoted !== it.id && this.state.cash + Math.max(0, this.state.bank) >= it.price && !this.state.owned.includes(it.id)) {
+    const it = this.state.wish && lookup(this.state.wish);
+    if (it && this.wishNoted !== it.id && this.state.cash + Math.max(0, this.state.bank) >= it.price && !this.state.owned.includes(this.state.wish)) {
       this.wishNoted = it.id;
       this.ui.toast(`You can afford the ${it.name} now. Just saying.`);
       this.audio.blip(true);
     }
     // the drop: the line grows from 8:45, the doors open at 10, a pair a minute or so
     const dr = this.dropState();
+    const look = this.dropItem().look;
+    if (this.dropLook !== look) {
+      this.dropLook = look;
+      this.G.setDropLook(look);
+    }
     const h = dr.h;
     this.drop = { line: dr.line, want: dr.line ? Math.min(14, Math.max(0, Math.round((h - 8.75) * 14))) : 0, spots: this.lineSpots() };
     if (dr.line && h >= 10 && this.S.dropLine.length) {
@@ -532,6 +628,12 @@ export class Shopping {
           : t <= 4
             ? ['Céleste: "Welcome to Maison Vellard."', 'Céleste: "Good afternoon. Let me know if anything catches your eye."']
             : ['Céleste: "There you are! We\'ve been hoping you\'d come in."', 'Céleste: "Darling. Champagne? Sit, sit."'],
+      rs:
+        t <= 1
+          ? ['Ines: "Hi! Browsing is free. Sitting on the sofas is free. Napping on them is... discouraged."', 'Ines: "Welcome to ROOMSET. Imagine it in your place. Go on."']
+          : t <= 4
+            ? ['Ines: "Hello! Everything you see is in stock, and we deliver today."', 'Ines: "Welcome in. The cloud sofa is the one everyone sits on. Try it."']
+            : ['Ines: "Oh, hello! I have a hot tub I think you need to see."', 'Ines: "Welcome back. Your place must be looking incredible."'],
     };
     this.ui.toast(this.rng.pick(lines[zone]));
     if (zone === 'mv') this.audio.tone(2200, 'sine', 0.02, 0.5);

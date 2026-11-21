@@ -71,7 +71,7 @@ export function buildPlaces(w) {
     name: () => 'HALCYON GALLERIA',
     sub: () => {
       const sat = w.weekday?.() === 'SAT';
-      return `RACK & RUIN thrift · SPLITGRAIN streetwear · MAISON VELLARD luxury${sat ? " · Grain Runner 9 drop today, 10 AM" : ''}`;
+      return `RACK & RUIN thrift · SPLITGRAIN streetwear · MAISON VELLARD luxury · ROOMSET furniture${sat ? " · Grain Runner 9 drop today, 10 AM" : ''}`;
     },
     status: (h) => (h >= 10 && h < 22 ? { text: 'OPEN · until 10 PM', open: true } : { text: 'CLOSED · opens 10 AM', open: false }),
     needs: () => ['fun', 'social', 'hunger'],
