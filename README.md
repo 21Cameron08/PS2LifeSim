@@ -23,6 +23,7 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 | Bartending (SUBSTATION) | ingredients 1-0, Q, W · Enter finish the glass · Backspace tip it out · S serve | the panel's buttons |
 | DJ set (SUBSTATION) | 1-4 pick what plays next · Space cue on the one · Esc end the set | the panel's buttons |
 | Shopping (Galleria) | ↑ ↓ pick · T try on · Enter bag it (or order it at ROOMSET) · P pay now · Space "I want this" · Esc done | the panel's buttons |
+| Trading terminal (HALCYON EXCHANGE) | ↑ ↓ pick a company · ← → how many · Enter buy · X sell · Esc done | the panel's buttons |
 | Furniture at home | F: your things (or pick up the piece in front of you) · R turn it · E set it down · F put it back | DECOR, TURN, USE |
 | NIGHT RUNNER (the arcade cabinet) | Space / E / ↑ jump (hold for higher) · Esc leave | tap to jump |
 | Register 2 (GULLY'S crew) | items 1-0, Q, W, R, T · Space eat here / to go · Backspace void last · Enter send · Esc step away | the panel's buttons |
@@ -55,8 +56,12 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   **Loft 4** at The Kiln Works in Kiln Heights, and the **Meridian Tower Penthouse**
   Downtown. See below.
 - **Jobs**: night clerk at **HALCYON 24**, the convenience store next door to Unit 3B
-  ($9 an hour), crew at **GULLY'S** ($9.50 and a meal) and the bar at **SUBSTATION** ($11
-  plus tips). One shift at a time. See below.
+  ($9 an hour), crew at **GULLY'S** ($9.50 and a meal, then shift manager, then the
+  franchise) and the bar at **SUBSTATION** ($11 plus tips). One shift at a time. See below.
+- **Getting rich**: the **HALCYON EXCHANGE** Downtown, a 1920s banking hall turned
+  brokerage with a bar: trade shares in eight made-up companies, buy buildings around the
+  city and collect rent, resell sneakers at the night market, and watch your net worth
+  climb. See below.
 - **A nightclub**: **SUBSTATION**, a converted power substation in Ember Row, across the
   road from the Lantern Quarter. Open 10 PM to 4 AM. See below.
 - **A burger joint**: **GULLY'S** in Greenway, a little harbour-town fast food chain
@@ -78,7 +83,7 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   shorts, shoes), plus every piece you've bought.
 - **Save**: autosaves to localStorage ("memory card"): position, time, money,
   looks, friendships, needs, what's in your fridge, Gull Box toys, your furniture and
-  where it stands, settings.
+  where it stands, your shares, buildings and franchise, settings.
 - **Sound**: all synthesised with WebAudio: city rumble, wind, crickets, footsteps,
   horns, distant sirens, UI blips, typewriter ticks.
 
@@ -240,10 +245,10 @@ day is about 16 minutes, which is about two meals, one sleep and one shower.
 | Need | Drains | Fills from |
 | --- | --- | --- |
 | Hunger | ~5.5 an hour | the fridge at home (one meal per portion; groceries at HALCYON 24, $18 for 5), GULLY'S (every item has its own value, filled bite by bite), hot dogs and candy at HALCYON 24, fries outside SUBSTATION, vending machines |
-| Energy | ~4.5 an hour, faster on a shift and when hungry | sleeping (until 7 AM, or a two-hour nap), coffee (GULLY'S, HALCYON 24), sodas, sitting on your own sofa, the hot tub |
+| Energy | ~4.5 an hour, faster on a shift and when hungry | sleeping (until 7 AM, or a two-hour nap), coffee (GULLY'S, HALCYON 24), sodas, sitting on your own sofa, the hot tub, an espresso at the Ticker Bar |
 | Hygiene | ~3.5 an hour, faster on a shift and dancing | a shower (or the penthouse bath), washing up at GULLY'S, the hot tub |
-| Fun | ~4.5 an hour, faster on a shift | TV and music at home, dancing, the club, drinks, the photo booth, the kiddie ride, Gull Box toys, lanterns, fortunes and just being in the Lantern Quarter, shopping, your own furniture (the fish, the home bar, NIGHT RUNNER, the jukebox, the hot tub, admiring your collections) |
-| Social | ~3 an hour | talking to anyone (a first chat in a while counts most), dancing with someone, the club and GULLY'S crowds |
+| Fun | ~4.5 an hour, faster on a shift | TV and music at home, dancing, the club, drinks, the photo booth, the kiddie ride, Gull Box toys, lanterns, fortunes and just being in the Lantern Quarter, shopping, your own furniture (the fish, the home bar, NIGHT RUNNER, the jukebox, the hot tub, admiring your collections), trading, a cocktail after the closing bell, the Harbour Gull, buying a building |
+| Social | ~3 an hour | talking to anyone (a first chat in a while counts most), dancing with someone, the club and GULLY'S crowds, a drink with a broker |
 
 When they run low: a warning tells you what would help. Below 15 energy you can't run,
 below 6 you walk slower, and at 0 you pass out: a cab takes you home ($20) and you wake
@@ -333,6 +338,17 @@ Theo and two of the cooks take a break. The **staff gate** at the west end of th
   out by talking to Marco: the slip shows orders rung up, wrong orders, people sent to Jo,
   baskets and grill loads, anything burnt, bags, and what was docked. Working drains energy,
   hygiene and fun faster; the register is a bit social; the meal fixes your hunger.
+- **Getting on.** Five good shifts (an hour or more, few mistakes) and Marco wants a word:
+  **shift manager**, $13.50 an hour plus a bonus on every order rung and bagged, a navy
+  shirt, and the complaints. Every couple of minutes someone in the dining room waves you
+  over (an orange "!" over their head): go and sort it out. Refund, remake or a free Gull
+  Box toy: the right call for the complaint earns a bonus, a poor one costs you, and
+  leaving them waiting costs more.
+- **The franchise.** Ten shifts as manager and Gully HQ calls: GULLY'S Greenway is for
+  sale, $150,000 from your bank. Once it's yours the week's profit lands on Monday mornings
+  (Marco still runs the pass), Jo calls you boss, and through Marco you can read the books,
+  run a **special of the week** (Two-for-Tuesday packs the place on thin margins; it
+  can go either way) and choose the **toy of the week** (five times as many in the boxes).
 
 ## The Halcyon Galleria (shopping)
 
@@ -415,6 +431,47 @@ ten the guard, Pruitt, walks the last shoppers out.
 - **Your home adds to your status**: every placed piece has a decor value (up to +45 in
   all), on top of the address.
 
+## Getting rich: the HALCYON EXCHANGE
+
+A 1920s banking hall Downtown, behind a stone portico with the name carved in the frieze
+and a bronze gull on the plaza (rub its beak for luck). Open 8 AM to midnight; Gus on the
+door walks the last of them out.
+
+- **The trading floor**: marble, columns, coffered ceiling, three brass chandeliers.
+  A **big board** of every price over the floor, an **LED ticker** crawling underneath with
+  the prices and the headlines, clocks for Port Halcyon and two made-up cities, and four
+  walnut desks of green-screen **terminals** with banker's lamps. Brokers work them while
+  the market's open and stare up at the board.
+- **The market**: eight made-up companies (GULLY'S Group, SPLITGRAIN, Maison Vellard,
+  Meridian Holdings, Brightwire, Harbour Freight & Ferry, Lantern Light & Power, Kiln
+  Works Steel). It trades 9:30 AM to 4 PM, Monday to Friday, and prices really move through
+  the day. Headlines go up at 8 AM and move the open; some are tied to the city (SPLITGRAIN
+  before a Saturday drop, Brightwire's endless refit). Sit at any free terminal: a chart of
+  thirty days and today, your position and profit, buy or sell 1, 10, 100 or all, $5 a
+  trade from your bank. Dividends land on Monday mornings. Prices are worked out from the
+  game clock (the same for everyone, every load), so the past nine weeks are on the charts
+  from day one.
+- **The Ticker Bar**: walnut and brass, a back bar of lit bottles, stools and a booth by the
+  window, Walt pouring. Coffee all day; cocktails after the **closing bell** at 4 (happy
+  hour, half price till six). Buy a broker a drink after the bell and they might tell you
+  tomorrow's news (they're right about seven times in ten). Cool jazz in the corner.
+- **Property**: Priya's desk, a listings wall and a **model of the whole city under glass**
+  (the buildings for sale glow red, yours green). Eight real buildings around Port Halcyon
+  carry **FOR SALE** boards, from lock-up garages ($24k) to a Downtown corner tower ($2.4M):
+  buy them from your bank, collect rent every Monday (less repairs, and now and then an
+  empty flat), sell any time for what they're worth that week (each district has its own
+  cycle) less 3%. Yours get a PRIVATE PROPERTY plaque and appear on the map.
+- **A trading desk at home**: ROOMSET sells a three-screen desk; trade from your flat.
+
+**SOLE SWAP** (the night market, 6 PM to 2 AM): Dex buys and sells Grain Runner 9s. Each
+colourway is worth most the week it drops, dips, then climbs again as it gets rare (some
+are grails); his chalkboard has this week's prices. He pays 80% and sells at 120%, cash,
+and he'll take your other clothes too (vintage gems and VELLARD hold their value best).
+
+**Net worth** (any ATM): cash, bank, shares, buildings, the franchise, and what your clothes
+and furniture would fetch. Passing $50k, $250k, $1M and $10M gets a moment, a headline
+about you on the Exchange's ticker, and a little status: people notice money.
+
 ## Clothes and status
 
 - Every piece is data in `src/game/fashion.js` (all brands made up): basics (free,
@@ -422,8 +479,8 @@ ten the guard, Pruitt, walks the last shoppers out.
   long coats, caps and beanies, sunglasses, gold, steel and diamond chains, watches,
   logo prints on the chest or across the back of a jacket, two-tone soles.
 - **Status** adds up what you're wearing, where you live (the loft and the penthouse
-  count) and what's in your home: Nobody, Regular, Put-Together, Fresh, Sharp, Flashy,
-  Rich, Untouchable.
+  count), what's in your home and what you're worth: Nobody, Regular, Put-Together, Fresh,
+  Sharp, Flashy, Rich, Untouchable.
   It sits under your money as gold pips; the wardrobe shows it as you change.
 - **The world notices**: people turn their heads as you pass (more of them the higher you
   climb) and now and then say something about your Meridian; Jo at GULLY'S asks if you're
@@ -468,13 +525,13 @@ src/
                           the SUBSTATION club (club.js) and the room under it
                           (undercurrent.js), GULLY'S (gullys.js, and the mascot figure in
                           gullyFigure.js), the Halcyon Galleria (galleria.js), furniture
-                          placed at home (homeDecor.js)
+                          placed at home (homeDecor.js), the HALCYON EXCHANGE (exchange.js)
   world/interior/         room/wall builder, furniture kit, baked lighting, apartment layouts
   actors/                 crowd renderer (instanced puppets, walk/carry/dance/sit poses),
                           appearance model, player + camera, pedestrians AI, traffic,
                           clubbers (the club's staff, queue and crowd), diners (GULLY'S
                           crew, customers, orders and trays), shoppers (the Galleria's
-                          staff, mannequins and shoppers)
+                          staff, mannequins and shoppers), brokers (the Exchange's)
   game/                   clock + save system, needs (needs.js), NPC dialogue data, the
                           store job, the club's dance game (dance.js), photo booth
                           (photobooth.js), theme nights (clubNights.js), bar job
@@ -482,8 +539,9 @@ src/
                           (gullysMenu.js), your visit there (gullysVisit.js), the
                           crew job (crewJob.js), clothes and status (fashion.js),
                           shopping at the Galleria (shopping.js), ROOMSET's furniture
-                          catalog (furniture.js), using it at home (homeLife.js) and the
-                          arcade cabinet's game (nightRunner.js)
+                          catalog (furniture.js), using it at home (homeLife.js), the
+                          arcade cabinet's game (nightRunner.js), the stock market
+                          (market.js), property (property.js) and sneaker resale (resale.js)
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls,
                           the city map (map.js; its places and hours are game/places.js,
                           the route beam is world/waypoint.js)
@@ -494,7 +552,8 @@ src/
 
 Performance notes: static scenery is merged into one mesh per material and every
 person is drawn with ~20 instanced meshes total (body parts plus what they wear), so a
-frame is roughly 70–140 draw calls. It should run well on integrated GPUs and phones.
+frame is roughly 70–190 draw calls (Downtown, with every tower in view, is the busiest). It
+should run well on integrated GPUs and phones.
 
 ## Roadmap (suggested order)
 
@@ -502,20 +561,17 @@ The big goal: **lots of cool places to hang out**. Every new space (diner, arcad
 rooftop, karaoke bar, record shop, a 2 AM laundromat, the pier) gets a real walk-in
 interior with the same detail, light and sound as the apartments and the store.
 
-1. **Being rich, phase 3: getting rich**: promotions (shift manager at GULLY'S, then
-   franchisee), investing (a ticker of made-up companies at the bank), buying property
-   and collecting rent, reselling limited sneaker drops.
-2. **Being rich, phase 4: the high life**: BRIGHTWIRE reopens, a car dealership and
+1. **Being rich, phase 4: the high life**: BRIGHTWIRE reopens, a car dealership and
    cars, a members' club and pool on the Meridian tower's roof, fine dining, hired help,
    bottle service at SUBSTATION.
-3. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
+2. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
    noodle bar cook, courier, office temp. Promotions and raises at the store.
-4. **Economy**: bills, shop inventories.
-5. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
-6. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
-7. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
-8. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
-9. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
+3. **Economy**: bills, shop inventories.
+4. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
+5. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
+6. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
+7. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
+8. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
     streets, chat and visiting apartments; the bank must move server‑side then.
 
 All names, shops and brands in the game are made up.

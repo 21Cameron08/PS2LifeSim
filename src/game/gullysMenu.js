@@ -146,10 +146,12 @@ export const TOYS = [
   { id: 'ghost', name: 'Ghost Gully', cap: '#9affd0', band: '#d8fff0', body: '#d8fff0', wing: '#a8f0d8', beak: '#9affd0', weight: 1, glow: true },
 ];
 
-export function pickToy(rng) {
-  const total = TOYS.reduce((s, t) => s + t.weight, 0);
+/** A Gull Box toy. boost: a toy id that's "toy of the week" (five times as likely). */
+export function pickToy(rng, boost = null) {
+  const w = (t) => t.weight * (t.id === boost ? 5 : 1);
+  const total = TOYS.reduce((s, t) => s + w(t), 0);
   let r = rng.next() * total;
-  for (const t of TOYS) if ((r -= t.weight) < 0) return t;
+  for (const t of TOYS) if ((r -= w(t)) < 0) return t;
   return TOYS[0];
 }
 

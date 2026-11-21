@@ -278,11 +278,11 @@ export class Ambience {
     if (style === 'club') return this.startClub(opts.beat ?? 0);
     const out = ctx.createGain();
     out.gain.value = 0.0001;
-    const GAIN = { piano: 0.16, muzak: 0.07, gullys: 0.075, under: 0.14, mall: 0.075, street: 0.09, lounge: 0.085, bossa: 0.09 };
+    const GAIN = { piano: 0.16, muzak: 0.07, gullys: 0.075, under: 0.14, mall: 0.075, street: 0.09, lounge: 0.085, bossa: 0.09, jazz: 0.095 };
     out.gain.setTargetAtTime(GAIN[style] ?? 0.12, ctx.currentTime, 0.4);
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
-    const CUT = { radio: 2400, records: 4200, muzak: 1800, gullys: 2800, under: 2200, mall: 3200, street: 3600, lounge: 2600, bossa: 3400 };
+    const CUT = { radio: 2400, records: 4200, muzak: 1800, gullys: 2800, under: 2200, mall: 3200, street: 3600, lounge: 2600, bossa: 3400, jazz: 3000 };
     lp.frequency.value = CUT[style] ?? 9000;
     out.connect(lp);
     let tail = lp;
@@ -321,7 +321,7 @@ export class Ambience {
       crackle.start();
       nodes.push(crackle);
     }
-    const LEN = { piano: 2.6, muzak: 2.8, gullys: 2.0, under: (4 * 60) / 70, mall: (4 * 60) / 96, street: (4 * 60) / 88, lounge: (4 * 60) / 104, bossa: (4 * 60) / 128 };
+    const LEN = { piano: 2.6, muzak: 2.8, gullys: 2.0, under: (4 * 60) / 70, mall: (4 * 60) / 96, street: (4 * 60) / 88, lounge: (4 * 60) / 104, bossa: (4 * 60) / 128, jazz: (4 * 60) / 126 };
     this.music = { style, out, echo, nodes, bar: 0, next: ctx.currentTime + 0.15, len: LEN[style] ?? 2.2 };
   }
 
@@ -657,6 +657,7 @@ export class Ambience {
     if (m.style === 'street') return this.playStreetBar(m, t);
     if (m.style === 'lounge') return this.playLoungeBar(m, t);
     if (m.style === 'bossa') return this.playBossaBar(m, t);
+    if (m.style === 'jazz') return this.playJazzBar(m, t);
     const prog = [
       [62, 65, 69, 72],
       [55, 59, 62, 65],
@@ -799,6 +800,37 @@ export class Ambience {
     for (let i = 0; i < 16; i++) this.noiseAt(m.out, t + (i * L) / 16, 7500, i % 2 ? 0.007 : 0.012, 0.04, 'highpass');
     const flute = [76, 79, 81, 83, 86, 88];
     if (m.bar % 8 > 3) for (let i = 0; i < 3; i++) if (Math.random() < 0.55) this.voice(m.out, hz(flute[Math.floor(Math.random() * flute.length)]), t + ((i * 5 + 2) * L) / 16, L * 0.28, 'sine', 0.022, 0.06);
+  }
+
+  // HALCYON EXCHANGE: a cool jazz trio in the corner. ii-V-I-VI in F: a walking bass,
+  // brushes on a ride with the swing, vibraphone chords on the off-beats, a lick now and then.
+  playJazzBar(m, t) {
+    const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
+    const L = m.len;
+    const prog = [
+      [55, 58, 62, 65],
+      [60, 64, 67, 70],
+      [57, 60, 64, 65],
+      [62, 65, 69, 72],
+    ];
+    const roots = [43, 48, 41, 50];
+    const k = m.bar % 4;
+    const r = roots[k];
+    const next = roots[(k + 1) % 4];
+    // walking bass: root, third, fifth, a chromatic step into the next chord
+    [r, r + (k === 1 ? 4 : 3), r + 7, next + (next > r ? -1 : 1)].forEach((n, i) => this.voice(m.out, hz(n - 12), t + (i * L) / 4, L * 0.22, 'triangle', 0.13, 0.008));
+    // the ride: ding, ding-a, ding, ding-a (swung)
+    const sw = L / 4;
+    for (const b of [0, 1, 1 + 2 / 3, 2, 3, 3 + 2 / 3]) this.noiseAt(m.out, t + b * sw, 8200, b % 1 ? 0.01 : 0.016, 0.12, 'highpass');
+    for (const b of [1, 3]) this.noiseAt(m.out, t + b * sw, 1800, 0.035, 0.09);
+    // vibes: chord stabs on the and-of-two and the and-of-four, with a slow shimmer
+    for (const b of [1 + 2 / 3, 3 + 2 / 3])
+      prog[k].forEach((n) => {
+        this.voice(m.out, hz(n + 12), t + b * sw, L * 0.3, 'sine', 0.022, 0.004);
+        this.voice(m.out, hz(n + 12) * 1.006, t + b * sw, L * 0.28, 'sine', 0.012, 0.004);
+      });
+    const lick = [65, 67, 69, 72, 74, 77];
+    if (m.bar % 4 === 2) for (let i = 0; i < 4; i++) if (Math.random() < 0.6) this.voice(m.out, hz(lick[Math.floor(Math.random() * lick.length)] + 12), t + (i + 0.5) * sw, sw * 0.8, 'sine', 0.028, 0.005);
   }
 
   // The Undercurrent: SUBSTATION's chords, slowed to 70 BPM and pitched down, detuned

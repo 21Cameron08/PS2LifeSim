@@ -168,12 +168,12 @@ export const TIERS = [
 ];
 const HOME = { starter: 0, loft: 12, penthouse: 30 };
 
-/** Status that isn't on your back: what's in your home (set by main.js from world/homeDecor.js). */
-export const extraStatus = { decor: 0 };
+/** Status that isn't on your back: what's in your home (world/homeDecor.js) and what you're worth (set by main.js). */
+export const extraStatus = { decor: 0, wealth: 0 };
 
 /** Your status from what you're wearing and where you live: { score, tier (0-7), name, next }. */
 export function statusOf(app, home) {
-  let score = (HOME[home] ?? 0) + (home ? extraStatus.decor : 0);
+  let score = (HOME[home] ?? 0) + (home ? extraStatus.decor + extraStatus.wealth : 0);
   for (const s of SLOTS) {
     const it = app.wear?.[s] && ITEM[app.wear[s]];
     if (it) score += it.status;

@@ -67,6 +67,8 @@ export class HomeLife {
         return this.jukebox();
       case 'tub':
         return this.tub();
+      case 'trade':
+        return this.openTerminal?.('HOME TRADING DESK');
       case 'sneakers':
       case 'watches':
       case 'toys':

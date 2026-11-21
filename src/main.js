@@ -21,6 +21,8 @@ import { Diners } from './actors/diners.js';
 import { GullysVisit } from './game/gullysVisit.js';
 import { CrewJob } from './game/crewJob.js';
 import { Galleria } from './world/galleria.js';
+import { Exchange } from './world/exchange.js';
+import { Brokers } from './actors/brokers.js';
 import { Shoppers } from './actors/shoppers.js';
 import { Shopping, lookup } from './game/shopping.js';
 import { Needs, NEEDS } from './game/needs.js';
@@ -47,6 +49,10 @@ import { baseWear, statusOf, dress, outerOn, ITEM, TIERS, showpiece, extraStatus
 import { HomeDecor } from './world/homeDecor.js';
 import { HomeLife } from './game/homeLife.js';
 import { FURN } from './game/furniture.js';
+import { Market, STOCKS } from './game/market.js';
+import { Property, PROPS } from './game/property.js';
+import { Resale, SwapBoard, SWAP_OPEN, sellable, DEX_LOOK } from './game/resale.js';
+import { GR9 } from './game/fashion.js';
 
 // ----------------------------------------------------------------------------
 // Boot
@@ -106,6 +112,13 @@ const state = {
   arcadeBest: save?.arcadeBest ?? 0, // NIGHT RUNNER high score
   fishFed: save?.fishFed,
   homeBar: save?.homeBar,
+  market: save?.market, // your shares: { holdings: { SYM: { n, cost } }, trades, realized }
+  property: save?.property, // buildings you own: { owned: { id: { paid, week } } }
+  franchise: save?.franchise, // GULLY'S Greenway, once it's yours: { since, special, toy, last }
+  tips: save?.tips, // which brokers told you something today
+  gullDay: save?.gullDay,
+  headline: save?.headline, // a headline about you on the Exchange ticker: { t, text }
+  milestone: save?.milestone ?? 0, // the last net-worth milestone you passed
 };
 // saves from before clothes could be owned: what you had on becomes basics
 if (!state.appearance.wear) state.appearance.wear = baseWear(state.appearance);
@@ -146,6 +159,8 @@ const player = new Player(crowd, place ? place.space : outdoor, state.appearance
 const peds = new Pedestrians(crowd, city, 72);
 const traffic = new Traffic(scene, tex, 24);
 const clock = new Clock(save?.minutes ?? START.hour * 60);
+// the stock market (game/market.js): prices come from the clock, your shares from the save
+const market = new Market({ clock, state });
 const job = new StoreJob({ store, crowd, ui, audio, state, clock, player });
 job.blocked = () => (barJob.onShift ? 'SUBSTATION' : crew.onShift ? "GULLY'S" : null);
 if (state.job.hired) store.helpWanted.visible = false;
@@ -166,6 +181,17 @@ const cityGround = outdoor.groundHeight;
 const galleria = new Galleria(scene, city, tex, apts.tex);
 outdoor.groundHeight = (x, z) => galleria.groundAt(x, z, player.pos.y, club.groundAt(x, z, player.pos.y, cityGround(x, z)));
 // the mall's ceiling is low in the shops and high under the glass roof
+// HALCYON EXCHANGE: the banking hall Downtown (world/exchange.js, actors/brokers.js)
+const exchange = new Exchange(scene, city, tex, apts.tex);
+// property you can buy (game/property.js): FOR SALE boards on real buildings, lit up on the city model
+const property = new Property({ city, clock, state });
+scene.add(property.signs);
+property.buildSigns(exchange.xt.xsigns);
+exchange.setModel(property.modelHighlights());
+const exchSpace = { ...outdoor, indoor: true, ceiling: exchange.origin.y + exchange.H - 0.5 };
+let inExchange = false;
+let exchKick = 0;
+let bellDay = -1;
 const mallSpace = {
   ...outdoor,
   indoor: true,
@@ -176,6 +202,7 @@ const mallSpace = {
 let inGalleria = false;
 let mallKick = 0;
 const shoppers = new Shoppers(crowd, galleria, city);
+const brokers = new Brokers(crowd, exchange);
 // the club's lobby is low, its hall is 7 m tall: the camera asks where you are
 const clubSpace = {
   ...outdoor,
@@ -233,11 +260,37 @@ Object.assign(keeper, { name: 'The Lantern Keeper', role: 'keeper', known: true,
 const VENDORS = [
   { name: 'Ottilie the Lantern Seller', role: 'lanterns' },
   { name: 'Madame Sol, Fortunes', role: 'fortune' },
+  { name: 'Dex, SOLE SWAP', role: 'resale', look: { ...defaultPlayerAppearance(), skin: '#8a5a3a', hair: '#1a1210', hairStyle: 4, height: 1.02, ...DEX_LOOK } },
 ];
+const VENDOR_ROLES = ['lanterns', 'fortune', 'resale'];
 lantern.vendorSpots.forEach((s, k) => {
-  const v = peds.addStander(s.x, s.z, s.yaw);
-  if (VENDORS[k]) Object.assign(v, VENDORS[k], { known: true });
+  const v = peds.addStander(s.x, s.z, s.yaw, VENDORS[k]?.look);
+  if (VENDORS[k]) Object.assign(v, { name: VENDORS[k].name, role: VENDORS[k].role }, { known: true });
 });
+// SOLE SWAP (game/resale.js): a chalkboard of this week's sneaker prices by Dex's stall
+const resale = new Resale({ clock, state });
+const swapBoard = new SwapBoard();
+{
+  const st = lantern.stalls[2];
+  const g = new THREE.Group();
+  const leg = new THREE.MeshLambertMaterial({ color: '#5a3a24' });
+  for (const sx of [-0.42, 0.42]) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.5, 0.05), leg);
+    m.position.set(sx, 0.75, 0);
+    g.add(m);
+  }
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.0), new THREE.MeshBasicMaterial({ map: swapBoard.tex }));
+  board.position.set(0, 0.95, 0.03);
+  g.add(board);
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.86, 1.06, 0.03), leg);
+  back.position.set(0, 0.95, 0);
+  g.add(back);
+  const p = new THREE.Vector3(1.95, 0, 0.9).applyMatrix4(st.m);
+  g.position.set(p.x, city.groundHeight(p.x, p.z), p.z);
+  g.rotation.y = st.ry + 0.35;
+  scene.add(g);
+  swapBoard.draw(resale);
+}
 // people loitering by shop fronts, some in pairs having a chat
 {
   const rng = new Rng(31337);
@@ -320,6 +373,13 @@ function saveNow(showToast = false) {
     arcadeBest: state.arcadeBest,
     fishFed: state.fishFed,
     homeBar: state.homeBar,
+    market: state.market,
+    property: state.property,
+    franchise: state.franchise,
+    tips: state.tips,
+    gullDay: state.gullDay,
+    headline: state.headline,
+    milestone: state.milestone,
     ledger: state.ledger.slice(-60),
     gullMeals: state.gullMeals,
     gullOrders: state.gullOrders,
@@ -404,6 +464,10 @@ function talkTo(npc) {
     ];
     return say('Lanterns! Paper, wire and one small wish. Five dollars.', menu());
   }
+  if (npc.role === 'resale') {
+    onClose();
+    return soleSwap();
+  }
   if (npc.role === 'fortune') {
     const FORTUNES = [
       'I see... a job. A small one. It will lead to a bigger one. Or a nap.',
@@ -470,6 +534,7 @@ function useAtm() {
     { label: 'Deposit $100', fn: () => move(100) },
     { label: 'Deposit all', fn: () => move(state.cash) },
     { label: 'Statement', fn: () => statement() },
+    { label: 'Net worth', fn: () => worthSheet(show) },
     { label: 'Exit', fn: () => ui.closeDialog() },
   ];
   const statement = () => {
@@ -793,6 +858,10 @@ function findInteraction() {
     const m = mallSeatOrTalk();
     if (m) return m;
   }
+  if (inExchange || exchange.onPlaza(player.pos)) {
+    const x = exchangeFind();
+    if (x) return x;
+  }
   const food = visit.find();
   if (food) return food;
   const nightlife = clubInteraction();
@@ -805,6 +874,9 @@ function findInteraction() {
       act: () => (job.J.shift ? ui.toast("You're on the clock. Clock out first.") : home ? enterApartment(door) : leaseOffer(door, false)),
     };
   }
+  // the night market's stallholders stand behind their counters: talk to them across it
+  const vendor = peds.list.find((n) => VENDOR_ROLES.includes(n.role) && Math.hypot(n.pos.x - player.pos.x, n.pos.z - player.pos.z) < 3.2);
+  if (vendor) return { label: vendor.role === 'resale' ? 'SOLE SWAP: talk to Dex' : `Talk to ${vendor.name}`, act: () => talkTo(vendor) };
   const npc = peds.nearest(player.pos, 2.3);
   let best = null;
   let bd = Infinity;
@@ -1530,6 +1602,10 @@ function standUp() {
   seat = null;
   clubbers.taken.delete(sp);
   shoppers.seatTaken.delete(sp);
+  if (sp.exch && seatRef) {
+    brokers.taken.delete(seatRef);
+    seatRef = null;
+  }
   player.locked = false;
   player.pos.x = sp.out.x;
   player.pos.z = sp.out.z;
@@ -1545,7 +1621,7 @@ function updateSeat() {
   c.yaw = seat.yaw;
   c.sit = true;
   c.ground = seat.y;
-  c.y = seat.y + 0.5 - 0.86 * state.appearance.height;
+  c.y = seat.y + (seat.seatH ?? 0.5) - 0.86 * state.appearance.height;
   c.amount = 0;
   if (Math.hypot(input.move().x, input.move().y) > 0.6) standUp();
 }
@@ -1864,6 +1940,341 @@ function mallTalk(a) {
 
 // ----------------------------------------------------------------------------
 // The Halcyon Galleria
+/** The Exchange: the board, the crawl, the people, the music, the closing bell, midnight. */
+function updateExchange(dt) {
+  const camD = camera.position.distanceTo(exchange.doorCenter);
+  const people = brokers.people();
+  if (exchange.open) people.push(player.pos);
+  exchange.update(dt, time, env, { hour: clock.hour, camera, people, market, stocks: STOCKS, clockText: clock.format(), tape: tickerItems });
+  brokers.update(dt, { hour: clock.hour, weekday: clock.weekday, near: camD < 95, watched: camD < 50, playerPos: player.pos });
+  if (!playing) return;
+  const style = inExchange && exchange.open ? 'jazz' : null;
+  if (style && audio.music?.style !== style) audio.startMusic(style);
+  if (!style && audio.music?.style === 'jazz' && !place) audio.stopMusic();
+  // four o'clock on a weekday: the closing bell, and happy hour at the bar
+  const d = Math.floor(clock.minutes / 1440);
+  if (inExchange && market.isOpen() === false && clock.hour >= 16 && clock.hour < 16.2 && bellDay !== d && !['SAT', 'SUN'].includes(clock.weekday)) {
+    bellDay = d;
+    for (let k = 0; k < 4; k++) setTimeout(() => audio.tone(1568, 'sine', 0.07, 1.2), k * 380);
+    ui.toast("The closing bell rings. A cheer from the floor, a groan from the corner. Happy hour at the Ticker Bar.");
+  }
+  // midnight: Gus walks the last of them out
+  if (inExchange && !exchange.open && !ui.modal && !ui.fading) {
+    if ((exchKick += dt) > 8) {
+      exchKick = 0;
+      ui.fade(() => {
+        if (seat) standUp();
+        leaveInterior();
+        const sp = exchange.outsideSpot;
+        player.teleport(outdoor, sp.x, sp.z, sp.yaw);
+        Object.assign(rig, { space: outdoor, pitch: 0.28, yaw: sp.yaw, curDist: rig.dist, mode: 'follow', blend: 1 });
+        ui.toast('Gus: "That\'s midnight. Doors open at eight. Go home, the money will still be here."');
+      }, 'CLOSING TIME');
+    }
+  } else exchKick = 0;
+}
+
+/** What crawls along the LED band: every price, then the headlines. */
+function tickerItems() {
+  const items = STOCKS.map((s) => {
+    const p = market.price(s.sym);
+    const ch = ((p - market.prevClose(s.sym)) / market.prevClose(s.sym)) * 100;
+    return { text: `${s.sym} ${p.toFixed(2)} ${ch >= 0 ? '▲' : '▼'}${Math.abs(ch).toFixed(1)}%`, col: ch >= 0 ? '#5aff8a' : '#ff6a5a' };
+  });
+  for (const h of market.headlines(undefined, 4)) items.push({ text: `◆ ${h.you ? 'BREAKING: ' : ''}${h.text.toUpperCase()}`, col: h.you ? '#ffd36a' : '#ffb060' });
+  return items;
+}
+
+const BAR_MENU = [
+  { id: 'espresso', name: 'Espresso', price: 3, give: { energy: 12, fun: 1 }, line: 'Short, black, bitter. Your eyes open a little wider.' },
+  { id: 'flat', name: 'Flat white', price: 4, give: { energy: 10, hunger: 3 }, line: 'Walt does a leaf in the foam without looking.' },
+  { id: 'bull', name: 'Bull run', price: 14, booze: true, give: { fun: 8, social: 3 }, line: 'Bourbon, ginger, a lot of confidence. It tastes like a green day.' },
+  { id: 'cat', name: 'Dead cat bounce', price: 12, booze: true, give: { fun: 7, social: 2 }, line: 'Gin, bitter lemon, a twist. Goes down, comes back up a little. Like the name.' },
+  { id: 'bell', name: 'Closing bell', price: 16, booze: true, give: { fun: 9, social: 3 }, line: 'Champagne and something gold. Walt rings a tiny bell when he serves it.' },
+  { id: 'margin', name: 'Margin call', price: 18, booze: true, give: { fun: 10, energy: -4 }, line: "Three spirits and a dare. You feel richer. You aren't." },
+  { id: 'soda', name: 'Club soda', price: 2, give: { fun: 1 }, line: 'Fizzy water with a lime. Walt respects it.' },
+];
+
+/** The Ticker Bar: coffee all day, cocktails after the bell (half price till six). */
+function tickerBar() {
+  player.locked = true;
+  const h = clock.hour;
+  const after = h >= 16 || h < 4 || ['SAT', 'SUN'].includes(clock.weekday);
+  const happy = h >= 16 && h < 18;
+  const close = () => ui.closeDialog();
+  const buy = (it, price) => {
+    if (state.cash < price) return ui.toast(`Walt: "That's ${money(price)}, cash. There's an ATM by the door. Kidding, there isn't. There's one on the corner."`);
+    state.cash = Math.round((state.cash - price) * 100) / 100;
+    needs.give(it.give);
+    audio.coin();
+    close();
+    ui.toast(it.line);
+  };
+  ui.openDialog({
+    name: 'WALT · THE TICKER BAR',
+    text: after ? (happy ? "Happy hour. Half price on anything with a name. What'll it be?" : 'Evening. What can I get you?') : "Coffee's on. The cocktails start when the bell rings at four.",
+    choices: [
+      ...BAR_MENU.filter((it) => after || !it.booze).map((it) => {
+        const price = happy && it.booze ? it.price / 2 : it.price;
+        return { label: `${it.name} (${money(price)})`, fn: () => buy(it, price) };
+      }),
+      { label: 'Nothing for now', fn: close },
+    ],
+    onClose: () => (player.locked = false),
+  });
+}
+
+const BROKER_LINES = [
+  "Buy low, sell high. That's the whole job. Nobody can do it, but that's the job.",
+  "I've been watching Brightwire for a year. It's a lottery ticket with a logo.",
+  "The board's green, I'm happy. The board's red, I'm at the bar. Either way I'm at the bar.",
+  'Dividends. Boring, beautiful dividends. Monday mornings are my favourite.',
+  'Headlines go up at eight. By nine-thirty everyone has an opinion. By ten, half of them are wrong.',
+  "Never put everything in one stock. Put most of it in one stock and lie about the rest. Joke. Mostly.",
+  'Property, though. You can stand inside property. Try standing inside a share.',
+];
+
+/** Talking to people at the Exchange. Brokers at the bar after the bell will trade you a tip for a drink. */
+function exchangeTalk(a) {
+  const key = a.key ?? 'broker';
+  player.locked = true;
+  a.talking = true;
+  const close = () => ui.closeDialog();
+  const done = () => {
+    a.talking = false;
+    player.locked = false;
+  };
+  needs.chat(`exch:${a.name}`, clock.minutes, 6);
+  if (key === 'walt') {
+    a.talking = false;
+    return tickerBar();
+  }
+  if (key === 'priya') {
+    a.talking = false;
+    return propertyDesk();
+  }
+  if (key === 'gus') return ui.openDialog({ name: 'Gus', text: talkRng.pick(["Evening. Wipe your feet, it's real marble.", "Eight till midnight. I've been on this door since the board had chalk on it.", 'Rub the gull outside on your way out. Everybody does. Nobody admits it.']), choices: [{ label: 'Bye', fn: close }], onClose: done });
+  const d = Math.floor(clock.minutes / 1440);
+  state.tips ??= {};
+  const atBar = a.spot && (a.spot.role === 'bar' || a.spot.role === 'booth');
+  const choices = [];
+  if (atBar && clock.hour >= 16 && state.tips[a.name] !== d)
+    choices.push({
+      label: "Buy them a drink and ask what they've heard ($14)",
+      fn: () => {
+        if (state.cash < 14) return ui.toast('Not enough cash for a round.');
+        state.cash -= 14;
+        state.tips[a.name] = d;
+        needs.give({ social: 6, fun: 3 });
+        audio.coin();
+        const tip = market.tip(d);
+        const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const when = tip && (tip.day === d + 1 ? 'tomorrow' : `on ${DAYS[((tip.day % 7) + 7) % 7]}`);
+        const text = tip
+          ? `${a.name} leans in. "You didn't hear it from me. ${STOCKS.find((s) => s.sym === tip.sym).name}, ${when}. ${tip.up ? 'Good news. Very good news.' : "Bad news. I'd be out by the open."}" They tap their nose.`
+          : `${a.name} shrugs into the glass. "Quiet week. Nothing's moving that I know about."`;
+        ui.openDialog({ name: a.name, text, choices: [{ label: 'Thanks', fn: close }], onClose: done });
+      },
+    });
+  choices.push({ label: 'Bye', fn: close });
+  ui.openDialog({ name: a.name, text: talkRng.pick(BROKER_LINES), choices, onClose: done });
+}
+
+/** E at the Exchange (and on its plaza). */
+function exchangeFind() {
+  const p = player.pos;
+  if (seat?.exch) return { label: seat.terminal ? 'Back to the terminal' : 'Stand up', act: seat.terminal ? () => openTerminal('HALCYON EXCHANGE · TERMINAL', standUp) : standUp };
+  const near = (q, r) => Math.hypot(q.x - p.x, q.z - p.z) < r;
+  if (exchange.onPlaza(p) && near(exchange.gull, 1.3)) return { label: "Rub the Harbour Gull's beak", act: rubGull };
+  if (!inExchange || !exchange.open) return null;
+  // the terminals
+  for (const t of exchange.terminals) {
+    if (brokers.taken.has(t.seat) || !near(t.seat, 0.9)) continue;
+    return { label: 'Use the terminal', act: () => (sitDown({ ...t.seat, exch: true, terminal: true }), brokers.taken.add(t.seat), (seatRef = t.seat), openTerminal('HALCYON EXCHANGE · TERMINAL', standUp)) };
+  }
+  const a = brokers.nearest(p, 1.5);
+  const loc = exchange.local(p);
+  if (a && (a.key || Math.hypot(a.c.x - p.x, a.c.z - p.z) < 1.3)) return { label: `Talk to ${a.name}`, act: () => exchangeTalk(a) };
+  if (loc.x > 3.3 && loc.x < 4.9 && loc.z > 3.6 && loc.z < 11.6) return { label: 'Order at the bar', act: tickerBar };
+  if (near(exchange.agentSpot, 1.3)) return { label: 'Ask about property', act: propertyDesk };
+  if (near(exchange.modelAt, 2.3)) return { label: 'Look at the city model', act: () => ui.toast(propertyModelLine()) };
+  for (const s of [...exchange.stools, ...exchange.booths, ...exchange.loungeSeats]) {
+    if (brokers.taken.has(s) || !near(s, 0.8)) continue;
+    const label = s.stool ? 'Sit at the bar' : exchange.booths.includes(s) ? 'Slide into the booth' : 'Sit down';
+    return { label, act: () => (brokers.taken.add(s), (seatRef = s), sitDown({ ...s, exch: true })) };
+  }
+  return null;
+}
+let seatRef = null; // the exchange seat object you're in (shared "taken" set with the brokers)
+
+/** Priya's desk: what's for sale, what you own, buy, sell, find it on the map. */
+function propertyDesk() {
+  if (!state.seen.property) {
+    state.seen.property = true;
+    setTimeout(() => ui.hint('Buy a building and its rent lands in your bank every <b>Monday</b>, minus repairs. Values go up and down with each district: sell here any time (3% fees).', 10), 300);
+  }
+  player.locked = true;
+  const row = (p) => {
+    const mine = property.owns(p.id);
+    const v = property.value(p);
+    const o = state.property.owned[p.id];
+    return {
+      p,
+      name: p.name,
+      desc: `${p.where} · ${p.blurb}`,
+      chip: mine ? '#5aff8a' : '#ff5a4a',
+      tags: mine ? [`<em class="own">YOURS · paid ${money(o.paid)}</em>`] : [],
+      right: money(v),
+      rightSub: `rent ${money(property.rent(p))}/wk`,
+      acts: mine
+        ? [
+            { id: 'map', label: 'Show me on the map', key: 'E', go: true },
+            { id: 'sell', label: `Sell (${money(Math.round(v * 0.97))} after fees)`, key: 'X' },
+          ]
+        : [
+            { id: 'buy', label: 'Buy it', key: 'E', go: true },
+            { id: 'map', label: 'Show me on the map', key: 'X' },
+          ],
+    };
+  };
+  ui.openDecor({
+    title: 'HALCYON EXCHANGE · PROPERTY',
+    style: 'prop',
+    sub: () => `Bank ${money(state.bank)} · you own ${property.ownedList().length} of ${PROPS.length}`,
+    rows: () => [...PROPS.filter((p) => !property.owns(p.id)).map(row), ...PROPS.filter((p) => property.owns(p.id)).map(row)],
+    empty: '',
+    foot: input.isTouch ? 'tap a row, then a button' : '↑↓ pick · Enter buy (or map) · X sell (or map) · Esc done',
+    onAct: (r, id) => {
+      const p = r.p;
+      if (id === 'map') {
+        ui.closeDecor();
+        const at = property.frontOf(p);
+        if (at) setRoute({ id: `prop:${p.id}`, at, name: () => p.name, icon: () => 'key', color: () => '#d8b46a' });
+        return void ui.toast(`Route set: ${p.name}, ${p.where}. Follow the beam.`);
+      }
+      if (id === 'buy') {
+        const v = property.value(p);
+        ui.closeDecor();
+        player.locked = true;
+        return void ui.openDialog({
+          name: 'Priya',
+          text: `${p.name}, ${p.where}. ${money(v)} today, rent about ${money(property.rent(p))} a week. From your bank (you have ${money(state.bank)}). Shall I draw up the papers?`,
+          choices: [
+            {
+              label: `Buy it (${money(v)})`,
+              fn: () => {
+                const res = property.buy(p.id);
+                ui.closeDialog();
+                if (!res.ok) return ui.toast(res.msg);
+                audio.coin();
+                setTimeout(() => audio.tone(1568, 'sine', 0.05, 0.6), 200);
+                needs.give({ fun: 12 });
+                propertyChanged();
+                ui.toast(`Priya: "Congratulations. ${res.msg}" She hands you a heavy ring of keys.`);
+                saveNow();
+              },
+            },
+            { label: 'Not yet', fn: () => ui.closeDialog() },
+          ],
+          onClose: () => (player.locked = false),
+        });
+      }
+      if (id === 'sell') {
+        const res = property.sell(p.id);
+        if (res.ok) {
+          audio.coin();
+          propertyChanged();
+          saveNow();
+        }
+        return res.msg;
+      }
+    },
+    onClose: () => (player.locked = false),
+  });
+}
+
+/** SOLE SWAP: sell Dex your pairs (and other clothes), buy the colourways you missed. */
+function soleSwap() {
+  if (!SWAP_OPEN(clock.hour)) return ui.toast('Dex: "Stall opens at six. Daylight is bad for business. And for my eyes."');
+  player.locked = true;
+  if (!state.seen.swap) {
+    state.seen.swap = true;
+    setTimeout(() => ui.hint('Grain Runner 9 pairs are worth the most the week they drop, then less, then more as they get rare. Dex pays 80% of the going rate and sells at 120%. He pays cash.', 10), 300);
+  }
+  const rows = () => {
+    const out = [{ head: true, name: "Grain Runner 9 · this week's prices", desc: 'A new colourway drops at SPLITGRAIN every Saturday, 10 AM.' }];
+    for (const id of GR9) {
+      const it = ITEM[id];
+      const m = resale.market(id);
+      const mine = state.owned.includes(id);
+      const a = resale.sinceDrop(id);
+      out.push({
+        id,
+        name: it.name,
+        desc: m === null ? 'Not dropped yet.' : a === 0 ? 'Dropped this week. Peak hype.' : `Dropped ${a} week${a > 1 ? 's' : ''} ago.`,
+        chip: it.look.shoes,
+        tags: mine ? ['<em class="own">YOURS</em>'] : [],
+        right: m === null ? '—' : money(m),
+        rightSub: m === null ? '' : mine ? `Dex pays ${money(resale.offer(id))}` : `Dex sells ${money(resale.ask(id))}`,
+        acts: m === null ? [] : mine ? [{ id: 'sell', label: `Sell (${money(resale.offer(id))})`, key: 'X' }] : [{ id: 'buy', label: `Buy (${money(resale.ask(id))})`, key: 'E', go: true }],
+      });
+    }
+    const rest = sellable(state).filter((it) => !it.drop);
+    if (rest.length) out.push({ head: true, name: 'Your other clothes', desc: 'Dex takes anything. Vintage gems and VELLARD hold their value best.' });
+    for (const it of rest) out.push({ id: it.id, name: it.name, desc: it.desc, chip: it.look.jacket ?? it.look.top ?? it.look.bottom ?? it.look.shoes ?? '#888', right: money(it.price), rightSub: `Dex pays ${money(resale.offer(it.id))}`, acts: [{ id: 'sell', label: `Sell (${money(resale.offer(it.id))})`, key: 'X' }] });
+    return out;
+  };
+  ui.openDecor({
+    title: 'SOLE SWAP · DEX',
+    style: 'swap',
+    sub: () => `Cash ${money(state.cash)} · cash only`,
+    rows,
+    empty: '',
+    foot: input.isTouch ? 'tap a row, then a button' : '↑↓ pick · Enter buy · X sell · Esc done',
+    onAct: (row, id) => {
+      if (id === 'buy') {
+        const res = resale.buy(row.id);
+        if (res.ok) {
+          audio.coin();
+          needs.add('fun', 6);
+          saveNow();
+        }
+        return res.msg;
+      }
+      if (id === 'sell') {
+        const res = resale.sell(row.id, state.appearance, baseWear(state.appearance));
+        if (res.ok) {
+          crowd.setAppearance(player.char.id, state.appearance);
+          audio.coin();
+          saveNow();
+        }
+        return res.msg;
+      }
+    },
+    onClose: () => (player.locked = false),
+  });
+}
+
+/** Ownership changed: the boards on the buildings, the city model, the map. */
+function propertyChanged() {
+  property.buildSigns(exchange.xt.xsigns);
+  exchange.setModel(property.modelHighlights());
+}
+
+function propertyModelLine() {
+  const n = property.ownedList().length;
+  return `Port Halcyon in miniature, under glass. ${PROPS.length - n} buildings glow red: for sale.${n ? ` ${n} glow green: yours.` : ''} Somebody has put a tiny gull on the Exchange.`;
+}
+
+function rubGull() {
+  const d = Math.floor(clock.minutes / 1440);
+  if (state.gullDay === d) return ui.toast("The beak's already shiny from you today. Greedy.");
+  state.gullDay = d;
+  needs.add('fun', 3);
+  audio.tone(880, 'sine', 0.04, 0.4);
+  ui.toast(talkRng.pick(["You rub the Harbour Gull's beak. It's worn gold from a hundred years of hopeful hands.", 'A rub for luck. A tourist takes your photo doing it.', 'The bronze is warm from the sun. You feel, briefly, like a winner.']));
+}
+
 function updateGalleria(dt) {
   const camD = camera.position.distanceTo(galleria.doorCenter);
   const people = shoppers.people();
@@ -2059,6 +2470,7 @@ function leaveInterior() {
   inClub = false;
   inGullys = false;
   inGalleria = false;
+  inExchange = false;
   if (inUnder) {
     inUnder = false;
     under.show(false);
@@ -2185,7 +2597,12 @@ const park = city.blocks.find((b) => b.kind === 'park');
 
 // ----------------------------------------------------------------------------
 // The map (M) and routes
-const places = buildPlaces({ city, apts, state, store, job, crew, gullys, galleria, club, lantern, park, clubNight, clubTheme: tonightTheme, clubFriends, weekday: () => clock.weekday });
+const places = buildPlaces({ city, apts, state, store, job, crew, gullys, galleria, exchange, market, club, lantern, park, clubNight, clubTheme: tonightTheme, clubFriends, weekday: () => clock.weekday });
+// buildings you own show up on the map (with a key)
+for (const p of PROPS) {
+  const at = property.frontOf(p);
+  if (at) places.list.push({ id: `prop:${p.id}`, icon: () => 'key', color: () => '#d8b46a', at, name: () => p.name.toUpperCase(), sub: () => `Yours · ${p.where} · rent about ${money(property.rent(p))} a week`, status: () => ({ text: 'YOURS', open: true }), needs: () => [], hidden: () => !property.owns(p.id) });
+}
 
 /** Friends whose usual night it is tonight (for the map). */
 function clubFriends() {
@@ -2323,6 +2740,102 @@ function payRent() {
   state.ledger.push({ t: Math.round(clock.minutes), what: `Rent · ${apt.L.name}`, amt: -due });
   ui.toast(`Rent paid: -${money(due)} · ${apt.L.name}`);
   if (state.bank < 0) setTimeout(() => ui.toast('Your bank account is overdrawn!'), 2600);
+  weeklyIncome(n);
+}
+
+/** Monday morning, after the rent: what your money made last week. */
+function weeklyIncome(n = 1) {
+  const lines = [];
+  const div = market.payDividends();
+  if (div > 0) lines.push(`dividends +${money(div)}`);
+  const fr = crew.franchiseProfit(n, Math.floor((clock.minutes - 6 * 60) / (7 * 1440)));
+  if (fr) lines.push(`GULLY'S ${fr >= 0 ? '+' : '-'}${money(Math.abs(fr))}`);
+  if (property.ownedList().length) {
+    const r = property.collect(n);
+    lines.push(`rent ${r.net >= 0 ? '+' : '-'}${money(Math.abs(r.net))}`);
+    if (r.notes.length) setTimeout(() => ui.toast(`Your buildings: ${r.notes.slice(0, 3).join(' · ')}`), 6400);
+  }
+  if (lines.length) setTimeout(() => ui.toast(`Monday: ${lines.join(' · ')}`), 3200);
+}
+
+// ----------------------------------------------------------------------------
+// Getting rich: the market (game/market.js) and what you're worth
+/** Everything you have: cash, bank, shares (and, later, property and what your things would fetch). */
+function netWorth() {
+  const furniture = decor.pieces.reduce((s, p) => s + (FURN[p.id]?.price ?? 0) * 0.4, 0);
+  return state.cash + state.bank + market.value() + property.worth() + (crew.J.owner ? 150000 : 0) + resale.worth() + furniture;
+}
+
+/** What you're worth, line by line (at any ATM). */
+function worthSheet(back) {
+  const furniture = decor.pieces.reduce((s, p) => s + (FURN[p.id]?.price ?? 0) * 0.4, 0);
+  const line = (a, b) => `${a.padEnd(24, '.')} ${money(Math.round(b))}`;
+  const rows = [
+    line('Cash', state.cash),
+    line('Bank', state.bank),
+    line('Shares', market.value()),
+    line(`Property (${property.ownedList().length})`, property.worth()),
+    ...(crew.J.owner ? [line("GULLY'S Greenway", 150000)] : []),
+    line('Clothes (to a reseller)', resale.worth()),
+    line('Furniture (second-hand)', furniture),
+    '',
+    line('NET WORTH', netWorth()),
+  ];
+  ui.openDialog({ name: 'HALCYON SAVINGS · NET WORTH', text: rows.join('\n'), mono: true, choices: [{ label: 'Back', fn: () => back() }], onClose: () => (player.locked = false) });
+}
+
+// Net worth milestones: a moment, a headline on the Exchange's ticker, and status
+const MILESTONES = [
+  { at: 50000, status: 4, head: 'NEWCOMER CLEARS $50K; FRIENDS SUDDENLY CALL MORE' },
+  { at: 250000, status: 8, head: 'QUARTER-MILLION AND CLIMBING: WHO IS THIS PERSON?' },
+  { at: 1000000, status: 15, head: 'PORT HALCYON HAS A NEW MILLIONAIRE' },
+  { at: 10000000, status: 25, head: 'TEN MILLION: THE CITY NOTICES ITS NEWEST TYCOON' },
+];
+let worthT = 0;
+function updateWorth(dt) {
+  if ((worthT -= dt) > 0) return;
+  worthT = 0.5;
+  const w = netWorth();
+  let k = 0;
+  MILESTONES.forEach((m, i) => w >= m.at && (k = i + 1));
+  extraStatus.wealth = k ? MILESTONES[k - 1].status : 0;
+  if (k > (state.milestone ?? 0)) {
+    const m = MILESTONES[k - 1];
+    state.milestone = k;
+    state.headline = { t: Math.round(clock.minutes), text: m.head };
+    for (let j = 0; j < 3; j++) setTimeout(() => audio.tone(1047 + j * 262, 'sine', 0.05, 0.35), j * 160);
+    ui.toast(`NET WORTH: ${money(m.at)}+. ${['People start asking what you do.', 'Your bank calls just to say hello.', "You're a millionaire. Say it out loud. Go on.", 'You could buy the street. You might.'][k - 1]} It's on the ticker at the Exchange.`);
+    saveNow();
+  }
+}
+
+function openTerminal(title = 'HALCYON EXCHANGE · TERMINAL', after = null) {
+  player.locked = true;
+  if (!state.seen.market) {
+    state.seen.market = true;
+    setTimeout(() => ui.hint('Pick a company, choose how many (←→), then <b>Enter</b> to buy or <b>X</b> to sell. Headlines go up at 8 AM; the market is open 9:30 to 4, Monday to Friday.', 10), 400);
+  }
+  ui.openMarket({
+    title,
+    market,
+    stocks: STOCKS,
+    cash: () => state.cash,
+    bank: () => state.bank,
+    worth: netWorth,
+    onTrade: (sym, side, n) => {
+      const res = side === 'buy' ? market.buy(sym, n) : market.sell(sym, n);
+      if (res.ok) {
+        audio.coin();
+        needs.add('fun', 1.5);
+        saveNow();
+      }
+      return res;
+    },
+    onClose: () => {
+      player.locked = false;
+      after?.();
+    },
+  });
 }
 
 function handleKeys() {
@@ -2364,7 +2877,7 @@ function handleKeys() {
 // ----------------------------------------------------------------------------
 // Home: placing furniture (world/homeDecor.js) and using it (game/homeLife.js)
 const atHome = () => !!(place && !touring && place.id === state.home);
-const homeLife = new HomeLife({ ui, audio, needs, clock, state, player, decor, sitDown, timeSkipped: () => (needsLast = clock.minutes), save: () => saveNow(), talk: talkRng });
+const homeLife = new HomeLife({ ui, audio, needs, clock, state, player, decor, sitDown, timeSkipped: () => (needsLast = clock.minutes), save: () => saveNow(), talk: talkRng, openTerminal: (t) => openTerminal(t) });
 
 function carryPrompt() {
   const c = decor.carry;
@@ -2528,6 +3041,23 @@ function frame(now) {
         district = '';
       }
     }
+    const nowInX = exchange.contains(player.pos, -0.05);
+    if (nowInX !== inExchange) {
+      inExchange = nowInX;
+      player.space = rig.space = nowInX ? exchSpace : outdoor;
+      if (nowInX) {
+        outdoorDist = rig.dist;
+        rig.dist = 4.6;
+        if (playing) ui.showLocation('HALCYON EXCHANGE', !exchange.open ? 'closed · opens 8 am' : market.isOpen() ? 'the market is open' : 'the ticker bar is open');
+        if (playing && !state.seen.exchange) {
+          state.seen.exchange = true;
+          setTimeout(() => ui.hint('Use any free <b>terminal</b> on the floor to buy and sell shares (9:30 to 4, weekdays). The <b>Ticker Bar</b> is on the left, the <b>property desk</b> on the right. Brokers talk, especially after a drink.', 11), 1500);
+        }
+      } else {
+        rig.dist = outdoorDist;
+        district = '';
+      }
+    }
     const nowInM = galleria.contains(player.pos, -0.05);
     if (nowInM !== inGalleria) {
       inGalleria = nowInM;
@@ -2550,6 +3080,7 @@ function frame(now) {
   updateClub(dt);
   updateGullys(dt);
   updateGalleria(dt);
+  updateExchange(dt);
   updateNeeds(dt);
   updateRoute(dt);
   peds.update(dt, player.pos, env.night);
@@ -2592,6 +3123,7 @@ function frame(now) {
     ui.setClock(clock.format(), clock.day);
     ui.setMoney(state.cash, state.bank);
     updateStatus();
+    updateWorth(dt);
     if (!place && !inUnder && (districtTimer -= dt) <= 0) {
       districtTimer = 0.5;
       const d = city.districtAt(player.pos.x, player.pos.z);
@@ -2609,7 +3141,7 @@ function frame(now) {
 
   const parkD = park ? Math.hypot(player.pos.x - park.cx, player.pos.z - park.cz) : 999;
   const green = Math.max(smoothstep(45, 15, parkD), smoothstep(0.6, 1.0, Math.hypot(player.pos.x, player.pos.z) / 160));
-  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place || inUnder ? 1 : inStore || inGullys ? 0.5 : inGalleria ? 0.6 : inClub ? 0.85 : 0, store: inStore ? 1 : 0, kitchen: inGullys && gullys.open ? 1 : 0 });
+  audio.update({ night: env.night, magic: env.magic, green, time, indoor: place || inUnder ? 1 : inStore || inGullys ? 0.5 : inGalleria || inExchange ? 0.6 : inClub ? 0.85 : 0, store: inStore ? 1 : 0, kitchen: inGullys && gullys.open ? 1 : 0 });
 
   // the shop's security cameras (only when you're close enough to see a monitor)
   if (!place && cctvTick++ % 4 === 0 && camera.position.distanceTo(store.doorCenter) < 30) store.renderCCTV(renderer, scene);
@@ -2623,6 +3155,17 @@ requestAnimationFrame(frame);
 
 // handy for debugging from the console
 window.game = {
+  resale,
+  soleSwap,
+  property,
+  exchange,
+  brokers,
+  get inExchange() {
+    return inExchange;
+  },
+  market,
+  openTerminal,
+  netWorth,
   decor,
   homeLife,
   startCarry,

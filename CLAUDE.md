@@ -79,6 +79,21 @@ features, controls and the code map.
   ROOMSET (`galleria.buildRoomset`, zone 'rs') builds the same catalog pieces as its
   displays; its orders go through `shopping.delivered` into storage. `extraStatus.decor`
   in fashion.js is the home's status. Wishes for furniture are `'f:<id>'` (`lookup`).
+- Getting rich (`game/market.js`, `game/property.js`, `game/resale.js`, `world/exchange.js`,
+  `actors/brokers.js`, `render/exchangeTextures.js`): stock prices are a pure function of the
+  clock (`market.day(sym, d)` caches each day's open/close from seeded noise and the
+  morning's `news(d)`; `EPOCH` days of history before day 0), so nothing about the market is
+  saved but your holdings (`state.market`). The Exchange is its own shell like the Galleria
+  (`exchange.contains`, `exchSpace`); its board, LED crawl and clocks are canvas textures
+  redrawn in `exchange.update`, and `setModel(highlights)` rebuilds the city model from
+  `city.footprints` (which now carry `i, j, shop, gf, faces`). Brokers' spots are the
+  Exchange's own seat objects with a `route` from the front aisle, so `brokers.taken` is
+  shared with the player's seats. Property picks its buildings from footprints by block and
+  rule; `property.buildSigns` puts the boards up. Weekly money (rent out, dividends,
+  property rent, franchise profit) all runs from `payRent`/`weeklyIncome` in main.js.
+  GULLY'S ranks live on `state.crewJob` (`rank`, `good`, `mgrShifts`, `owner`); the
+  franchise on `state.franchise`. `netWorth()` in main.js feeds milestones and
+  `extraStatus.wealth`.
 - Needs (`game/needs.js`, `updateNeeds`/`passOut` in main.js, HUD in `ui.setNeeds`): decay
   comes from game time each frame (`needs.tick`); jumps of 30+ minutes are skipped there, so
   anything that skips time on purpose (sleep, shower, fridge, passing out) applies its own

@@ -1,5 +1,6 @@
+import * as THREE from 'three';
 import { Rng } from '../core/rng.js';
-import { BRAND, LUNCH, BREAKFAST, menuAt, sayItems } from './gullysMenu.js';
+import { BRAND, LUNCH, BREAKFAST, TOYS, menuAt, sayItems } from './gullysMenu.js';
 import { KitchenScreen } from '../render/gullysTextures.js';
 
 // Crew member at GULLY'S. Marco (the shift manager) hires you; you work any time
@@ -16,8 +17,31 @@ import { KitchenScreen } from '../render/gullysTextures.js';
 //    empty bin holds up the whole line (the screens over the line show it all)
 //  - to-go orders come up on the pass for you to bag and call
 //  - $9.50 an hour (entry level), paid to your bank with a slip, plus a crew meal
+//
+// Getting on: after five good shifts Marco puts you up for shift manager ($13.50,
+// a bonus on every order, and the complaints come to you: walk over to the "!").
+// Ten shifts as manager and Gully HQ offers you the franchise. Then it's yours:
+// the week's profit on Mondays, a special of the week, the toy of the week.
 
 export const CREW_WAGE = 950; // cents per game hour
+export const MANAGER_WAGE = 1350;
+export const FRANCHISE_PRICE = 150000;
+const PROMOTE_AFTER = 5; // good shifts as crew
+const FRANCHISE_AFTER = 10; // shifts as manager
+export const SPECIALS = [
+  { id: 'none', name: 'No special', sales: 1, cost: 0, spread: 0.12, blurb: 'Just the menu. Steady.' },
+  { id: 'twofer', name: 'Two-for-Tuesday Gull Stacks', sales: 1.2, cost: 0.07, spread: 0.3, blurb: 'Packs the place. Thin margins. Could go either way.' },
+  { id: 'breakfast', name: 'Breakfast all day', sales: 1.08, cost: 0.015, spread: 0.15, blurb: 'Early Birds at midnight. People love it a bit more than is healthy.' },
+  { id: 'family', name: 'Family Feast Fridays', sales: 1.12, cost: 0.035, spread: 0.2, blurb: 'Four meals, four Gull Boxes, one price. Loud Fridays.' },
+];
+const COMPLAINTS = [
+  { text: 'These fries are cold. Cold! I could hear them crying.', best: 'remake', ok: 'refund' },
+  { text: "I asked for no pickles. There are pickles. There are so many pickles.", best: 'remake', ok: 'refund' },
+  { text: "We waited twenty minutes and the kids are melting down. Look at them. LOOK at them.", best: 'toy', ok: 'refund' },
+  { text: "There's a hair in my burger. It's not my hair. I'd know my hair.", best: 'refund', ok: 'remake' },
+  { text: 'My son got Captain Gully again. He has four. FOUR. He wants the ghost one.', best: 'toy', ok: 'remake' },
+  { text: "The shake machine is 'broken' again? It's always broken. Is it ever not broken?", best: 'refund', ok: 'toy' },
+];
 const FRY_TIME = 14; // seconds a basket takes
 const FRY_GRACE = 10; // seconds to lift it before it burns
 const SIDE_TIME = 9; // seconds a side on the grill
@@ -46,6 +70,13 @@ export class CrewJob {
     this.rng = new Rng(Date.now() & 0xfff);
     state.crewJob ??= { hired: false, shift: null, earned: 0, shifts: 0 };
     this.J = state.crewJob;
+    this.J.rank ??= 'crew'; // 'crew' | 'manager'
+    this.J.good ??= 0; // good shifts as crew (towards the promotion)
+    this.J.mgrShifts ??= 0;
+    this.J.owner ??= false; // you bought the franchise
+    this.complaint = null;
+    this.compMark = this.makeMark();
+    gullys.group.add(this.compMark);
     if (this.J.shift) this.J.shift = null; // a saved shift from last time: start fresh
     this.work = null;
     this.K = null; // the kitchen while you're on: { baskets, grill }
@@ -59,6 +90,37 @@ export class CrewJob {
 
   get onShift() {
     return !!this.J.shift;
+  }
+
+  get manager() {
+    return this.J.rank === 'manager' || this.J.owner;
+  }
+
+  wage() {
+    return this.manager ? MANAGER_WAGE : CREW_WAGE;
+  }
+
+  /** The "!" over a customer with a complaint. */
+  makeMark() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = '#ff8a2a';
+    g.beginPath();
+    g.arc(32, 32, 28, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#ffffff';
+    g.font = 'bold 44px "Arial Black", Impact, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('!', 32, 35);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, fog: false }));
+    s.scale.set(0.45, 0.45, 0.45);
+    s.renderOrder = 9;
+    s.visible = false;
+    return s;
   }
 
   breakfast() {
@@ -94,6 +156,53 @@ export class CrewJob {
       });
       return out;
     }
+    if (!this.onShift && this.J.rank === 'crew' && this.J.good >= PROMOTE_AFTER)
+      out.push({
+        label: 'You wanted a word?',
+        fn: () =>
+          say(
+            "I did. You've been good. Really good. I'm putting you up for shift manager. $13.50 an hour, a bonus on every order that goes out on your shift, and the complaints come to you. All of them. Also: a tie. Clip-on. Yes?",
+            [
+              {
+                label: 'Take the job',
+                fn: () => {
+                  this.J.rank = 'manager';
+                  this.audio.coin();
+                  this.visit.saveNow?.();
+                  say("Welcome to management. When someone waves you over, that's you now. Smile. Refund, remake or a free toy: pick right and the bonus goes up.");
+                },
+              },
+              { label: 'Not yet', fn: () => ui.closeDialog() },
+            ],
+          ),
+      });
+    if (!this.onShift && this.J.rank === 'manager' && !this.J.owner && this.J.mgrShifts >= FRANCHISE_AFTER)
+      out.push({
+        label: 'HQ called?',
+        fn: () =>
+          say(
+            `They did. They want to sell this place. To someone who knows it. That's you. $${FRANCHISE_PRICE.toLocaleString('en-US')} for GULLY'S Greenway: the building, the name, the fryers, me. The week's profit is yours every Monday. Run a special, pick the toy of the week. I'll still run the pass.`,
+            [
+              {
+                label: `Buy the franchise ($${FRANCHISE_PRICE.toLocaleString('en-US')})`,
+                fn: () => {
+                  if (this.state.bank < FRANCHISE_PRICE) return say(`HQ wants it from your bank account, and you're $${Math.ceil(FRANCHISE_PRICE - this.state.bank).toLocaleString('en-US')} short. Keep saving. I'll tell them to wait.`);
+                  this.state.bank -= FRANCHISE_PRICE;
+                  this.state.ledger?.push({ t: Math.round(this.clock.minutes), what: "GULLY'S franchise", amt: -FRANCHISE_PRICE });
+                  this.J.owner = true;
+                  this.state.franchise = { since: this.clock.minutes, special: 'none', toy: null, last: null };
+                  this.audio.coin();
+                  this.needs.give({ fun: 25 });
+                  this.visit.saveNow?.();
+                  this.onOwner?.();
+                  say("It's done. Congratulations, boss. HQ is sending a plaque. Jo is already practising saying 'boss'. You'll get the week's profit every Monday.");
+                },
+              },
+              { label: 'Let me think about it', fn: () => ui.closeDialog() },
+            ],
+          ),
+      });
+    if (this.J.owner) out.push(...this.ownerChoices(say, done));
     if (!this.onShift) {
       out.push({ label: 'Start a shift', fn: () => (ui.closeDialog(), this.clockIn()) });
       out.push({
@@ -122,7 +231,9 @@ export class CrewJob {
     const h = this.clock.hour;
     if (h >= 23 || h < 6) return this.ui.toast('Marco: "Night crew\'s covered. Come back for an early one, we open at six."');
     if (this.visit.tray || this.visit.order) return this.ui.toast('Marco: "Finish your food first. I\'m not a monster."');
-    this.J.shift = { start: this.clock.minutes, rung: 0, wrong: 0, lost: 0, baskets: 0, loads: 0, burnt: 0, bagged: 0, docked: 0, late: 0, notes: [] };
+    this.J.shift = { start: this.clock.minutes, rung: 0, wrong: 0, lost: 0, baskets: 0, loads: 0, burnt: 0, bagged: 0, docked: 0, late: 0, notes: [], bonus: 0, handled: 0, upset: 0 };
+    this.compT = this.rng.float(40, 80);
+    this.complaint = null;
     this.D.shift = { stock: { fry: 6, grill: 4 }, short: null };
     this.K = { baskets: [0, 1, 2].map(() => ({ s: 'up', t: 0 })), grill: { s: 'off', t: 0 } };
     this.G.crewKitchen = { baskets: [false, false, false], grill: 'off' };
@@ -132,7 +243,7 @@ export class CrewJob {
     this.shortT = 0;
     this.wearUniform(true);
     this.audio.punch?.();
-    this.ui.toast('Marco: "Cap on, hands washed. Register two is yours, and the fryer and the grill. Jo\'s on one, I\'m on the pass. Go!"');
+    this.ui.toast(this.manager ? `Marco: "${this.J.owner ? 'Boss' : 'Manager'} on the floor! Register two, the fryer, the grill, and any complaints. Go!"` : 'Marco: "Cap on, hands washed. Register two is yours, and the fryer and the grill. Jo\'s on one, I\'m on the pass. Go!"');
     this.ui.hint('The <b>staff gate</b> at the left end of the counter is open. Keep the <b>fry</b> and <b>grill</b> bins stocked and take orders at <b>register 2</b>. The screens over the line show the tickets.', 12);
   }
 
@@ -142,8 +253,16 @@ export class CrewJob {
     if (!s) return;
     if (reason === 'walked') this.dock(500, 'walked off mid-shift');
     const mins = Math.max(0, this.clock.minutes - s.start);
-    const wage = Math.floor((mins / 60) * CREW_WAGE);
-    const total = Math.max(0, wage - s.docked);
+    const rate = this.wage();
+    const wage = Math.floor((mins / 60) * rate);
+    // managers get a bonus on what went out on their shift
+    if (this.manager) s.bonus += s.rung * 40 + s.bagged * 25;
+    const bonus = this.manager ? Math.max(0, s.bonus) : 0;
+    const total = Math.max(0, wage + bonus - s.docked);
+    this.clearComplaint();
+    const good = !reason && mins >= 60 && s.wrong <= 3 && s.burnt <= 2 && s.lost <= 3;
+    if (this.J.rank === 'crew' && good) this.J.good++;
+    if (this.manager && !reason && mins >= 60) this.J.mgrShifts++;
     this.state.bank += total / 100;
     this.state.ledger?.push({ t: Math.round(this.clock.minutes), what: "GULLY'S wages", amt: total / 100 });
     this.J.earned += total;
@@ -167,7 +286,8 @@ export class CrewJob {
     const line = (a, b) => `${a.padEnd(18, '.')} ${b}`;
     const text = [
       line('Time worked', `${Math.floor(mins / 60)}h ${String(Math.floor(mins % 60)).padStart(2, '0')}m`),
-      line('Wage @ $9.50/hr', money(wage)),
+      line(`Wage @ ${money(rate)}/hr`, money(wage)),
+      ...(this.manager ? [line('Manager bonus', money(bonus)), line('Complaints', `${s.handled} sorted, ${s.upset} walked`)] : []),
       line('Orders rung up', String(s.rung)),
       line('Wrong orders', String(s.wrong)),
       line('Sent to Jo', String(s.lost)),
@@ -179,6 +299,8 @@ export class CrewJob {
       line('Paid to bank', money(total)),
       '',
       this.verdict(true, reason, mins),
+      ...(this.J.rank === 'crew' && this.J.good >= PROMOTE_AFTER ? ['', 'Marco: "Come and see me before you go. I want a word."'] : []),
+      ...(this.J.rank === 'manager' && !this.J.owner && this.J.mgrShifts >= FRANCHISE_AFTER ? ['', 'Marco: "HQ called about you. Come and talk to me."'] : []),
     ].join('\n');
     const meal = mins >= 60 && reason !== 'walked' && this.G.open;
     this.player.locked = true;
@@ -230,7 +352,8 @@ export class CrewJob {
 
   wearUniform(on) {
     const app = this.state.appearance;
-    this.crowd.setAppearance(this.player.char.id, on ? { ...app, wear: null, top: BRAND.teal, topStyle: 0, bottom: BRAND.navy, bottomStyle: 0, shoes: '#1e1e22' } : app);
+    const m = this.manager;
+    this.crowd.setAppearance(this.player.char.id, on ? { ...app, wear: null, top: m ? BRAND.navy : BRAND.teal, topStyle: m ? 1 : 0, bottom: m ? '#2a2a2e' : BRAND.navy, bottomStyle: 0, shoes: '#1e1e22' } : app);
   }
 
   /** From the restaurant sim: someone at your register gave up, or got the wrong food. */
@@ -255,6 +378,8 @@ export class CrewJob {
   find(p) {
     if (!this.onShift) return null;
     if (this.work) return { label: `${this.work.label}… ${Math.floor((this.work.t / this.work.dur) * 100)}%`, act: () => {} };
+    const cp = this.complaint;
+    if (cp && near(p, cp.a.c, 1.5)) return { label: 'Sort out the complaint', act: () => this.handleComplaint() };
     if (!this.G.behindCounter(p)) return null;
     const St = this.G.stations;
     const K = this.K;
@@ -470,15 +595,18 @@ export class CrewJob {
       this.kds.draw(tickets, { fry: stock.fry, grill: stock.grill, short: D.shift.short });
     }
 
+    // managers: every few minutes someone waves you over
+    if (this.manager && inside) this.updateComplaint(dt);
     // closing time, or walking off
     if (!G.open) return this.clockOut('closed');
     if (Math.hypot(p.pos.x - G.doorCenter.x, p.pos.z - G.doorCenter.z) > 45) return this.clockOut('walked');
 
     // the HUD
     const mins = this.clock.minutes - s.start;
-    const pay = Math.floor((mins / 60) * CREW_WAGE) - s.docked;
+    const pay = Math.floor((mins / 60) * this.wage()) + (this.manager ? s.bonus + s.rung * 40 + s.bagged * 25 : 0) - s.docked;
     const tasks = [];
     const w = D.waitingAt(1);
+    if (this.complaint) tasks.push(`COMPLAINT: go to the "!" in the dining room (${Math.max(0, Math.ceil(70 - this.complaint.t))}s)`);
     if (w) tasks.push(`REGISTER 2: someone waiting (${Math.max(0, Math.ceil(45 - (w.waitT ?? 0)))}s)`);
     const bags = D.orders.filter((o) => o.state === 'bag');
     if (bags.length) tasks.push(`BAG to go: ${bags.map((o) => `#${o.num}`).join(', ')}`);
@@ -488,6 +616,149 @@ export class CrewJob {
     tasks.push(`Grill bin ${stock.grill}/${BIN.grill}${stock.grill < 3 ? ' (low)' : ''}${grillState}`);
     const open = D.orders.filter((o) => o.state === 'cooking' && o.owner !== 'player').length;
     if (open) tasks.push(`${open} ticket${open > 1 ? 's' : ''} on the screen${D.shift.short ? ` · held for ${D.shift.short === 'fry' ? 'FRIES' : 'GRILL'}` : ''}`);
-    this.ui.setShift(`CREW SHIFT · ${Math.floor(mins / 60)}h ${String(Math.floor(mins % 60)).padStart(2, '0')}m · ${money(pay)}`, tasks);
+    this.ui.setShift(`${this.J.owner ? "OWNER'S SHIFT" : this.manager ? 'MANAGER SHIFT' : 'CREW SHIFT'} · ${Math.floor(mins / 60)}h ${String(Math.floor(mins % 60)).padStart(2, '0')}m · ${money(pay)}`, tasks);
+  }
+
+  // ---------------------------------------------------------------- complaints (managers)
+  updateComplaint(dt) {
+    const cp = this.complaint;
+    if (!cp) {
+      if ((this.compT -= dt) > 0) return;
+      this.compT = this.rng.float(70, 130);
+      const seated = this.D.pool.filter((a) => a.mode === 'sit' && a.c.visible && this.G.contains(a.c, -0.3)); // inside, not on the patio
+      if (!seated.length) return;
+      const a = this.rng.pick(seated);
+      this.complaint = { a, type: this.rng.pick(COMPLAINTS), t: 0 };
+      this.audio.tone(660, 'triangle', 0.04, 0.2);
+      this.ui.toast('Someone in the dining room is waving at you. Manager! (the "!")');
+      return;
+    }
+    cp.t += dt;
+    const c = cp.a.c;
+    this.compMark.visible = true;
+    this.compMark.position.set(c.x, c.y + 2.0 + Math.sin(cp.t * 4) * 0.06, c.z);
+    if (cp.a.mode !== 'sit' || cp.t > 70) {
+      const s = this.J.shift;
+      s.upset++;
+      s.bonus -= 200;
+      s.notes.push('a complaint walked out');
+      this.ui.toast('They give up waiting and storm out. Marco: "That\'s a one-star review."');
+      this.clearComplaint();
+    }
+  }
+
+  clearComplaint() {
+    this.complaint = null;
+    if (this.compMark) this.compMark.visible = false;
+  }
+
+  handleComplaint() {
+    const cp = this.complaint;
+    if (!cp) return;
+    const s = this.J.shift;
+    this.player.locked = true;
+    const choose = (how) => {
+      this.ui.closeDialog();
+      if (how === cp.type.best) {
+        s.bonus += 250;
+        s.handled++;
+        this.needs.add('social', 3);
+        this.ui.toast(this.rng.pick(['"Oh. Well. That\'s... actually very nice. Thank you." Crisis over. +$2.50 bonus.', 'They soften completely. One of them even says sorry. +$2.50 bonus.']));
+      } else if (how === cp.type.ok) {
+        s.bonus += 50;
+        s.handled++;
+        this.ui.toast('"Fine. I suppose." Not thrilled, but they stay. +$0.50 bonus.');
+      } else {
+        s.bonus -= 100;
+        s.handled++;
+        this.ui.toast('"That\'s it? Really?" They take it, grumbling. -$1.00 bonus.');
+      }
+      this.clearComplaint();
+    };
+    this.ui.openDialog({
+      name: 'A CUSTOMER',
+      text: cp.type.text,
+      choices: [
+        { label: 'Refund them', fn: () => choose('refund') },
+        { label: 'Remake it, on the house', fn: () => choose('remake') },
+        { label: 'Give the table a free Gull Box toy', fn: () => choose('toy') },
+      ],
+      onClose: () => (this.player.locked = false),
+    });
+  }
+
+  // ---------------------------------------------------------------- the franchise (owners)
+  ownerChoices(say, done) {
+    const F = (this.state.franchise ??= { since: this.clock.minutes, special: 'none', toy: null, last: null });
+    const sp = SPECIALS.find((x) => x.id === F.special) ?? SPECIALS[0];
+    return [
+      {
+        label: "Let's look at the books",
+        fn: () => {
+          const L = F.last;
+          const line = (a, b) => `${a.padEnd(20, '.')} ${b}`;
+          const m = (d) => `${d < 0 ? '-' : ''}$${Math.abs(d).toLocaleString('en-US')}`;
+          const text = L
+            ? [`GULLY'S GREENWAY · WEEK ${L.week}`, '', line('Sales', m(L.sales)), line('Food and staff', m(-L.costs)), line('Toy promotion', m(-L.toy)), line('Profit (paid to you)', m(L.profit)), '', `Special: ${L.special}`].join('\n')
+            : 'No week closed yet. The books close on Monday morning, and the profit goes straight to your bank.';
+          this.ui.openDialog({ name: "GULLY'S · THE BOOKS", text, mono: !!L, choices: [{ label: 'Close the books', fn: () => this.ui.closeDialog() }], onClose: done });
+        },
+      },
+      {
+        label: `This week's special (${sp.name})`,
+        fn: () =>
+          say(
+            'What are we running this week? Specials bring people in. Not all of them bring money in.',
+            [
+              ...SPECIALS.map((x) => ({
+                label: `${x.name}${x.id === F.special ? ' (now)' : ''}`,
+                fn: () => {
+                  F.special = x.id;
+                  this.visit.saveNow?.();
+                  say(`${x.name}. ${x.blurb} It runs till Monday.`);
+                },
+              })),
+            ],
+          ),
+      },
+      {
+        label: `The toy of the week (${F.toy ? TOYS.find((t) => t.id === F.toy).name : 'none'})`,
+        fn: () =>
+          say(
+            'Which Gully goes in most of the boxes this week? It costs a bit to switch the order. The kids will notice.',
+            [
+              ...TOYS.map((t) => ({
+                label: `${t.name}${t.id === F.toy ? ' (now)' : ''}`,
+                fn: () => {
+                  F.toy = t.id;
+                  this.visit.saveNow?.();
+                  say(`${t.name} it is. Five times as many in the boxes this week.`);
+                },
+              })),
+              { label: 'Mix them up again', fn: () => ((F.toy = null), say('Back to the usual mix.')) },
+            ],
+          ),
+      },
+    ];
+  }
+
+  /** Monday morning: the weeks' profit (n weeks if you were away). Returns the total, in dollars. */
+  franchiseProfit(n, week) {
+    if (!this.J.owner) return 0;
+    const F = (this.state.franchise ??= { since: this.clock.minutes, special: 'none', toy: null, last: null });
+    const sp = SPECIALS.find((x) => x.id === F.special) ?? SPECIALS[0];
+    let total = 0;
+    for (let k = 0; k < n; k++) {
+      const r = new Rng(31337 + (week - k) * 7);
+      const sales = Math.round(21000 * sp.sales * (1 + r.float(-sp.spread, sp.spread)));
+      const costs = Math.round(sales * (0.78 + sp.cost));
+      const toy = F.toy ? 300 : 0;
+      const profit = sales - costs - toy;
+      F.last = { week: week - k, sales, costs, toy, profit, special: sp.name };
+      total += profit;
+    }
+    this.state.bank += total;
+    this.state.ledger?.push({ t: Math.round(this.clock.minutes), what: "GULLY'S Greenway profit", amt: total });
+    return total;
   }
 }

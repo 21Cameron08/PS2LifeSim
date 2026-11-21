@@ -873,6 +873,172 @@ export class UI {
     r?.onClose?.();
   }
 
+  // ---------------------------------------------------------------- the trading terminal
+  /**
+   * o: { title, market (game/market.js), stocks, cash(), bank(), worth(), onTrade(sym, 'buy'|'sell', n) -> { ok, msg }, onClose }
+   * Re-draws every second while it's open: the prices really move.
+   */
+  openMarket(o) {
+    this.modal = 'market';
+    this.mkS = { ...o, sel: 0, qty: 1, note: '' };
+    $('market').classList.remove('hidden');
+    document.body.classList.add('in-menu');
+    this.setPrompt(null);
+    this.renderMarket();
+    // once a second the numbers move (only the numbers: rebuilding the buttons would eat taps)
+    this.mkTimer = setInterval(() => this.modal === 'market' && this.renderMarket(true), 1000);
+  }
+  renderMarket(live = false) {
+    const r = this.mkS;
+    const M = r.market;
+    const QTY = [1, 10, 100, 'max'];
+    const pct = (a, b) => (b ? ((a - b) / b) * 100 : 0);
+    const sgn = (v, f) => (v > 0 ? '+' : v < 0 ? '-' : '') + f(Math.abs(v));
+    const rows = r.stocks
+      .map((s, i) => {
+        const p = M.price(s.sym);
+        const ch = pct(p, M.prevClose(s.sym));
+        const h = M.holding(s.sym);
+        return `<div class="mk-row${i === r.sel ? ' sel' : ''}" data-i="${i}"><b style="color:${s.col}">${s.sym}</b><span class="nm">${s.name}</span><span class="px">${money(p)}</span><span class="chg ${ch > 0.005 ? 'up' : ch < -0.005 ? 'dn' : ''}">${sgn(ch, (v) => `${v.toFixed(1)}%`)}</span><span class="own">${h.n || ''}</span></div>`;
+      })
+      .join('');
+    const s = r.stocks[r.sel];
+    const p = M.price(s.sym);
+    const prev = M.prevClose(s.sym);
+    const h = M.holding(s.sym);
+    const avg = h.n ? h.cost / h.n : 0;
+    const pl = h.n ? (p - avg) * h.n : 0;
+    const path = M.todayPath(s.sym);
+    const all = [...path, prev];
+    const hi = path.length ? Math.max(...all) : prev;
+    const lo = path.length ? Math.min(...all) : prev;
+    const news = M.headlines(undefined, 4)
+      .map((n) => `<div class="${n.you ? 'you' : n.sym ? (n.up ? 'up' : 'dn') : ''}"><b>${n.you ? 'BREAKING' : n.sym ?? 'MARKET'}</b> ${n.text}</div>`)
+      .join('');
+    const q = QTY[r.qtyI ?? 0];
+    const qLabel = q === 'max' ? 'MAX' : q;
+    const moneyLine = `Cash ${money(r.cash())} · Bank ${money(r.bank())} · Shares ${money(M.value())} · <b>Net worth ${money(r.worth())}</b>`;
+    const stats = `Prev close ${money(prev)} · Today's high ${money(hi)} · low ${money(lo)}`;
+    const pos = h.n ? `You own <b>${h.n}</b> · avg ${money(avg)} · worth ${money(h.n * p)} · <span class="${pl >= 0 ? 'up' : 'dn'}">${sgn(pl, money)} (${sgn(pct(p, avg), (v) => `${v.toFixed(1)}%`)})</span>` : "You don't own any yet.";
+    if (live && $('market').querySelector('.mk-chart')) {
+      const el = $('market');
+      const st = el.querySelector('.mk-status');
+      st.textContent = M.statusText();
+      st.className = `mk-status ${M.isOpen() ? 'open' : ''}`;
+      el.querySelector('.mk-money').innerHTML = moneyLine;
+      r.stocks.forEach((s2, i) => {
+        const row = el.querySelector(`.mk-row[data-i="${i}"]`);
+        if (!row) return;
+        const p2 = M.price(s2.sym);
+        const ch = pct(p2, M.prevClose(s2.sym));
+        row.querySelector('.px').textContent = money(p2);
+        const c = row.querySelector('.chg');
+        c.textContent = sgn(ch, (v) => `${v.toFixed(1)}%`);
+        c.className = `chg ${ch > 0.005 ? 'up' : ch < -0.005 ? 'dn' : ''}`;
+        row.querySelector('.own').textContent = M.holding(s2.sym).n || '';
+      });
+      el.querySelector('.mk-stats').innerHTML = stats;
+      el.querySelector('.mk-pos').innerHTML = pos;
+      el.querySelector('.mk-news').innerHTML = news;
+      this.drawChart(el.querySelector('.mk-chart'), M.history(s.sym, 30), path, prev);
+      return;
+    }
+    $('market').innerHTML = `<div class="reg-head"><span>${r.title}</span><span class="mk-status ${M.isOpen() ? 'open' : ''}">${M.statusText()}</span></div>
+      <div class="mk-money">${moneyLine}</div>
+      <div class="mk-body">
+        <div class="mk-list"><div class="mk-row hd"><b>SYM</b><span class="nm">COMPANY</span><span class="px">PRICE</span><span class="chg">TODAY</span><span class="own">OWN</span></div>${rows}</div>
+        <div class="mk-detail">
+          <div class="mk-title"><b style="color:${s.col}">${s.name}</b> <small>${s.sym} · ${s.sector}${s.div ? ` · dividend ${(s.div * 52 * 100).toFixed(1)}% a year` : ''}</small></div>
+          <div class="mk-blurb">${s.blurb}</div>
+          <canvas class="mk-chart" width="440" height="150"></canvas>
+          <div class="mk-stats">${stats}</div>
+          <div class="mk-pos">${pos}</div>
+          <div class="mk-trade">
+            <div class="mk-qty">${QTY.map((x, i) => `<button class="reg-btn${(r.qtyI ?? 0) === i ? ' on' : ''}" data-q="${i}">${x === 'max' ? 'MAX' : x}</button>`).join('')}</div>
+            <button class="reg-btn go" data-buy="1"><span>↵</span>Buy ${qLabel}</button>
+            <button class="reg-btn" data-sell="1"><span>X</span>Sell ${q === 'max' ? 'all' : q}</button>
+          </div>
+        </div>
+      </div>
+      <div class="mk-news">${news}</div>
+      <div class="reg-note">${r.note || `$5 a trade. ${M.isOpen() ? 'Prices move while the market is open.' : 'Orders wait for the open: come back between 9:30 AM and 4 PM, Monday to Friday.'}`}</div>
+      <div class="reg-foot">↑↓ pick · ←→ how many · Enter buy · X sell · Esc done</div>`;
+    const el = $('market');
+    el.querySelectorAll('[data-i]').forEach((b) => b.addEventListener('click', () => ((r.sel = Number(b.dataset.i)), (r.note = ''), this.renderMarket())));
+    el.querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => ((r.qtyI = Number(b.dataset.q)), this.renderMarket())));
+    el.querySelector('[data-buy]').addEventListener('click', () => this.marketTrade('buy'));
+    el.querySelector('[data-sell]').addEventListener('click', () => this.marketTrade('sell'));
+    this.drawChart(el.querySelector('.mk-chart'), M.history(s.sym, 30), path, prev);
+  }
+  drawChart(cv, hist, today, prev) {
+    const g = cv.getContext('2d');
+    const W = cv.width;
+    const H = cv.height;
+    g.fillStyle = '#04100a';
+    g.fillRect(0, 0, W, H);
+    const all = [...hist, ...today];
+    const lo = Math.min(...all) * 0.995;
+    const hi = Math.max(...all) * 1.005;
+    const y = (v) => H - 14 - ((v - lo) / (hi - lo || 1)) * (H - 28);
+    g.strokeStyle = 'rgba(90,255,140,0.12)';
+    g.lineWidth = 1;
+    for (let k = 1; k < 5; k++) {
+      g.beginPath();
+      g.moveTo(0, (k * H) / 5);
+      g.lineTo(W, (k * H) / 5);
+      g.stroke();
+    }
+    const split = W * 0.72;
+    // 30 days of closes, then today
+    g.strokeStyle = '#7ad8a0';
+    g.lineWidth = 2;
+    g.beginPath();
+    hist.forEach((v, i) => (i ? g.lineTo((i / (hist.length - 1)) * split, y(v)) : g.moveTo(0, y(v))));
+    g.stroke();
+    g.setLineDash([4, 4]);
+    g.strokeStyle = 'rgba(255,255,255,0.35)';
+    g.beginPath();
+    g.moveTo(split, y(prev));
+    g.lineTo(W, y(prev));
+    g.stroke();
+    g.setLineDash([]);
+    if (today.length) {
+      const last = today[today.length - 1];
+      g.strokeStyle = last >= prev ? '#5aff8a' : '#ff6a5a';
+      g.lineWidth = 2;
+      g.beginPath();
+      today.forEach((v, i) => (i ? g.lineTo(split + (i / 26) * (W - split - 6), y(v)) : g.moveTo(split, y(v))));
+      g.stroke();
+      g.fillStyle = g.strokeStyle;
+      g.fillRect(split + ((today.length - 1) / 26) * (W - split - 6) - 2, y(last) - 2, 5, 5);
+    }
+    g.font = '11px monospace';
+    g.fillStyle = 'rgba(160,255,190,0.7)';
+    g.fillText('30 DAYS', 6, 12);
+    g.fillText('TODAY', split + 6, 12);
+    g.textAlign = 'right';
+    g.fillText(hi.toFixed(2), W - 4, 12);
+    g.fillText(lo.toFixed(2), W - 4, H - 4);
+    g.textAlign = 'left';
+  }
+  marketTrade(side) {
+    const r = this.mkS;
+    const q = [1, 10, 100, 'max'][r.qtyI ?? 0];
+    const res = r.onTrade(r.stocks[r.sel].sym, side, side === 'sell' && q === 'max' ? 'all' : q);
+    r.note = res.msg;
+    this.audio.blip(!!res.ok);
+    this.renderMarket();
+  }
+  closeMarket() {
+    const r = this.mkS;
+    this.mkS = null;
+    clearInterval(this.mkTimer);
+    if (this.modal === 'market') this.modal = null;
+    $('market').classList.add('hidden');
+    document.body.classList.remove('in-menu');
+    r?.onClose?.();
+  }
+
   // ---------------------------------------------------------------- home: what you own, what's placed
   /**
    * o: { title, sub() -> text, rows() -> [{ name, desc, chip, tags: [html], right, rightSub, acts: [{ id, label, key: 'E'|'X', go }] }],
@@ -885,7 +1051,7 @@ export class UI {
     if (first[0]?.head && first.length > 1) this.decorS.sel = 1;
     const el = $('shop');
     el.classList.remove('hidden');
-    el.dataset.shop = 'home';
+    el.dataset.shop = o.style ?? 'home';
     document.body.classList.add('in-menu');
     this.setPrompt(null);
     this.renderDecor();
@@ -1242,6 +1408,23 @@ export class UI {
       else if (k === 'Enter' || k === 'KeyE' || k === 'NumpadEnter') this.shopAct('bag');
       else if (k === 'Space') this.shopAct('wish');
       else if (k === 'KeyP') this.shopPay();
+      return eat();
+    }
+    if (this.modal === 'market') {
+      const r = this.mkS;
+      const n = r.stocks.length;
+      if (k === 'Escape') this.closeMarket();
+      else if (k === 'ArrowUp' || k === 'KeyW' || k === 'ArrowDown' || k === 'KeyS') {
+        r.sel = (r.sel + (k === 'ArrowUp' || k === 'KeyW' ? -1 : 1) + n) % n;
+        r.note = '';
+        this.audio.blip(false);
+        this.renderMarket();
+      } else if (k === 'ArrowLeft' || k === 'KeyA' || k === 'ArrowRight' || k === 'KeyD') {
+        r.qtyI = ((r.qtyI ?? 0) + (k === 'ArrowLeft' || k === 'KeyA' ? -1 : 1) + 4) % 4;
+        this.audio.blip(false);
+        this.renderMarket();
+      } else if (k === 'Enter' || k === 'KeyE' || k === 'KeyB' || k === 'NumpadEnter') this.marketTrade('buy');
+      else if (k === 'KeyX' || k === 'Backspace') this.marketTrade('sell');
       return eat();
     }
     if (this.modal === 'decor') {

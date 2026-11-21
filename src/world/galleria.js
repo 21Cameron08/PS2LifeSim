@@ -850,7 +850,7 @@ export class Galleria {
       this.seats.push({ ...xz(A.point(0, 0, 0.45)), y: this.origin.y + y, yaw: R90, out: xz(A.point(-0.9, 0, 0.5)), mall: true, showroom: 'the armchair' });
     }
     disp('rs-seating', 'Sofas and chairs', 23.2, 3.6, PI, ['beanbag', 'armchair', 'sofa', 'cloud', 'lounger']);
-    disp('rs-tables', 'Tables, lamps and plants', 25.0, 3.55, PI, ['sideTable', 'coffeeGlass', 'dining', 'floorLamp', 'arcLamp', 'plant', 'fig', 'olive']);
+    disp('rs-tables', 'Tables, desks, lamps and plants', 25.0, 3.55, PI, ['sideTable', 'coffeeGlass', 'dining', 'tradeDesk', 'floorLamp', 'arcLamp', 'plant', 'fig', 'olive']);
     // the collectors' corner, in the window
     put('sneakerWall', 20.65, 0.02);
     put('watchCase', 20.2, 2.0, R90);

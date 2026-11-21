@@ -17,6 +17,7 @@ export const PLACE_ICONS = {
   lantern: 'M8 1 10.8 5.5 8 15 5.2 5.5zM6.6 5.6h2.8L8 11z',
   tree: 'M8 1a4.8 4.8 0 0 1 2.6 8.8H9v4.7H7V9.8H5.4A4.8 4.8 0 0 1 8 1z',
   bag: 'M2.5 5h11l.8 9.5H1.7zM5.4 5V3.8a2.6 2.6 0 0 1 5.2 0V5H9.2V3.8a1.2 1.2 0 0 0-2.4 0V5z',
+  chart: 'M1 1.5h1.6v11.4H15v1.6H1zM3.6 10.6l3.2-4 2.4 2 3.6-4.8-1.4-.1L12.9 2l.6 3.4-1-.9-3.3 4.4-2.4-2-2 2.6z',
 };
 
 /**
@@ -58,7 +59,7 @@ export function buildPlaces(w) {
     color: () => '#ff9a4a',
     at: { x: gullys.outsideSpot.x, z: gullys.outsideSpot.z },
     name: () => "GULLY'S",
-    sub: () => (w.crew?.J.hired ? (w.crew.onShift ? 'Your job · on shift now' : 'Your job · crew, $9.50 an hour + a meal') : 'Burgers, fries, shakes · Gull Box toys · hiring'),
+    sub: () => (w.crew?.J.owner ? "It's yours · the franchise, profit every Monday" : w.crew?.J.hired ? (w.crew.onShift ? 'Your job · on shift now' : w.crew.manager ? 'Your job · shift manager, $13.50 an hour + bonus' : 'Your job · crew, $9.50 an hour + a meal') : 'Burgers, fries, shakes · Gull Box toys · hiring'),
     status: (h) => (gullysOpen(h) ? { text: 'OPEN · until 2 AM', open: true } : { text: 'CLOSED · opens 6 AM', open: false }),
     needs: () => ['hunger', 'fun', 'social'],
     big: () => true,
@@ -77,6 +78,18 @@ export function buildPlaces(w) {
     needs: () => ['fun', 'social', 'hunger'],
     big: () => true,
   });
+  if (w.exchange)
+    P.push({
+      id: 'exchange',
+      icon: () => 'chart',
+      color: () => '#8affb0',
+      at: { x: w.exchange.outsideSpot.x, z: w.exchange.outsideSpot.z },
+      name: () => 'HALCYON EXCHANGE',
+      sub: () => 'Trade shares on the floor · the Ticker Bar · property for sale',
+      status: (h) => (h >= 8 ? { text: w.market?.isOpen() ? 'OPEN · the market trades till 4 PM' : 'OPEN · the bar until midnight', open: true } : { text: 'CLOSED · opens 8 AM', open: false }),
+      needs: () => ['fun', 'social', 'energy'],
+      big: () => true,
+    });
   P.push({
     id: 'club',
     icon: () => 'club',

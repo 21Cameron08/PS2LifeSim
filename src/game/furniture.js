@@ -63,6 +63,32 @@ export const FURNITURE = [
     P.collide(-0.25, -0.25, 0.25, 0.25, 0.55);
   }, { chip: '#a8784a' }),
   P_('coffeeGlass', 'Glass coffee table', 'tables', 450, 2, 'floor', [-0.6, -0.32, 0.6, 0.32], 0.42, 'Glass top, chrome legs, a magazine you will never read.', (P) => F.coffeeTable(P, { w: 1.2, d: 0.64, glass: true }), { chip: '#a8c8e0' }),
+  P_('tradeDesk', 'Trading desk', 'tables', 2800, 4, 'floor', [-0.85, 0, 0.85, 1.3], 1.3, 'Walnut, three screens, a ticker running all day. Trade from home.', (P) => {
+    const walnut = C('#4a2e1e');
+    P.box('wood', -0.85, 0.72, 0, 0.85, 0.76, 0.75, walnut, { bottom: true });
+    for (const x of [-0.82, 0.78]) P.box('wood', x, 0, 0.05, x + 0.04, 0.72, 0.7, walnut);
+    P.box('wood', -0.78, 0.4, 0.04, 0.78, 0.72, 0.08, walnut);
+    for (const [x, ry] of [
+      [-0.5, 0.35],
+      [0, 0],
+      [0.5, -0.35],
+    ]) {
+      const S = P.sub(x, 0.18, ry, 0.76);
+      S.box('solid', -0.24, 0.12, -0.02, 0.24, 0.44, 0.02, C('#141418'));
+      S.box('glow', -0.22, 0.14, 0.02, 0.22, 0.42, 0.026, C('#0a3a1e'));
+      for (let k = 0; k < 4; k++) S.box('glow', -0.19, 0.36 - k * 0.06, 0.026, -0.19 + 0.12 + ((k * 37) % 23) * 0.012, 0.375 - k * 0.06, 0.031, C(k % 2 ? '#ff6a5a' : '#5aff8a'));
+      S.box('solid', -0.02, 0, -0.06, 0.02, 0.12, -0.02, C('#2a2a2e'));
+      S.box('solid', -0.1, 0, -0.1, 0.1, 0.012, 0.04, C('#2a2a2e'));
+    }
+    P.box('solid', -0.25, 0.76, 0.42, 0.25, 0.78, 0.58, C('#2a2a2e'));
+    // an office chair
+    P.geo('solid', cyl(0.25, 0.25, 0.03, 10), 0, 0.03, 1.0, C('#2a2a2e'));
+    P.geo('solid', cyl(0.025, 0.025, 0.4, 6), 0, 0.24, 1.0, C('#8a8c90'));
+    P.box('fabric', -0.26, 0.44, 0.76, 0.26, 0.52, 1.24, C('#1a1a1e'));
+    P.box('fabric', -0.24, 0.52, 1.2, 0.24, 1.05, 1.27, C('#1a1a1e'));
+    P.light(0, 1.1, 0.4, '#5aff8a', 0.12);
+    P.collide(-0.85, 0, 0.85, 0.75, 1.3).collide(-0.27, 0.76, 0.27, 1.27, 1.05).shadow(-0.85, 0, 0.85, 1.27, 0.4);
+  }, { use: 'trade', label: 'Check the markets', reach: 1.6, chip: '#0a3a1e' }),
   P_('dining', 'Marble dining table', 'tables', 3200, 6, 'floor', [-1.0, -1.05, 1.0, 1.05], 0.92, 'Four chairs, one slab of marble that weighs more than you.', (P) => F.diningTable(P, { w: 1.7, d: 0.9, col: '#e8e4dc', topKey: 'marble', chairCol: '#2a2a2e', chairs: 4 }), { chip: '#e8e4dc' }),
   // ---------------------------------------------------------------- lamps and plants
   P_('floorLamp', 'Floor lamp', 'lamps', 160, 1, 'floor', [-0.2, -0.2, 0.2, 0.2], 1.7, 'Warm shade, brass stem.', (P) => {

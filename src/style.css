@@ -1516,9 +1516,166 @@ body.in-menu #hint {
   border-color: #d8b46a;
   box-shadow: 0 0 40px rgba(216, 180, 106, 0.25);
 }
+/* ------------------------------------------------------------------ the trading terminal */
+#market {
+  z-index: 5;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1000px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #08140e, #030806);
+  border: 2px solid #5ac88a;
+  border-radius: 10px;
+  pointer-events: auto;
+  padding: 12px 14px;
+  color: #c8f0d4;
+  font-variant-numeric: tabular-nums;
+  overflow-y: auto;
+}
+#market .reg-head {
+  color: #8affb0;
+  letter-spacing: 0.15em;
+}
+.mk-status {
+  color: #ff8a7a;
+  font-size: 13px;
+}
+.mk-status.open {
+  color: #5aff8a;
+}
+.mk-money {
+  font-size: 13px;
+  color: #9ad8b0;
+  margin: 4px 0 8px;
+}
+.mk-money b {
+  color: #e8ffe8;
+}
+.mk-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 12px;
+}
+.mk-row {
+  display: grid;
+  grid-template-columns: 46px 1fr 74px 58px 34px;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+}
+.mk-row.hd {
+  cursor: default;
+  font-size: 11px;
+  color: #6aa880;
+  letter-spacing: 0.08em;
+}
+.mk-row.sel {
+  background: rgba(90, 255, 140, 0.1);
+  border-color: rgba(90, 255, 140, 0.45);
+}
+.mk-row .nm {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #9ad8b0;
+}
+.mk-row .px,
+.mk-row .chg,
+.mk-row .own {
+  text-align: right;
+}
+.mk-row .own {
+  color: #ffd36a;
+}
+#market .up {
+  color: #5aff8a;
+}
+#market .dn {
+  color: #ff6a5a;
+}
+.mk-title small {
+  color: #6aa880;
+}
+.mk-blurb {
+  font-size: 13px;
+  color: #8ab89a;
+  margin: 2px 0 6px;
+}
+.mk-chart {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid rgba(90, 255, 140, 0.25);
+}
+.mk-stats,
+.mk-pos {
+  font-size: 13px;
+  margin-top: 4px;
+}
+.mk-trade {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  align-items: center;
+}
+.mk-qty {
+  display: flex;
+  gap: 4px;
+}
+.mk-qty .reg-btn {
+  min-width: 44px;
+}
+.mk-news {
+  margin-top: 10px;
+  font-size: 13px;
+  border-top: 1px solid rgba(90, 255, 140, 0.2);
+  padding-top: 6px;
+}
+.mk-news div {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mk-news b {
+  display: inline-block;
+  min-width: 70px;
+}
+.mk-news .you b {
+  color: #ffd36a;
+}
+@media (max-width: 760px) {
+  .mk-body {
+    grid-template-columns: 1fr;
+  }
+}
 #shop[data-shop='home'] {
   background: linear-gradient(180deg, #1e1a16, #0e0c0a);
   border-color: #c8b89a;
+}
+#shop[data-shop='swap'] {
+  background: linear-gradient(180deg, #1c1c20, #0a0a0c);
+  border-color: #ff8a2a;
+}
+#shop[data-shop='swap'] .reg-head {
+  color: #ff8a2a;
+  letter-spacing: 0.12em;
+}
+#shop[data-shop='prop'] {
+  background: linear-gradient(180deg, #16202c, #0a0e14);
+  border-color: #d8b46a;
+}
+#shop[data-shop='prop'] .reg-head {
+  color: #e8dcc0;
+  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: 0.12em;
 }
 #shop[data-shop='rs'] {
   background: linear-gradient(180deg, #24201c, #12100e);

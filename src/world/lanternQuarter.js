@@ -149,6 +149,7 @@ export class LanternQuarter {
     // night market stalls in the corners
     const cloth = ['#8a1a2a', '#2a2a7a', '#1a6a6a', '#c08a1a'];
     this.vendorSpots = [];
+    this.stalls = []; // { x, z, ry, m } (SOLE SWAP's board goes by the third)
     [
       [-1, -1],
       [1, -1],
@@ -178,6 +179,7 @@ export class LanternQuarter {
       colliders.addC(x, z, 3.0, 3.0, 2.5);
       const front = new THREE.Vector3(0, 0, -0.5).applyMatrix4(m);
       this.vendorSpots.push({ x: front.x, z: front.z, yaw: ry });
+      this.stalls.push({ x, z, ry, m });
     });
     group.add(wood.mesh(new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
     group.add(stone.mesh(new THREE.MeshLambertMaterial({ vertexColors: true })));

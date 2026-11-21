@@ -243,6 +243,8 @@ export class CityMap {
     };
     site(city.clubSite, '#5a3a6e');
     site(city.gullysSite, '#1a8a90');
+    site(city.galleriaSite, '#8a7a5a');
+    site(city.exchangeSite, '#6a6048');
     if (city.gullysSite) {
       g.fillStyle = '#d8d0c4';
       g.globalAlpha = 0.35;
