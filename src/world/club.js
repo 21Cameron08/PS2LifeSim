@@ -1496,10 +1496,17 @@ export class Club {
     this.vipGateTop = this.vipGate.y1;
   }
 
-  /** Bottle service: a sparkler fizzing on the bottle at `pos` for a few seconds. */
-  sparkle(pos) {
+  /**
+   * Bottle service: sparklers fizzing on the bottle at `pos`. opts.n: how many
+   * (a parade carries them in from opts.from first), opts.time: how long they burn.
+   */
+  sparkle(pos, opts = {}) {
     this.sparkAt = pos.clone();
-    this.sparkT = 9;
+    this.sparkFrom = opts.from ? new THREE.Vector3(opts.from.x, pos.y, opts.from.z) : null;
+    this.sparkN = opts.n ?? 1;
+    this.sparkT = opts.time ?? 9;
+    this.sparkT0 = this.sparkT;
+    this.sparkAnchors = Array.from({ length: this.sparkN }, () => pos.clone());
   }
 
   // ==========================================================================
@@ -1711,8 +1718,21 @@ export class Club {
     if (this.sparkT > 0) {
       this.sparkT -= dt;
       const sp = this.sparks.geometry.attributes.position;
-      const a = this.sparkAt;
+      // the parade: the sparklers walk in from the stairs in a line, then gather round the bottle
+      const walked = this.sparkT0 - this.sparkT;
+      const A = this.sparkAnchors ?? [this.sparkAt];
+      A.forEach((v, j) => {
+        const n = A.length;
+        const spread = n > 1 ? 0.35 : 0;
+        const home = this.sparkAt.clone().add(new THREE.Vector3(Math.cos((j / n) * Math.PI * 2) * spread, 0, Math.sin((j / n) * Math.PI * 2) * spread));
+        if (this.sparkFrom) {
+          const t = Math.min(1, Math.max(0, (walked - j * 0.45) / 4));
+          v.lerpVectors(this.sparkFrom, home, t);
+          v.y = home.y + 0.6 * (1 - t) + Math.abs(Math.sin(walked * 6 + j)) * 0.05 * (1 - t);
+        } else v.copy(home);
+      });
       this.sparkSeeds.forEach(([ph, ang, v], k) => {
+        const a = A[k % A.length];
         const life = (time * v + ph) % 1;
         const r = life * 0.32;
         sp.setXYZ(k, a.x + Math.cos(ang + life * 2) * r, a.y + 0.12 + life * 0.55 - life * life * 0.7, a.z + Math.sin(ang + life * 2) * r);

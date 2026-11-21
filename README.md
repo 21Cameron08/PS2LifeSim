@@ -27,6 +27,8 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
 | Furniture at home | F: your things (or pick up the piece in front of you) · R turn it · E set it down · F put it back | DECOR, TURN, USE |
 | NIGHT RUNNER (the arcade cabinet) | Space / E / ↑ jump (hold for higher) · Esc leave | tap to jump |
 | Register 2 (GULLY'S crew) | items 1-0, Q, W, R, T · Space eat here / to go · Backspace void last · Enter send · Esc step away | the panel's buttons |
+| Drive (your car) | E get in / out · W/S or ↑↓ go and brake (then reverse) · A/D steer · Space handbrake · H horn · R radio | stick, BRAKE, HORN, RADIO, USE |
+| Phone (once you have one) | Tab | PHONE (under your needs) |
 | City map, routes | M (↑↓ pick a place, Enter set a route) | MAP |
 | Sound on/off | pause menu (Sound) | in the pause menu |
 
@@ -62,6 +64,11 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   brokerage with a bar: trade shares in eight made-up companies, buy buildings around the
   city and collect rent, resell sneakers at the night market, and watch your net worth
   climb. See below.
+- **The high life**: **CORSO MOTORS** sells six made-up cars you can drive anywhere (a
+  radio, a horn, traffic that waits for you); **THE CROWN** is a members' club with an
+  infinity pool on the roof of the Meridian tower, with **ORRERY**, a seven-course
+  restaurant, in a glass pavilion up there; **BRIGHTWIRE** sells phones (cabs, valet,
+  bookings, hired help) and home tech. See below.
 - **A nightclub**: **SUBSTATION**, a converted power substation in Ember Row, across the
   road from the Lantern Quarter. Open 10 PM to 4 AM. See below.
 - **A burger joint**: **GULLY'S** in Greenway, a little harbour-town fast food chain
@@ -83,7 +90,8 @@ npm run build    # static site in dist/ — host it anywhere (GitHub Pages, Netl
   shorts, shoes), plus every piece you've bought.
 - **Save**: autosaves to localStorage ("memory card"): position, time, money,
   looks, friendships, needs, what's in your fridge, Gull Box toys, your furniture and
-  where it stands, your shares, buildings and franchise, settings.
+  where it stands, your shares, buildings and franchise, your cars and where you parked
+  them, memberships, bookings, your phone and staff, settings.
 - **Sound**: all synthesised with WebAudio: city rumble, wind, crickets, footsteps,
   horns, distant sirens, UI blips, typewriter ticks.
 
@@ -188,7 +196,11 @@ store it's part of the street: no loading screen.
 - **Sit down** in the booths, on the balcony and on the roof sofas and bench.
 - **VIP balcony**: Celeste on the upper door sells wristbands ($150 on Fridays and Saturdays,
   $100 other nights, card). Emerald booths over the glass rail, the best view of the floor,
-  and bottle service ($200) that arrives with a sparkler and wins over the whole balcony.
+  and **bottle service**: from the house Volta ($200) through Maison Lune Brut ($450) and
+  Rosé ($900) to a Grande Réserve magnum ($2,500) and a six-litre methuselah ($12,000). Every
+  bottle comes with sparklers; the big ones come up the stairs in a sparkler parade, get you
+  a shout-out from the DJ, fill the balcony (your regulars come up from the floor) and the
+  methuselah brings the confetti down. People talk about it on the Exchange's ticker.
 - **The roof terrace**: from the stair landing, out the door and up the fire escape on the
   front of the building. Decking, string lights, patio heaters, sofas, a bench at the parapet
   facing the Lantern Quarter's glowing tree, a roof bar, and people out getting some air. The
@@ -245,10 +257,10 @@ day is about 16 minutes, which is about two meals, one sleep and one shower.
 | Need | Drains | Fills from |
 | --- | --- | --- |
 | Hunger | ~5.5 an hour | the fridge at home (one meal per portion; groceries at HALCYON 24, $18 for 5), GULLY'S (every item has its own value, filled bite by bite), hot dogs and candy at HALCYON 24, fries outside SUBSTATION, vending machines |
-| Energy | ~4.5 an hour, faster on a shift and when hungry | sleeping (until 7 AM, or a two-hour nap), coffee (GULLY'S, HALCYON 24), sodas, sitting on your own sofa, the hot tub, an espresso at the Ticker Bar |
-| Hygiene | ~3.5 an hour, faster on a shift and dancing | a shower (or the penthouse bath), washing up at GULLY'S, the hot tub |
-| Fun | ~4.5 an hour, faster on a shift | TV and music at home, dancing, the club, drinks, the photo booth, the kiddie ride, Gull Box toys, lanterns, fortunes and just being in the Lantern Quarter, shopping, your own furniture (the fish, the home bar, NIGHT RUNNER, the jukebox, the hot tub, admiring your collections), trading, a cocktail after the closing bell, the Harbour Gull, buying a building |
-| Social | ~3 an hour | talking to anyone (a first chat in a while counts most), dancing with someone, the club and GULLY'S crowds, a drink with a broker |
+| Energy | ~4.5 an hour, faster on a shift and when hungry | sleeping (until 7 AM, or a two-hour nap; better with a housekeeper), coffee (GULLY'S, HALCYON 24), sodas, sitting on your own sofa, the hot tub, an espresso at the Ticker Bar or CORSO MOTORS, a lounger at THE CROWN |
+| Hygiene | ~3.5 an hour, faster on a shift and dancing | a shower (or the penthouse bath), washing up at GULLY'S, the hot tub, swimming at THE CROWN |
+| Fun | ~4.5 an hour, faster on a shift | TV and music at home, dancing, the club, drinks, the photo booth, the kiddie ride, Gull Box toys, lanterns, fortunes and just being in the Lantern Quarter, shopping, your own furniture (the fish, the home bar, NIGHT RUNNER, the jukebox, the hot tub, admiring your collections), trading, a cocktail after the closing bell, the Harbour Gull, buying a building, driving (faster is more fun), buying a car, THE CROWN (the pool, the loungers, the fire pits, cabana champagne), ORRERY, TV, the hi-fi and movie night at home |
+| Social | ~3 an hour | talking to anyone (a first chat in a while counts most), dancing with someone, the club and GULLY'S crowds, a drink with a broker, the fire pits at THE CROWN, dinner at ORRERY, bottle service |
 
 When they run low: a warning tells you what would help. Below 15 energy you can't run,
 below 6 you walk slower, and at 0 you pass out: a cab takes you home ($20) and you wake
@@ -385,7 +397,8 @@ ten the guard, Pruitt, walks the last shoppers out.
   hot tub in the corner; an art wall with a neon palm; a home bar; rugs piled on a
   platform; bossa nova. Sit on the sofas. Order anything (several if you like), pay Ines
   or press P, and it's delivered the same day to your storage at home.
-- BRIGHTWIRE, next door, is closed for refit: a wall of TVs still on behind the shutter.
+- **BRIGHTWIRE** (electronics, next door to ROOMSET, Kai): phones and home tech. See
+  *The high life* below.
 - **Shopping**: browse any rack, wall, table or case (E). Each piece shows its price and
   how much status it gives. **Try it on** (you really wear it round the shop; the
   mirrors turn the camera on you) or **bag it**, then **Pay now** (P, or the button in any
@@ -472,6 +485,104 @@ and he'll take your other clothes too (vintage gems and VELLARD hold their value
 and furniture would fetch. Passing $50k, $250k, $1M and $10M gets a moment, a headline
 about you on the Exchange's ticker, and a little status: people notice money.
 
+## The high life: cars, THE CROWN, ORRERY, BRIGHTWIRE
+
+### Cars and CORSO MOTORS
+
+**CORSO MOTORS** is a glass-fronted showroom in Kiln Heights, just north of the Meridian
+tower, open 9 AM to 8 PM. The CORSO MOTORS logo is lit up on a black wall at the back, and
+in front of it the hero car turns slowly on a turntable under four spotlights. Five more
+cars stand on the polished floor, each with a price card on a little lectern. There's an
+espresso lounge with black leather sofas (help yourself to an espresso, once an hour) and
+Vic's sales desk, with a key cabinet and 1:18 models on the sideboard. Nico spends the day
+polishing the Kestrel and browsers wander in to stare at the Rift. Outside: two approved
+used Pips on the forecourt, a lit pylon, flags and the **DELIVERY BAY**.
+
+| Car | Price | Top speed | Character |
+| --- | --- | --- | --- |
+| CORSO Pip (used) | $8,900 | 98 km/h | a city hatch, two careful owners and one careless one |
+| FERRO Strada | $24,000 | 115 km/h | the sensible saloon |
+| KESTREL GT | $68,000 | 156 km/h | long bonnet, straight six |
+| CORSO Spider '68 | $95,000 | 127 km/h | an open roadster; holds its value |
+| HALVARD Monarch | $145,000 | 144 km/h | the car you get driven in |
+| VANTOR Rift | $380,000 | 207 km/h | the supercar; people film you |
+
+- **Buying**: look at any car (or talk to Vic) for prices and stats, pick a colour (the car on
+  the floor changes colour as you choose) and pay from your bank. It's waiting in the
+  delivery bay out front with the keys in it. Vic buys cars back (two thirds of the price;
+  the Spider is a classic, so a little more than you paid). Your best car adds to your
+  status, and your cars count in your net worth.
+- **Test drives**: thirty minutes in any car, two a day, while the showroom's open. Vic
+  won't hand over the keys to the expensive ones unless you look like you could buy one, or
+  if you've been drinking.
+- **Driving**: get in with E. W/S (or ↑↓) to accelerate and brake (then reverse), A/D to
+  steer (sharper at low speed), Space for the handbrake, H for the horn, R for the radio.
+  On a phone: the stick steers and drives, plus BRAKE, RADIO and HORN buttons. A chase camera
+  swings round behind you. Cars bump off buildings, lamp posts and each other; traffic waits
+  for you (and honks); people walking jump out of the way and tell you what they think.
+  Driving's fun. You can't drive into buildings or through the night market, and you can't
+  drive after a drink.
+- **The radio**: six made-up stations playing the game's music (oldies on HARBOUR AM, late
+  lounge, beats, bossa nova, jazz, easy hits), or off. The speedometer shows the station.
+- **Parking**: park anywhere. Your car stays where you left it (it's saved) and shows on the
+  map. The phone's **valet** brings any of your cars round to you ($40).
+
+### THE CROWN (a members' club on the roof of the Meridian tower)
+
+A brass canopy and a red carpet at the foot of the Meridian tower; Felix on the door; a lift
+58 metres up. Membership is $25,000, once; the penthouse comes with it, and an ORRERY
+booking gets you up for dinner. Open 10 AM to 2 AM.
+
+- **The deck**: teak decking over the whole roof, glass all the way round, the city below.
+  An **infinity pool** along the street edge, lit from underneath, that you really walk
+  down into (waist deep; swim a few lengths for fun and hygiene), with the water running to
+  a glass edge and nothing beyond it but Downtown. A row of loungers and white umbrellas
+  (soak up the sun, or look at the stars), two **fire pits** with sofas round them (warm
+  your hands and fall into conversation), two **cabanas** with curtains and daybeds ($600
+  for the day from Margaux, champagne to the cabana $180), and string lights over
+  everything.
+- **THE CROWN BAR**: marble, brass stools, a lit back bar, Remy pouring (a Crown Spritz, a
+  Meridian Martini, champagne by the glass), all on your tab.
+- **Sunset sessions**: DJ Lune in the corner from 6 to 10 PM, under a pink neon.
+- **Members**: a dozen of the city's richest people drift between the loungers, the pool,
+  the fire pits and the bar. They're not always nice to newcomers.
+
+### ORRERY
+
+A glass pavilion on THE CROWN's deck: six tables in white cloth with green velvet chairs,
+pendant lamps, candles, a wine column, Kenji at the pass, and over the room a slowly turning
+brass **orrery**. Dinner 7 to 11 PM, by reservation (Anouk at the door, or by phone), and
+Anouk will only seat you if you're **Sharp** or better.
+
+- **Seven courses**, brought by Theo one at a time: an oyster, tomato tea, a scallop,
+  tagliolini with a lot of black truffle, glazed short rib, a cheese with its own
+  biography, and the Orrery (a chocolate planet that opens when the caramel goes on). Eat
+  each when you're ready; a quarter of an hour passes per course. $420, the **wine
+  pairing** $260 more (a glass with each course). Fills hunger, fun and social; the bill
+  comes in a little brass box.
+
+### BRIGHTWIRE and the phone
+
+**BRIGHTWIRE** (the Galleria, upstairs next to ROOMSET, Kai) has reopened: a wall of twelve
+TVs, a white phone counter, a games pod with beanbags (play NIGHT RUNNER HD on the VOLT
+Station demo), a hi-fi corner with a leather listening chair, a plasma and a home cinema.
+
+- **Home tech**, ordered like ROOMSET's furniture and delivered to your storage: the
+  **BRIGHTWIRE Plasma 50"** (watch TV), the **VOLT Station** (NIGHT RUNNER HD at home), a
+  **hi-fi stack** (put a record on), floor-standing speakers, and a **home cinema** (a
+  screen that rolls down: movie night).
+- **Phones**: the **BRIGHTWIRE Flip** ($480) and the **Flip Gold** ($2,400, and status).
+  Open it with **Tab** (or the PHONE button under your needs):
+  - **Harbour Cabs**: a cab to anywhere on the map, fare by distance.
+  - **Valet**: one of your cars brought round to you.
+  - **ORRERY**: book a table.
+  - **Markets**: the trading terminal, anywhere.
+  - **Bank**: your net worth.
+  - **The Agency**: hired help, paid every Monday. A **housekeeper** ($600 a week) keeps
+    the fridge stocked and the sheets fresh (you sleep better). A **private chef**
+    ($1,400) turns fridge meals into real dinners. A **chauffeur** ($1,800) drives you
+    anywhere, free, from wherever you are. Staff add to your status.
+
 ## Clothes and status
 
 - Every piece is data in `src/game/fashion.js` (all brands made up): basics (free,
@@ -525,13 +636,15 @@ src/
                           the SUBSTATION club (club.js) and the room under it
                           (undercurrent.js), GULLY'S (gullys.js, and the mascot figure in
                           gullyFigure.js), the Halcyon Galleria (galleria.js), furniture
-                          placed at home (homeDecor.js), the HALCYON EXCHANGE (exchange.js)
+                          placed at home (homeDecor.js), the HALCYON EXCHANGE (exchange.js),
+                          CORSO MOTORS (motors.js), THE CROWN and ORRERY (crown.js)
   world/interior/         room/wall builder, furniture kit, baked lighting, apartment layouts
   actors/                 crowd renderer (instanced puppets, walk/carry/dance/sit poses),
                           appearance model, player + camera, pedestrians AI, traffic,
                           clubbers (the club's staff, queue and crowd), diners (GULLY'S
                           crew, customers, orders and trays), shoppers (the Galleria's
-                          staff, mannequins and shoppers), brokers (the Exchange's)
+                          staff, mannequins and shoppers), brokers (the Exchange's),
+                          motorsFolk (CORSO's), crownFolk (THE CROWN's members and staff)
   game/                   clock + save system, needs (needs.js), NPC dialogue data, the
                           store job, the club's dance game (dance.js), photo booth
                           (photobooth.js), theme nights (clubNights.js), bar job
@@ -541,7 +654,8 @@ src/
                           shopping at the Galleria (shopping.js), ROOMSET's furniture
                           catalog (furniture.js), using it at home (homeLife.js), the
                           arcade cabinet's game (nightRunner.js), the stock market
-                          (market.js), property (property.js) and sneaker resale (resale.js)
+                          (market.js), property (property.js) and sneaker resale (resale.js),
+                          cars and driving (cars.js), ORRERY's menu (orrery.js)
   ui/                     HUD, dialogue box, wardrobe, pause menu, title, touch controls,
                           the city map (map.js; its places and hours are game/places.js,
                           the route beam is world/waypoint.js)
@@ -552,7 +666,7 @@ src/
 
 Performance notes: static scenery is merged into one mesh per material and every
 person is drawn with ~20 instanced meshes total (body parts plus what they wear), so a
-frame is roughly 70–190 draw calls (Downtown, with every tower in view, is the busiest). It
+frame is roughly 70–250 draw calls (CORSO MOTORS, with the street seen through all that glass, is the busiest; the showroom cars are four draws each). It
 should run well on integrated GPUs and phones.
 
 ## Roadmap (suggested order)
@@ -561,17 +675,13 @@ The big goal: **lots of cool places to hang out**. Every new space (diner, arcad
 rooftop, karaoke bar, record shop, a 2 AM laundromat, the pier) gets a real walk-in
 interior with the same detail, light and sound as the apartments and the store.
 
-1. **Being rich, phase 4: the high life**: BRIGHTWIRE reopens, a car dealership and
-   cars, a members' club and pool on the Meridian tower's roof, fine dining, hired help,
-   bottle service at SUBSTATION.
-2. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
+1. **More jobs**: the store system (clock, tasks, slip) generalises to other shops:
    noodle bar cook, courier, office temp. Promotions and raises at the store.
-3. **Economy**: bills, shop inventories.
-4. **Cars**: enter/exit parked cars, driving model on the same road graph, parking.
-5. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
-6. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
-7. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
-8. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
+2. **Economy**: bills, shop inventories.
+3. **NPC lives**: homes, workplaces, daily schedules, memory of conversations, dating.
+4. **Art pass**: Blender characters/clothing/furniture as glTF, real animations.
+5. **Weather**: rain with wet-street reflections (very PS2), wind, seasonal events.
+6. **Online (later later)**: a small Node server (WebSocket, e.g. Colyseus) for shared
     streets, chat and visiting apartments; the bank must move server‑side then.
 
 All names, shops and brands in the game are made up.

@@ -388,7 +388,9 @@ export class Clubbers {
     }
 
     // ---------------------------------------------------------------- balcony and roof
-    const fillVip = open ? Math.round((VIP_BUSY[s.weekday] ?? 3) * Math.max(0.4, fill)) : 0;
+    // a big bottle fills the balcony for a while (main.js vipHost sets vipBoost)
+    const boost = this.vipBoostUntil > performance.now() ? this.vipBoost : 0;
+    const fillVip = open ? Math.max(boost, Math.round((VIP_BUSY[s.weekday] ?? 3) * Math.max(0.4, fill))) : 0;
     const fillRoof = open ? Math.round((ROOF_BUSY[s.weekday] ?? 4) * Math.max(0.3, fill)) : 0;
     this.settle(this.vips, fillVip, club.vipSeats, !inside);
     this.settle(this.roofers, fillRoof, [...club.roofStand, ...club.roofSeats], !s.onRoof);

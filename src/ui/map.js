@@ -245,6 +245,12 @@ export class CityMap {
     site(city.gullysSite, '#1a8a90');
     site(city.galleriaSite, '#8a7a5a');
     site(city.exchangeSite, '#6a6048');
+    if (city.motorsSite) {
+      // the showroom, and its forecourt in front
+      const m = city.motorsSite;
+      site({ x0: m.x0 + 0.8, z0: m.z0 + 0.3, x1: m.x1 - 0.8, z1: m.z0 + 18.9 }, '#6a3a3a');
+      site({ x0: m.x0, z0: m.z0 + 18.9, x1: m.x1, z1: m.z1 }, '#a8a49c');
+    }
     if (city.gullysSite) {
       g.fillStyle = '#d8d0c4';
       g.globalAlpha = 0.35;

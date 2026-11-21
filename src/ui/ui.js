@@ -97,6 +97,25 @@ export class UI {
         input.tap(b.dataset.key);
       }),
     );
+    // held buttons (the car's brake and horn)
+    document.querySelectorAll('#touch [data-hold]').forEach((b) => {
+      const k = b.dataset.hold;
+      const up = (e) => {
+        e.preventDefault();
+        input.keys.delete(k);
+        b.classList.remove('on');
+      };
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        input.keys.add(k);
+        input.pressed.add(k);
+        b.classList.add('on');
+      });
+      b.addEventListener('pointerup', up);
+      b.addEventListener('pointercancel', up);
+      b.addEventListener('pointerleave', up);
+    });
     const run = document.querySelector('#touch [data-run]');
     run.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -206,6 +225,21 @@ export class UI {
     if (flags !== this._flags) $('need-flags').textContent = this._flags = flags;
   }
 
+  /** The car HUD: { kmh, name, radio } while you're driving, or null. */
+  setCar(info) {
+    const el = $('car');
+    if (!info) {
+      if (this._car) el.classList.add('hidden');
+      this._car = null;
+      return;
+    }
+    if (!this._car) el.classList.remove('hidden');
+    const c = this._car ?? {};
+    if (info.kmh !== c.kmh) $('car-kmh').textContent = info.kmh;
+    if (info.name !== c.name) $('car-name').textContent = info.name;
+    if (info.radio !== c.radio) $('car-radio').textContent = info.radio;
+    this._car = { ...info };
+  }
   showLocation(name, sub = '') {
     const el = $('location');
     el.innerHTML = `${name}${sub ? `<small>${sub}</small>` : ''}`;

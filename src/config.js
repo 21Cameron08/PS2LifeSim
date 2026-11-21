@@ -75,7 +75,11 @@ export const GALLERIA_SITE = { block: [2, 2], width: 28, depth: 25, floorLift: 0
 // property desk, behind a portico and a bronze gull (src/world/exchange.js).
 export const EXCHANGE_SITE = { block: [3, 3], width: 24, depth: 22, floorLift: 0.015 };
 
-const ALL_SITES = [...Object.entries(APARTMENT_SITES), ['store', STORE_SITE], ['club', CLUB_SITE], ['gullys', GULLYS_SITE], ['galleria', GALLERIA_SITE], ['exchange', EXCHANGE_SITE]];
+// CORSO MOTORS: a glass-fronted car showroom in Kiln Heights, just north of the
+// Meridian tower, with a forecourt on the street (src/world/motors.js).
+export const MOTORS_SITE = { block: [3, 1], width: 32, depth: 24, floorLift: 0.015 };
+
+const ALL_SITES = [...Object.entries(APARTMENT_SITES), ['store', STORE_SITE], ['club', CLUB_SITE], ['gullys', GULLYS_SITE], ['galleria', GALLERIA_SITE], ['exchange', EXCHANGE_SITE], ['motors', MOTORS_SITE]];
 export const siteForBlock = (i, j) => ALL_SITES.find(([, s]) => s.block[0] === i && s.block[1] === j);
 
 export const START = {

@@ -23,6 +23,7 @@
             <svg id="route-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 14 8 10.5 2 14z" /></svg>
             <div><div id="route-name"></div><div id="route-dist" class="sub"></div></div>
           </div>
+          <div id="car" class="panel hidden"><div class="car-speed"><b id="car-kmh">0</b><span>KM/H</span></div><div id="car-name"></div><div id="car-radio"></div></div>
         </div>
         <div id="hud-right">
           <div id="hud-money" class="panel">
@@ -33,6 +34,7 @@
             <div id="unpaid" class="sub hidden"></div>
           </div>
           <div id="needs" class="panel"></div>
+          <button id="phone-btn" class="panel">PHONE</button>
         </div>
       </div>
 
@@ -139,6 +141,9 @@
         <button class="tbtn small map-btn" data-key="KeyM">MAP</button>
         <button class="tbtn small decor-btn" data-key="KeyF">DECOR</button>
         <button class="tbtn small turn-btn" data-key="KeyR">TURN</button>
+        <button class="tbtn drive-btn brake-btn" data-hold="Space">BRAKE</button>
+        <button class="tbtn small drive-btn radio-btn" data-key="KeyR">RADIO</button>
+        <button class="tbtn small drive-btn horn-btn" data-hold="KeyH">HORN</button>
       </div>
       <div id="stick"><div id="stick-knob"></div></div>
     </div>

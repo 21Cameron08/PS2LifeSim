@@ -390,7 +390,7 @@ export class InteriorKit {
   build(group, matOpts = {}, globalOpts = {}) {
     for (const R of this.rooms) {
       R.lampAmb.setRGB(0, 0, 0);
-      R.dayAmb = 0;
+      R.dayAmb = R.f.sky ?? 0; // open-air rooms (a roof terrace) get daylight from the whole sky
     }
     const zone = (k) => (k < 0 ? -1 : (this.rooms[k].zone ?? `#${k}`));
     for (const L of this.lights) {

@@ -114,6 +114,7 @@ export class Galleria {
     if (y > UP - 0.6) {
       if (x < 6.5) return 'mv';
       if (x > 19.5 && z < PART) return 'rs';
+      if (x > 19.5) return 'bw';
       return 'mall';
     }
     if (x < 8.5) return 'rr';
@@ -145,7 +146,7 @@ export class Galleria {
       if (h <= reach && h > best) best = h;
     };
     // the upper floor: everything but the atrium void
-    if ((x < 19.5 && !(x > 8.5 && x < 17.5 && z > 2.5)) || (x >= 19.5 && z < PART)) take(UP);
+    if ((x < 19.5 && !(x > 8.5 && x < 17.5 && z > 2.5)) || x >= 19.5) take(UP);
     // the escalators
     if (x > ESC.lanes[0].x0 - 0.05 && x < ESC.lanes[1].x1 + 0.05 && z > ESC.zTop - 0.02 && z < ESC.zBot + 0.3) take(Math.min(UP, slopeY(z) + TREAD));
     return o.y + best;
@@ -193,6 +194,7 @@ export class Galleria {
       zone: 'mv',
     });
     kit.room('rs', 19.5, 0, W, PART, { floor: 'woodOak', floorColor: '#d8c8b0', wall: 'plaster', wallColor: '#ece6dc', ceil: '#f2efe8', ceilKey: 'plaster', base: '#b8aa94', trim: '#e8dcc8', y0: UP, zone: 'rs' });
+    kit.room('bw', 19.5, PART, W, D, { floor: 'wallTile', floorColor: '#dfe5ea', wall: 'plaster', wallColor: '#e6ecf0', ceil: '#f2f6f8', ceilKey: 'plaster', base: '#1a1e24', trim: '#1a1e24', y0: UP, zone: 'bw' });
 
     // ---------------------------------------------------------------- walls
     const upperCut = { y0: GH, y1: H, noTrim: true }; // ground-floor walls stop at the slab
@@ -224,7 +226,26 @@ export class Galleria {
       open: spans([[0, 0.6], [0.6, 6.4, win(UP + 0.4, UP + 3.2, '#a8844a')], [6.4, 7.0], [7.0, 9.0, { y0: UP, y1: UP + 2.9, kind: 'opening', trim: '#a8844a' }], [9.0, 9.6], [9.6, 16.4, win(UP + 0.4, UP + 3.2, '#a8844a')], [16.4, D]], lowerCut),
     });
     // ROOMSET: a display window and an open doorway; BRIGHTWIRE behind its shutter
-    kit.wall('z', 19.5, 0, D, { t: 0.2, open: spans([[0, 0.8], [0.8, 4.4, win(UP + 0.4, UP + 3.0, '#e8dcc8')], [4.4, 5.0], [5.0, 7.2, { y0: UP, y1: UP + 2.9, kind: 'opening', trim: '#e8dcc8' }], [7.2, D]], lowerCut) });
+    kit.wall('z', 19.5, 0, D, {
+      t: 0.2,
+      open: spans(
+        [
+          [0, 0.8],
+          [0.8, 4.4, win(UP + 0.4, UP + 3.0, '#e8dcc8')],
+          [4.4, 5.0],
+          [5.0, 7.2, { y0: UP, y1: UP + 2.9, kind: 'opening', trim: '#e8dcc8' }],
+          [7.2, 12.6],
+          // BRIGHTWIRE: a window, the door, a window (a little wall between, so the trims never meet)
+          [12.6, 13.7, win(UP + 0.3, UP + 3.0, '#1a1e24', [1, 1])],
+          [13.7, 13.95],
+          [13.95, 15.65, { y0: UP, y1: UP + 2.9, kind: 'opening', trim: '#5ae8ff' }],
+          [15.65, 15.9],
+          [15.9, 16.7, win(UP + 0.3, UP + 3.0, '#1a1e24', [1, 1])],
+          [16.7, D],
+        ],
+        lowerCut,
+      ),
+    });
     kit.wall('x', PART, 19.6, W, { t: 0.2, open: spans([[19.6, W]], lowerCut) });
 
     // daylight from the glass roof, and spilling across the balconies
@@ -240,6 +261,7 @@ export class Galleria {
     this.buildSplitgrain(kit, P);
     this.buildVellard(kit, P);
     this.buildRoomset(kit, P);
+    this.buildBrightwire(kit, P);
     this.buildClosedFronts(kit, P);
   }
 
@@ -913,23 +935,75 @@ export class Galleria {
     Pd.light(0, 2.3, 0, '#ffe2b8', 0.45, true);
   }
 
-  // ---------------------------------------------------------------- the closed shop upstairs
-  buildClosedFronts(kit, P) {
+  // ---------------------------------------------------------------- BRIGHTWIRE (upstairs, east, behind ROOMSET)
+  // Electronics: a wall of TVs, the phone counter, a games demo pod, a hi-fi corner.
+  // The home gear is the real catalog pieces (game/furniture.js, cat 'tech'), ordered
+  // here and delivered to your storage like ROOMSET's; the phones are sold at the counter.
+  buildBrightwire(kit, P) {
     const y = UP;
-    // BRIGHTWIRE: shutters down over a wall of TVs, still on
-    const B = P(19.4, 14.6, -R90, y);
-    B.box('solid', -2.05, 0.2, 0, 2.05, 3.1, 0.05, C('#0a0e14'));
+    const disp = (id, label, x, z, yaw, items) => this.displays.push({ id, shop: 'bw', label, stand: { ...xz(this.w(x, z)), y: this.origin.y + y }, yaw, items });
+    const put = (id, x, z, r = 0) => FURN[id].build(P(x, z, r, y), { variant: 0, dyn: [] });
+    const cyan = '#5ae8ff';
+    // the TV wall (the east wall): twelve screens all showing the same thing
+    const T = P(W, 14.6, -R90, y);
+    T.box('solid', -2.0, 0.45, 0, 2.0, 3.05, 0.05, C('#0a0e14'));
     for (let r = 0; r < 3; r++)
-      for (let c = 0; c < 3; c++) {
-        const x = -1.78 + c * 1.2;
-        const yy = 0.45 + r * 0.85;
-        B.box('solid', x, yy, 0.05, x + 1.15, yy + 0.7, 0.1, C('#1a1a1e'));
-        B.quad('tv', [x + 0.05, yy + 0.05, 0.106], [x + 1.1, yy + 0.05, 0.106], [x + 1.1, yy + 0.65, 0.106], [x + 0.05, yy + 0.65, 0.106], [0, 0, 1], [0, 0, 1, 1]);
+      for (let c = 0; c < 4; c++) {
+        const x = -1.9 + c * 0.96;
+        const yy = 0.55 + r * 0.82;
+        T.box('solid', x, yy, 0.05, x + 0.9, yy + 0.74, 0.09, C('#16181c'));
+        T.panel('tv', x + 0.04, yy + 0.04, x + 0.86, yy + 0.7, 0.096);
       }
-    for (let k = 0; k < 16; k++) B.box('solid', -2.05, 0.2 + k * 0.18, 0.16, 2.05, 0.24 + k * 0.18, 0.2, C('#8a8c90'));
-    B.panel('mSigns', -1.5, 3.2, 1.5, 3.62, 0.006, msignUV('bright'));
-    B.panel('mSigns', 1.05, 1.6, 1.9, 2.3, 0.205, msignUV('refit'));
-    B.light(0, 1.5, 0.5, '#5ae8ff', 0.4);
+    T.box('glow', -2.0, 3.05, 0.0, 2.0, 3.09, 0.05, C(cyan));
+    T.light(0, 1.8, 0.9, '#8ad8ff', 0.45);
+    // the phone counter: white, lit from underneath; Kai behind it
+    const K = P(22.9, 14.6, 0, y);
+    K.box('solid', -0.3, 0.08, -0.85, 0.3, 0.95, 0.85, C('#f2f4f6'));
+    K.box('glow', -0.31, 0.02, -0.86, 0.31, 0.08, 0.86, C(cyan));
+    K.box('solid', -0.34, 0.95, -0.9, 0.34, 0.99, 0.9, C('#e0e6ea'), { bottom: true });
+    for (let k = 0; k < 4; k++) {
+      const z = -0.6 + k * 0.4;
+      K.box('solid', -0.2, 0.99, z - 0.04, -0.1, 1.0, z + 0.04, C('#c8ccd0'));
+      K.geo('solid', new THREE.BoxGeometry(0.07, 0.13, 0.012), -0.15, 1.07, z, C(k === 3 ? '#d8b46a' : '#1a1a1e'), -R90, 1, 1, 1, -0.25);
+      K.geo('glow', new THREE.BoxGeometry(0.058, 0.11, 0.004), -0.143, 1.072, z, C(k % 2 ? '#5a8aff' : '#5ae8a0'), -R90, 1, 1, 1, -0.25);
+    }
+    K.collide(-0.34, -0.9, 0.34, 0.9, 1.0).shadow(-0.34, -0.9, 0.34, 0.9, 0.45);
+    this.tills.bw = { stand: xz(this.w(22.2, 14.0)), yaw: R90 };
+    this.staffSpots.kai = { ...xz(this.w(23.6, 14.6)), y: this.origin.y + y, yaw: -R90 };
+    this.phoneStand = { ...xz(this.w(22.2, 15.1)), y: this.origin.y + y };
+    // the games pod against the ROOMSET wall: a white desk, a big screen, two beanbags
+    const G = P(20.9, PART + 0.11, 0, y);
+    G.box('solid', -0.8, 0, 0, 0.8, 0.7, 0.45, C('#f2f4f6'));
+    G.box('glow', -0.8, 0.0, 0.45, 0.8, 0.04, 0.455, C('#ff6ac8'));
+    G.box('solid', -0.75, 0.95, 0, 0.75, 1.85, 0.06, C('#141418'));
+    G.panel('tv', -0.71, 0.99, 0.71, 1.81, 0.066);
+    G.box('solid', -0.2, 0.7, 0.1, 0.1, 0.8, 0.35, C('#e8e8ec'));
+    G.collide(-0.8, 0, 0.8, 0.45, 0.7);
+    put('beanbag', 20.45, 13.55);
+    put('beanbag', 21.35, 13.55);
+    this.gamesPod = { ...xz(this.w(20.9, 13.0)), y: this.origin.y + y };
+    // the plasma on the same wall, the cinema on the front wall, the hi-fi in the corner
+    put('plasma', 23.75, PART + 0.11);
+    put('cinema', 21.3, D - 0.15, PI);
+    put('hifi', 24.65, D - 0.15, PI);
+    F.armchair(P(24.65, 14.95, 0, y), { col: '#1a1a1e', style: 'modern' });
+    this.seats.push({ ...xz(this.w(24.65, 15.4)), y: this.origin.y + y, yaw: 0, out: xz(this.w(25.6, 15.4)), mall: true, showroom: 'the listening chair' });
+    disp('bw-screens', 'Screens: the plasma and the home cinema', 21.3, 15.6, 0, ['plasma', 'cinema']);
+    disp('bw-audio', 'Hi-fi and speakers', 25.6, 15.9, 0, ['hifi', 'speakers']);
+    disp('bw-games', 'Games', 21.9, 13.2, PI, ['console']);
+    // ceiling: two long light strips and a cyan line round the top of the walls
+    for (const z of [13.4, 15.8]) {
+      P(22.75, z, 0, y).box('solid', -2.6, H - y - 0.07, -0.08, 2.6, H - y, 0.08, C('#e8ecf0'));
+      P(22.75, z, 0, y).box('glow', -2.55, H - y - 0.075, -0.04, 2.55, H - y - 0.07, 0.04, C('#f2f8ff'));
+      P(22.75, z, 0, y).light(-1.4, H - y - 0.4, 0, '#eef6ff', 0.4, true).light(1.4, H - y - 0.4, 0, '#eef6ff', 0.4, true);
+    }
+    P(22.75, PART + 0.006, 0, y).box('glow', -3.2, 2.95, 0, 3.2, 2.98, 0.01, C(cyan));
+    // the sign over the door, out on the walkway
+    P(19.4, 14.8, -R90, y).panel('mSigns', -1.5, 3.2, 1.5, 3.62, 0.006, msignUV('bright'));
+  }
+
+  // ---------------------------------------------------------------- the people looking in
+  buildClosedFronts(kit, P) {
     // people stop to look in the windows
     this.lookouts.push({ ...xz(this.w(18.6, 14.6)), y: this.origin.y + UP, yaw: R90 });
     this.lookouts.push({ ...xz(this.w(18.6, 2.6)), y: this.origin.y + UP, yaw: R90 });
@@ -1293,7 +1367,12 @@ export class Galleria {
     const sunUp = smoothstep(-0.05, 0.3, env.sky.uniforms.sunDir.value.y);
     u.uDayColor.value.copy(env.hemi.color).multiplyScalar(env.hemi.intensity * 0.35).add(env.sun.color.clone().multiplyScalar(sunUp * env.sun.intensity * 0.08));
     if (this.kit.glowMat) this.kit.glowMat.color.setScalar(open ? 1.25 : 0.35);
-    if (this.kit.screenMat) this.kit.screenMat.color.setScalar(open ? 1 : 0.2);
+    if (this.kit.screenMat) this.kit.screenMat.color.setScalar(open ? 1.4 : 0.2);
+    // BRIGHTWIRE's TVs (the screen texture is shared with the flats, which draw it while you're home)
+    if (near && !s.home && (this.tvTick = (this.tvTick ?? 0) - dt) <= 0) {
+      this.tvTick = 0.1;
+      this.tex.tv.draw(time, open);
+    }
     const night = env.night ?? 1 - sunUp;
     this.signMat.emissiveIntensity = 0.25 + night * 0.9 * (open ? 1 : 0.5);
     this.poolMat.opacity = night * (open ? 0.35 : 0.12);

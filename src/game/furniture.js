@@ -26,6 +26,7 @@ export const CATS = [
   ['art', 'Art'],
   ['big', 'Big ticket'],
   ['collect', 'Collections'],
+  ['tech', 'Home tech'],
 ];
 
 const P_ = (id, name, cat, price, decor, kind, b, h, desc, build, extra = {}) => ({ id, name, cat, price, decor, kind, box: b, h, desc, build, ...extra });
@@ -310,6 +311,73 @@ export const FURNITURE = [
       c.dyn.push({ type: 'photo', idx: k, m: P.m.clone().multiply(trs(x, 1.5, 0.037)), w: 0.17, h: 0.52 });
     }
   }, { use: 'photos', label: 'Look at your photos', chip: '#141418' }),
+  // ---------------------------------------------------------------- home tech (BRIGHTWIRE)
+  P_('plasma', 'BRIGHTWIRE Plasma 50"', 'tech', 2400, 4, 'wall', [-0.68, 0, 0.68, 0.1], 0, 'Fifty inches, a glass bezel, a picture so sharp the weather looks expensive.', (P) => {
+    P.box('solid', -0.68, 0.95, 0, 0.68, 1.75, 0.07, C('#141418'));
+    P.panel('tv', -0.64, 0.99, 0.64, 1.71, 0.076);
+    P.box('glow', -0.05, 0.965, 0.07, 0.05, 0.975, 0.078, C('#5ae8ff'));
+    P.box('solid', -0.5, 0.3, 0, 0.5, 0.62, 0.38, C('#1a1a1e')); // a low unit underneath
+    P.box('glow', -0.48, 0.58, 0.38, 0.48, 0.6, 0.386, C('#2a6a8a'));
+    P.collide(-0.5, 0, 0.5, 0.4, 0.62);
+  }, { use: 'watch', label: 'Watch TV', reach: 1.6, chip: '#141418' }),
+  P_('console', 'VOLT Station + NIGHT RUNNER', 'tech', 650, 2, 'floor', [-0.5, 0, 0.5, 0.45], 1.1, 'The console everyone queued for, a 28" set on a low cabinet, and NIGHT RUNNER HD.', (P) => {
+    P.box('wood', -0.5, 0, 0, 0.5, 0.45, 0.45, C('#2a2a2e'));
+    P.box('solid', -0.42, 0.45, 0.05, 0.42, 1.0, 0.4, C('#1a1a1e'));
+    P.box('glow', -0.36, 0.5, 0.4, 0.36, 0.94, 0.406, C('#14204a'));
+    P.box('glow', -0.3, 0.55, 0.406, 0.3, 0.57, 0.41, C('#5a4a8a'));
+    P.box('glow', -0.1, 0.57, 0.406, -0.07, 0.62, 0.41, C('#5ae8ff'));
+    P.box('solid', -0.3, 0.06, 0.45, 0.05, 0.16, 0.455, C('#e8e8ec')); // the console in its cubby
+    P.box('glow', 0.0, 0.1, 0.455, 0.03, 0.12, 0.46, C('#5aff8a'));
+    P.box('solid', 0.12, 0.45, 0.22, 0.3, 0.48, 0.34, C('#e8e8ec')); // a controller
+    P.collide(-0.5, 0, 0.5, 0.45, 1.0).shadow(-0.5, 0, 0.5, 0.45, 0.4);
+    P.light(0, 0.8, 0.6, '#5a8aff', 0.1);
+  }, { use: 'arcade', label: 'Play NIGHT RUNNER HD', chip: '#e8e8ec' }),
+  P_('hifi', 'Hi-fi stack', 'tech', 3800, 5, 'floor', [-0.9, 0, 0.9, 0.45], 1.2, 'A turntable on a glass rack, a valve amplifier, two speakers taller than a child.', (P) => {
+    // the rack: glass shelves on chrome posts
+    for (const [x, z] of [
+      [-0.34, 0.02],
+      [0.31, 0.02],
+      [-0.34, 0.39],
+      [0.31, 0.39],
+    ])
+      P.box('solid', x, 0, z, x + 0.03, 0.82, z + 0.03, C('#c8ccd0'));
+    for (const y of [0.1, 0.42, 0.8]) P.box('glass', -0.36, y, 0.0, 0.36, y + 0.02, 0.44);
+    P.box('solid', -0.24, 0.12, 0.05, 0.24, 0.3, 0.38, C('#2a2a2e')); // the amp
+    for (const x of [-0.14, 0, 0.14]) P.geo('glow', cyl(0.025, 0.025, 0.06, 8), x, 0.33, 0.2, C('#ffa040'));
+    P.box('wood', -0.22, 0.44, 0.05, 0.22, 0.52, 0.4, C('#6a4a32')); // the turntable
+    P.geo('solid', cyl(0.15, 0.15, 0.012, 20), 0, 0.53, 0.22, C('#141418'));
+    P.geo('solid', cyl(0.05, 0.05, 0.014, 12), 0, 0.535, 0.22, C('#c43a2a'));
+    for (const x of [-0.72, 0.72]) {
+      P.box('wood', x - 0.17, 0, 0.04, x + 0.17, 1.15, 0.42, C('#3a2a1e'));
+      P.geo('solid', cyl(0.12, 0.12, 0.02, 14), x, 0.35, 0.425, C('#1a1a1e'), 0, 1, 1, 1, Math.PI / 2);
+      P.geo('solid', cyl(0.06, 0.06, 0.02, 12), x, 0.75, 0.425, C('#1a1a1e'), 0, 1, 1, 1, Math.PI / 2);
+      P.geo('solid', cyl(0.03, 0.03, 0.02, 10), x, 0.98, 0.425, C('#c8a050'), 0, 1, 1, 1, Math.PI / 2);
+    }
+    P.collide(-0.9, 0, 0.9, 0.45, 1.15).shadow(-0.9, 0, 0.9, 0.45, 0.4);
+  }, { use: 'hifi', label: 'Put a record on the hi-fi', chip: '#3a2a1e' }),
+  P_('speakers', 'Floor-standing speakers', 'tech', 1600, 3, 'floor', [-0.75, 0, 0.75, 0.4], 1.2, 'A pair of black towers. They make the jukebox sound like a phone.', (P) => {
+    for (const x of [-0.58, 0.58]) {
+      P.box('wood', x - 0.16, 0, 0.02, x + 0.16, 1.18, 0.38, C('#141418'));
+      for (const [y, r] of [
+        [0.3, 0.11],
+        [0.62, 0.08],
+        [0.95, 0.03],
+      ])
+        P.geo('solid', cyl(r, r, 0.02, 14), x, y, 0.385, C('#2a2a2e'), 0, 1, 1, 1, Math.PI / 2);
+    }
+    P.collide(-0.75, 0, 0.75, 0.4, 1.2).shadow(-0.75, 0, 0.75, 0.4, 0.35);
+  }, { chip: '#141418' }),
+  P_('cinema', 'Home cinema', 'tech', 12000, 9, 'wall', [-1.3, 0, 1.3, 0.3], 0, 'A 120" screen that rolls down from a slot in a black bar, a projector, surround sound. Movie night.', (P) => {
+    P.box('solid', -1.3, 2.3, 0, 1.3, 2.45, 0.16, C('#141418')); // the bar the screen rolls out of
+    P.box('solid', -1.22, 0.85, 0.06, 1.22, 2.3, 0.07, C('#f2f2f0')); // the screen
+    P.panel('tv', -1.18, 0.9, 1.18, 2.25, 0.076);
+    P.box('solid', -1.22, 0.8, 0.05, 1.22, 0.85, 0.09, C('#141418')); // weighted bottom bar
+    for (const x of [-1.15, 1.15]) {
+      P.box('wood', x - 0.12, 0, 0.0, x + 0.12, 0.7, 0.26, C('#141418'));
+      P.geo('solid', cyl(0.07, 0.07, 0.02, 12), x, 0.45, 0.265, C('#2a2a2e'), 0, 1, 1, 1, Math.PI / 2);
+    }
+    P.collide(-1.27, 0, -1.03, 0.28, 0.7).collide(1.03, 0, 1.27, 0.28, 0.7);
+  }, { use: 'cinema', label: 'Movie night', reach: 2.2, chip: '#f2f2f0' }),
 ];
 
 export const FURN = Object.fromEntries(FURNITURE.map((f) => [f.id, f]));

@@ -182,6 +182,12 @@ export class Pedestrians {
       }
       c.visible = !npc.hidden && distP < 190;
       if (npc.hidden) continue;
+      // stepped out of the way of a car (see game/cars.js): drift back onto the pavement
+      if (npc.ox || npc.oz) {
+        npc.ox = damp(npc.ox, 0, 0.7, dt);
+        npc.oz = damp(npc.oz, 0, 0.7, dt);
+        if (Math.abs(npc.ox) + Math.abs(npc.oz) < 0.01) npc.ox = npc.oz = 0;
+      }
 
       let moving = false;
       let wantYaw = npc.yaw;
@@ -224,8 +230,8 @@ export class Pedestrians {
           }
           if (npc.mode === 'walk') {
             const p = this.onLoop(npc.loop, npc.s, npc.dir, npc.lane);
-            npc.pos.x = p.x;
-            npc.pos.z = p.z;
+            npc.pos.x = p.x + (npc.ox ?? 0);
+            npc.pos.z = p.z + (npc.oz ?? 0);
             wantYaw = Math.atan2(p.mx, p.mz);
             if (rng.chance(dt * 0.012)) {
               npc.mode = 'idle';
@@ -240,8 +246,8 @@ export class Pedestrians {
             npc.dir = npc.nextDir;
             npc.mode = 'walk';
           } else {
-            npc.pos.x = npc.crossFrom.x + (npc.crossTo.x - npc.crossFrom.x) * npc.crossT;
-            npc.pos.z = npc.crossFrom.y + (npc.crossTo.y - npc.crossFrom.y) * npc.crossT;
+            npc.pos.x = npc.crossFrom.x + (npc.crossTo.x - npc.crossFrom.x) * npc.crossT + (npc.ox ?? 0);
+            npc.pos.z = npc.crossFrom.y + (npc.crossTo.y - npc.crossFrom.y) * npc.crossT + (npc.oz ?? 0);
             wantYaw = Math.atan2(npc.crossTo.x - npc.crossFrom.x, npc.crossTo.y - npc.crossFrom.y);
           }
         }

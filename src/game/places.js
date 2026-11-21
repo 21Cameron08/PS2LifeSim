@@ -18,6 +18,8 @@ export const PLACE_ICONS = {
   tree: 'M8 1a4.8 4.8 0 0 1 2.6 8.8H9v4.7H7V9.8H5.4A4.8 4.8 0 0 1 8 1z',
   bag: 'M2.5 5h11l.8 9.5H1.7zM5.4 5V3.8a2.6 2.6 0 0 1 5.2 0V5H9.2V3.8a1.2 1.2 0 0 0-2.4 0V5z',
   chart: 'M1 1.5h1.6v11.4H15v1.6H1zM3.6 10.6l3.2-4 2.4 2 3.6-4.8-1.4-.1L12.9 2l.6 3.4-1-.9-3.3 4.4-2.4-2-2 2.6z',
+  crown: 'M1.5 12.5V4.5l3.2 3.2L8 2.5l3.3 5.2 3.2-3.2v8zM1.5 13.3h13v1.6h-13z',
+  car: 'M2 8.2 3.6 4.4A1.5 1.5 0 0 1 5 3.5h6a1.5 1.5 0 0 1 1.4.9L14 8.2a1.4 1.4 0 0 1 1 1.3V12H1V9.5a1.4 1.4 0 0 1 1-1.3zM3 12.5h3V14a.8.8 0 0 1-.8.8H3.8A.8.8 0 0 1 3 14zm7 0h3V14a.8.8 0 0 1-.8.8h-1.4A.8.8 0 0 1 10 14z',
 };
 
 /**
@@ -26,7 +28,7 @@ export const PLACE_ICONS = {
  *               needs() -> need keys it fills, big (always labelled) }
  */
 export function buildPlaces(w) {
-  const { city, apts, state, store, job, gullys, club, lantern, park } = w;
+  const { city, apts, state, store, job, gullys, club, lantern, park, motors, crown } = w;
   const P = [];
   for (const a of apts.list) {
     const home = () => a.id === state.home;
@@ -147,6 +149,42 @@ export function buildPlaces(w) {
       big: () => true,
       hidden: () => !state.seen?.undercurrent,
     });
+  if (motors)
+    P.push({
+      id: 'motors',
+      icon: () => 'car',
+      color: () => '#ff6a5a',
+      at: { x: motors.outsideSpot.x, z: motors.outsideSpot.z },
+      name: () => 'CORSO MOTORS',
+      sub: () => (state.cars?.length ? 'Car showroom · sell yours back to Vic, test drives' : 'Car showroom · from $8,900 · test drives · free espresso'),
+      status: (h) => (h >= 9 && h < 20 ? { text: 'OPEN · until 8 PM', open: true } : { text: 'OPENS 9 AM', open: false }),
+      needs: () => ['fun', 'energy'],
+      big: () => true,
+    });
+  if (crown) {
+    const member = () => !!state.crownMember || state.home === 'penthouse';
+    P.push({
+      id: 'crown',
+      icon: () => 'crown',
+      color: () => '#d8b46a',
+      at: { x: crown.lobbyDoor.x, z: crown.lobbyDoor.z + 1.2 },
+      name: () => 'THE CROWN',
+      sub: () => (member() ? 'Your club: pool, cabanas, fire pits, sunset sessions' : 'Rooftop members\' club on the Meridian tower · $25,000 to join'),
+      status: (h) => (h >= 10 || h < 2 ? { text: h >= 18 && h < 22 ? 'SUNSET SESSION' : 'OPEN · until 2 AM', open: true } : { text: 'OPENS 10 AM', open: false }),
+      needs: () => ['fun', 'energy', 'social', 'hygiene'],
+      big: () => true,
+    });
+    P.push({
+      id: 'orrery',
+      icon: () => 'crown',
+      color: () => '#f0d8a0',
+      at: { x: crown.lobbyDoor.x + 0.6, z: crown.lobbyDoor.z + 1.8 },
+      name: () => 'ORRERY',
+      sub: () => (state.orrery ? `Seven courses on the roof · your table: ${((state.orrery.hour + 11) % 12) + 1} PM` : 'Seven courses on the roof · book with Anouk (or by phone) · dress Sharp'),
+      status: (h) => (h >= 19 && h < 23 ? { text: 'SERVING · until 11', open: true } : { text: 'DINNER 7 - 11 PM', open: false }),
+      needs: () => ['hunger', 'fun', 'social'],
+    });
+  }
   // the street machines: drawn small, not in the list
   const small = city.interactables.filter((it) => it.type === 'atm' || it.type === 'vending').map((it) => ({ type: it.type, x: it.x, z: it.z }));
   return { list: P, small };

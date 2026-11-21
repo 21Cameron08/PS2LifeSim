@@ -65,6 +65,12 @@ export class HomeLife {
         return this.arcade();
       case 'jukebox':
         return this.jukebox();
+      case 'hifi':
+        return this.hifi();
+      case 'watch':
+        return this.watch();
+      case 'cinema':
+        return this.cinema();
       case 'tub':
         return this.tub();
       case 'trade':
@@ -177,6 +183,68 @@ export class HomeLife {
           },
         })),
         ...(this.audio.music ? [{ label: 'Stop the record', fn: () => (this.ui.closeDialog(), this.audio.stopMusic()) }] : []),
+        { label: 'Leave it', fn: () => this.ui.closeDialog() },
+      ],
+    });
+  }
+
+  /** The plasma: half an hour of whatever's on. */
+  watch() {
+    const h = (this.clock.minutes / 60) % 24;
+    const shows = h >= 22 || h < 5 ? ['a black-and-white film about a lighthouse', 'the late news, then a documentary about deep-sea fish', 'a shopping channel selling a blender you now need'] : h < 12 ? ['a cooking show where everything is made with butter', 'cartoons, unironically', 'a breakfast show interviewing a man about his giant marrow'] : ['a quiz show you get every answer right on from the sofa', 'harbour racing, live', 'a soap opera you swear you will not get into'];
+    const show = this.talk.pick(shows);
+    this.dialog({
+      name: 'BRIGHTWIRE PLASMA',
+      text: `On now: ${show}.`,
+      choices: [
+        { label: 'Watch for half an hour', fn: () => this.pass(30, { fun: 9, energy: 3 }, 'WATCHING', () => this.ui.toast(`Thirty minutes of ${show}. The picture really is incredible.`)) },
+        { label: 'Not now', fn: () => this.ui.closeDialog() },
+      ],
+    });
+  }
+
+  /** The home cinema: a whole film, the lights down, popcorn. */
+  cinema() {
+    const films = [
+      ['HARBOUR NOIR', 'rain, a saxophone, a detective who never takes off his hat'],
+      ['THE LAST GULL', 'a gull, a storm, and you are not crying, it is the surround sound'],
+      ['NIGHT RUNNER: THE MOVIE', 'terrible, wonderful, the runner has a love interest now'],
+      ['ORRERY', 'a slow film about a clockmaker that turns out to be about everything'],
+    ];
+    this.dialog({
+      name: 'HOME CINEMA',
+      text: 'The screen hums down from the ceiling. What are we watching?',
+      choices: [
+        ...films.map(([title, blurb]) => ({
+          label: title,
+          fn: () =>
+            this.pass(110, { fun: 28, energy: 6, social: 2 }, 'MOVIE NIGHT', () => {
+              this.audio.tone(220, 'sine', 0.04, 0.6);
+              this.ui.toast(`${title}: ${blurb}. Two hours gone, the credits rolling, popcorn everywhere.`);
+            }),
+        })),
+        { label: 'Not tonight', fn: () => this.ui.closeDialog() },
+      ],
+    });
+  }
+
+  /** The hi-fi: like the jukebox, but it sounds better and you have more opinions. */
+  hifi() {
+    this.dialog({
+      name: 'HI-FI',
+      text: 'Valves warming up, the needle hovering. You pull a record from the shelf.',
+      choices: [
+        ...RECORDS.slice(0, 4).map((r) => ({
+          label: r.label.replace(/^[A-E]\d · /, ''),
+          fn: () => {
+            this.ui.closeDialog();
+            this.audio.tone(140, 'sine', 0.03, 0.3);
+            this.audio.startMusic(r.style);
+            this.needs.give({ fun: 4, energy: 2 });
+            this.ui.toast(`${r.line} It sounds like the band is in the room.`);
+          },
+        })),
+        ...(this.audio.music ? [{ label: 'Lift the needle', fn: () => (this.ui.closeDialog(), this.audio.stopMusic()) }] : []),
         { label: 'Leave it', fn: () => this.ui.closeDialog() },
       ],
     });

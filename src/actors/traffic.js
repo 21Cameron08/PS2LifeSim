@@ -229,6 +229,7 @@ export class Traffic {
 
   update(dt, playerPos, peds, night) {
     this.honk = false;
+    this.obstacles ??= [];
     const cars = this.cars;
     for (const car of cars) {
       const f = car.fwd;
@@ -261,6 +262,8 @@ export class Traffic {
       };
       people(playerPos.x, playerPos.z, true);
       for (const p of peds) if (!p.hidden) people(p.pos.x, p.pos.z, false);
+      // your cars: the one you're driving counts as you (they honk), parked ones don't
+      for (const o of this.obstacles) people(o.x, o.z, o.you);
 
       if (car.ghost > 0) {
         car.ghost -= dt;

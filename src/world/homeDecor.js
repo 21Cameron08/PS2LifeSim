@@ -274,6 +274,8 @@ export class HomeDecor {
       S.group.add(mesh);
     }
     if (!tk.glow.empty) S.group.add(new THREE.Mesh(tk.glow.build(), kit.glowMat));
+    // screens (the plasma, the cinema) show whatever the flat's TV channel is showing
+    if (!tk.screen.empty) S.group.add(new THREE.Mesh(tk.screen.build(), kit.screenMat ?? (this.screenMat ??= new THREE.MeshBasicMaterial({ map: kit.tex.tv.tex, fog: false }))));
     if (!tk.glass.empty) {
       const g = new THREE.Mesh(tk.glass.build(), kit.glassMat);
       g.renderOrder = 5;

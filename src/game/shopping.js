@@ -21,11 +21,13 @@ const SHOPS = {
   sg: { name: 'SPLITGRAIN', staff: 'kez', bag: BRANDS.splitgrain.bag },
   mv: { name: 'MAISON VELLARD', staff: 'celeste', bag: BRANDS.vellard.bag },
   rs: { name: 'ROOMSET', staff: 'ines', bag: null, furniture: true },
+  bw: { name: 'BRIGHTWIRE', staff: 'kai', bag: null, furniture: true },
 };
-const UPSTAIRS = ['mv', 'rs'];
+const UPSTAIRS = ['mv', 'rs', 'bw'];
+const FURN_SHOPS = ['rs', 'bw'];
 /** Clothes are ITEMs; ROOMSET's stock is furniture. Wishes for furniture are 'f:<id>'. */
 export const lookup = (id) => (id?.startsWith('f:') ? FURN[id.slice(2)] : ITEM[id]);
-const itemOf = (id, shop) => (shop === 'rs' ? FURN[id] : ITEM[id]);
+const itemOf = (id, shop) => (FURN_SHOPS.includes(shop) ? FURN[id] : ITEM[id]);
 const SLOT_OF_DISPLAY = { 'rr-tops': ['top'], 'rr-outer': ['outer'], 'rr-bottoms': ['bottom'], 'rr-shoes': ['shoes'], 'rr-acc': ['hat', 'glasses'] };
 const DROP_STOCK = 12;
 const near = (p, q, r) => Math.hypot(p.x - q.x, p.z - q.z) < r && Math.abs((p.y ?? 0) - (q.y ?? p.y ?? 0)) < 1.3;
@@ -158,14 +160,14 @@ export class Shopping {
       if (p.y < G.origin.y + 1) return { label: 'Toss a coin in the fountain (25¢)', act: () => this.coin() };
     }
     if (near(p, { ...G.kiosk.stand, y: G.origin.y }, 1.0)) return { label: 'PRETZEL PILOT: a pretzel ($4.50)', act: () => this.pretzel() };
-    if (near(p, { ...G.directory, y: G.origin.y }, 0.9)) return { label: 'Read the directory', act: () => this.ui.toast('STREET LEVEL: RACK & RUIN (thrift), SPLITGRAIN (streetwear), PRETZEL PILOT, restrooms. UPPER LEVEL: MAISON VELLARD (luxury), ROOMSET (furniture, same-day delivery), BRIGHTWIRE (closed for refit). Open 10 AM - 10 PM.') };
+    if (near(p, { ...G.directory, y: G.origin.y }, 0.9)) return { label: 'Read the directory', act: () => this.ui.toast('STREET LEVEL: RACK & RUIN (thrift), SPLITGRAIN (streetwear), PRETZEL PILOT, restrooms. UPPER LEVEL: MAISON VELLARD (luxury), ROOMSET (furniture, same-day delivery), BRIGHTWIRE (phones, TVs, hi-fi, games). Open 10 AM - 10 PM.') };
     if (G.salon && near(p, G.salon.seat, 1.1) && this.zone === 'mv') return { label: 'Sink into the velvet sofa', act: () => this.salon() };
     return null;
   }
 
   // ---------------------------------------------------------------- browsing
   browse(d) {
-    if (d.shop === 'rs') return this.browseFurniture(d);
+    if (FURN_SHOPS.includes(d.shop)) return this.browseFurniture(d);
     const items = this.itemsAt(d).map((id) => ITEM[id]);
     const dr = this.dropState();
     this.player.locked = true;
@@ -200,8 +202,11 @@ export class Shopping {
     });
   }
 
-  /** ROOMSET: furniture to order (delivered home), several of anything if you like. */
+  /** ROOMSET and BRIGHTWIRE: things to order (delivered home), several of anything if you like. */
   browseFurniture(d) {
+    const shop = d.shop;
+    const sh = SHOPS[shop];
+    const clerk = this.S.staff[sh.staff].name;
     const items = d.items.map((id) => FURN[id]);
     this.player.locked = true;
     if (!this.seen.has(d.id)) {
@@ -210,8 +215,8 @@ export class Shopping {
     }
     const have = (id) => this.decor?.pieces.filter((p) => p.id === id).length ?? 0;
     this.ui.openShop({
-      title: `ROOMSET · ${d.label}`,
-      shop: 'rs',
+      title: `${sh.name} · ${d.label}`,
+      shop,
       noTry: true,
       bagLabels: ['Cancel', 'Order it'],
       bagTag: 'ORDERED',
@@ -224,7 +229,7 @@ export class Shopping {
           it,
           owned: false,
           have: have(it.id),
-          inBag: this.cartShop === 'rs' && this.cart.includes(it.id),
+          inBag: this.cartShop === shop && this.cart.includes(it.id),
           wish: this.state.wish === `f:${it.id}`,
           note: '',
           gain: it.decor,
@@ -232,11 +237,11 @@ export class Shopping {
         })),
       cash: () => this.state.cash,
       bank: () => this.state.bank,
-      cartText: () => (this.cartShop === 'rs' && this.cart.length ? `Your order: ${this.cart.length} piece${this.cart.length > 1 ? 's' : ''}, ${money(this.total('rs'))}. Delivered today, to your storage at home.` : 'Order something, then pay Ines at the desk (or press P). Delivery is free.'),
-      onBag: (it) => this.toggleBag(it, 'rs'),
+      cartText: () => (this.cartShop === shop && this.cart.length ? `Your order: ${this.cart.length} piece${this.cart.length > 1 ? 's' : ''}, ${money(this.total(shop))}. Delivered today, to your storage at home.` : `Order something, then pay ${clerk} at the ${shop === 'bw' ? 'counter' : 'desk'} (or press P). Delivery is free.`),
+      onBag: (it) => this.toggleBag(it, shop),
       onWish: (it) => this.toggleWish(it, `f:${it.id}`),
-      payText: () => (this.unpaid('rs') ? `Pay now · ${money(this.total('rs'))}` : ''),
-      onPay: () => setTimeout(() => this.checkout('rs'), 0),
+      payText: () => (this.unpaid(shop) ? `Pay now · ${money(this.total(shop))}` : ''),
+      onPay: () => setTimeout(() => this.checkout(shop), 0),
       onClose: () => (this.player.locked = false),
     });
   }
@@ -401,7 +406,7 @@ export class Shopping {
   paid(shop, ids, total, worn) {
     const S = this.state;
     const sh = SHOPS[shop];
-    if (sh.furniture) return this.delivered(ids, total);
+    if (sh.furniture) return this.delivered(ids, total, shop);
     for (const id of ids) if (!S.owned.includes(id)) S.owned.push(id);
     if (shop === 'rr') S.thrift.sold.push(...ids);
     for (const id of ids)
@@ -437,8 +442,8 @@ export class Shopping {
     this.saveNow?.();
   }
 
-  /** Paid at ROOMSET: it all goes to your storage at home. */
-  delivered(ids, total) {
+  /** Paid at ROOMSET or BRIGHTWIRE: it all goes to your storage at home. */
+  delivered(ids, total, shop = 'rs') {
     const S = this.state;
     for (const id of ids) this.decor.add(id);
     this.cart = [];
@@ -448,7 +453,17 @@ export class Shopping {
     this.audio.coin();
     setTimeout(() => this.audio.tone(2400, 'sine', 0.05, 0.25), 120);
     const big = ids.some((id) => FURN[id].price >= 5000);
-    this.ui.toast(`Ka-ching! ${big ? 'Ines: "Wonderful. I\'ll have the boys bring it up this afternoon. Mind the doorframe."' : 'Ines: "Lovely. It\'ll be waiting at your place when you get home."'}`);
+    this.ui.toast(
+      `Ka-ching! ${
+        shop === 'bw'
+          ? big
+            ? 'Kai: "Oh, you\'re going to love this. The install team will set it up this afternoon. Cables hidden, obviously."'
+            : 'Kai: "Nice. It\'ll be at yours today, boxed, with all the little plastic bits."'
+          : big
+            ? 'Ines: "Wonderful. I\'ll have the boys bring it up this afternoon. Mind the doorframe."'
+            : 'Ines: "Lovely. It\'ll be waiting at your place when you get home."'
+      }`,
+    );
     setTimeout(() => this.ui.hint('Delivered to your storage at home. At home, press <b>F</b> to place it.', 7), 1400);
     if (S.wish && ids.some((id) => S.wish === `f:${id}`)) S.wish = null;
     this.saveNow?.();
@@ -571,12 +586,13 @@ export class Shopping {
     const zone = this.G.zoneAt(p);
     // leaving a shop with things you haven't paid for
     if (this.zone && ['rr', 'sg', 'mv'].includes(this.zone) && zone !== this.zone) this.alarm(this.zone);
-    if (this.zone === 'rs' && zone !== 'rs' && this.unpaid('rs')) {
-      this.handBack('rs');
-      this.ui.toast('You walk out without paying. Ines cancels your order with one sad click.');
+    if (FURN_SHOPS.includes(this.zone) && zone !== this.zone && this.unpaid(this.zone)) {
+      const who = this.S.staff[SHOPS[this.zone].staff].name;
+      this.handBack(this.zone);
+      this.ui.toast(`You walk out without paying. ${who} cancels your order with one sad click.`);
     }
     // walking into a shop: the staff notice you (and what you're wearing)
-    if (zone !== this.zone && ['rr', 'sg', 'mv', 'rs'].includes(zone) && this.G.open && !this.greeted.has(zone)) {
+    if (zone !== this.zone && ['rr', 'sg', 'mv', 'rs', 'bw'].includes(zone) && this.G.open && !this.greeted.has(zone)) {
       this.greeted.add(zone);
       this.greet(zone);
     }
@@ -634,6 +650,10 @@ export class Shopping {
           : t <= 4
             ? ['Ines: "Hello! Everything you see is in stock, and we deliver today."', 'Ines: "Welcome in. The cloud sofa is the one everyone sits on. Try it."']
             : ['Ines: "Oh, hello! I have a hot tub I think you need to see."', 'Ines: "Welcome back. Your place must be looking incredible."'],
+      bw:
+        t <= 2
+          ? ['Kai: "Hey! Everything\'s plugged in, touch whatever you like. Gently."', 'Kai: "Welcome to BRIGHTWIRE. We\'re open! Finally! The refit took eleven months."']
+          : ['Kai: "Oh, hello. Have you seen the Flip Gold? Come and see the Flip Gold."', 'Kai: "Welcome in. The cinema demo is on in five minutes, if you like loud things."'],
     };
     this.ui.toast(this.rng.pick(lines[zone]));
     if (zone === 'mv') this.audio.tone(2200, 'sine', 0.02, 0.5);

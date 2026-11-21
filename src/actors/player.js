@@ -152,8 +152,31 @@ export class CameraRig {
         this.yaw += dt * 0.16;
         this.pitch = damp(this.pitch, 0.55, 2, dt); // up above the heads of the crowd
         this.focus.set(player.pos.x, player.pos.y + 1.1, player.pos.z);
+      } else if (this.mode === 'drive') {
+        // behind the car, swinging round as it turns, unless the user is looking about
+        const car = this.car;
+        this.yaw -= input.lookDX * 0.0055;
+        this.pitch = clamp(this.pitch + input.lookDY * 0.004, -0.05, 0.9);
+        const idle = performance.now() - input.lastLookTime > 1200;
+        const back = car.speed < -0.5 ? car.yaw + Math.PI : car.yaw;
+        if (idle) {
+          this.yaw = angleLerp(this.yaw, back, 1 - Math.exp(-(1.2 + Math.abs(car.speed) * 0.12) * dt));
+          this.pitch = damp(this.pitch, 0.2, 1.5, dt);
+        }
+        this.focus.set(car.x, car.y + 1.35, car.z);
       }
-      const want = this.mode === 'wardrobe' ? 3.0 : this.mode === 'talk' ? Math.min(this.dist, 4.2) : this.mode === 'dance' ? 3.1 : this.mode === 'dj' ? 5.2 : this.dist;
+      const want =
+        this.mode === 'wardrobe'
+          ? 3.0
+          : this.mode === 'talk'
+            ? Math.min(this.dist, 4.2)
+            : this.mode === 'dance'
+              ? 3.1
+              : this.mode === 'dj'
+                ? 5.2
+                : this.mode === 'drive'
+                  ? this.car.len * 1.25 + 1.6 + Math.min(3, Math.abs(this.car.speed) * 0.1)
+                  : this.dist;
       const cp = Math.cos(this.pitch);
       pos.set(
         this.focus.x - Math.sin(this.yaw) * want * cp,

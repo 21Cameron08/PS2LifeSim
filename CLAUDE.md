@@ -94,6 +94,33 @@ features, controls and the code map.
   GULLY'S ranks live on `state.crewJob` (`rank`, `good`, `mgrShifts`, `owner`); the
   franchise on `state.franchise`. `netWorth()` in main.js feeds milestones and
   `extraStatus.wealth`.
+- Cars (`game/cars.js`): `CARS` catalog, `makeCarMesh` (`static: true` bakes the wheels and
+  lamps into the trim for showroom cars), `Garage` owns `state.cars` (`{ uid, id, paint, x,
+  z, yaw, demo? }`; demo cars aren't saved). Driving replaces `player.update` in the frame
+  (`updateDriving`), the camera has a `'drive'` mode (`rig.car`), the car's circles resolve
+  against `city.colliders`, traffic (`traffic.obstacles`, refilled by `garage.update`) and
+  people (walkers get an `ox/oz` offset in pedestrians.js; standers stop the car); shells
+  are off limits via `forbidden`. CORSO MOTORS (`world/motors.js`, `actors/motorsFolk.js`,
+  `render/motorsTextures.js`) is a shell like the Exchange; sales, test drives and trade-ins
+  are in main.js. `extraStatus.car/phone/help` add to status like `decor`.
+- THE CROWN (`world/crown.js`, `actors/crownFolk.js`, `game/orrery.js`,
+  `render/crownTextures.js`): one InteriorKit on the Meridian tower's roof (origin at
+  `DECK`, 1.15 m above the roof) with open-air rooms (`noCeil`, `sky` = daylight from the
+  whole sky, a kit room option) and the ORRERY pavilion as a normal room; fx channels:
+  0 fire pits, 1 pool lights, 2 the DJ. `crown.groundAt` is chained outermost into the
+  city's ground (deck, pool steps and floor, the DJ platform); pool walls are colliders that
+  only exist below the deck. You get up and down with `crownLift` (a fade); `onCrown` /
+  `inOrrery` in main.js. Members walk a small waypoint graph (`NODES`/`EDGES`); seats are
+  shared through `crownFolk.taken`. ORRERY's dinner is `dinner` in main.js (`openDinner`,
+  the plate is `TablePlate`).
+- BRIGHTWIRE (in galleria.js, `buildBrightwire`, zone `'bw'`) is a second furniture shop
+  (`FURN_SHOPS` in shopping.js); its stock is furniture.js cat `'tech'` (uses `watch`,
+  `hifi`, `cinema`, `arcade` in homeLife.js). Screens use the kit's `'tv'` target (placed
+  furniture renders `tk.screen` too); the Galleria draws the shared TV texture when you're
+  not at home. The phone (`state.phone`, Tab / `#phone-btn`) and its apps (cabs, valet,
+  ORRERY, markets, bank, the Agency's hired help `HELP`/`state.help`, wages in
+  `weeklyIncome`) are in main.js. SUBSTATION's bottle list is `BOTTLES`; the sparkler
+  parade is `club.sparkle(pos, { n, from })` and a big bottle sets `clubbers.vipBoost`.
 - Needs (`game/needs.js`, `updateNeeds`/`passOut` in main.js, HUD in `ui.setNeeds`): decay
   comes from game time each frame (`needs.tick`); jumps of 30+ minutes are skipped there, so
   anything that skips time on purpose (sleep, shower, fridge, passing out) applies its own

@@ -292,6 +292,7 @@ export class City {
           else if (site[0] === 'gullys') this.gullysSite = { x0, z0, x1, z1 }; // so does the restaurant
           else if (site[0] === 'galleria') this.galleriaSite = { x0, z0, x1, z1 }; // and the mall
           else if (site[0] === 'exchange') this.exchangeSite = { x0, z0, x1, z1 }; // and the Exchange
+          else if (site[0] === 'motors') this.motorsSite = { x0, z0, x1, z1 }; // and the car showroom
           else this.apartmentBuilding(site[0], site[1], x0, z0, x1, z1);
           continue;
         }
