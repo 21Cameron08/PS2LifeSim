@@ -183,6 +183,7 @@ export function buildPlaces(w) {
       sub: () => (state.orrery ? `Seven courses on the roof · your table: ${((state.orrery.hour + 11) % 12) + 1} PM` : 'Seven courses on the roof · book with Anouk (or by phone) · dress Sharp'),
       status: (h) => (h >= 19 && h < 23 ? { text: 'SERVING · until 11', open: true } : { text: 'DINNER 7 - 11 PM', open: false }),
       needs: () => ['hunger', 'fun', 'social'],
+      big: () => false,
     });
   }
   // the street machines: drawn small, not in the list

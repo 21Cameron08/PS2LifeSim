@@ -417,6 +417,7 @@ export class UI {
   /** choices: [{ label, fn }]. fn() can open another dialog or call closeDialog(). */
   openDialog({ name, text, choices, onClose, mono = false, instant = false }) {
     this.modal = 'dialog';
+    document.body.classList.add('in-dialog'); // (on a phone the touch buttons step aside: tap the text and the choices)
     this.dialog = { name, text, choices: choices?.length ? choices : [{ label: 'OK', fn: () => this.closeDialog() }], onClose, shown: 0, typing: true, sel: 0 };
     $('dialog').classList.remove('hidden');
     $('dialog-name').textContent = name;
@@ -464,6 +465,7 @@ export class UI {
     const d = this.dialog;
     this.dialog = null;
     this.modal = null;
+    document.body.classList.remove('in-dialog');
     $('dialog').classList.add('hidden');
     d?.onClose?.();
   }
@@ -492,6 +494,7 @@ export class UI {
   /** A small point-of-sale: scan items, check ID for alcohol, take card or count out change. */
   openRegister(o) {
     this.modal = 'register';
+    document.body.classList.add('in-menu');
     this.reg = { ...o, stage: 'scan', pending: o.items.map((it, i) => ({ ...it, code: `0${48 + i}${(it.price * 37) % 9973}`.slice(0, 8) })), scanned: [], given: 0, soldBeerTo: null, refused: null };
     $('register').classList.remove('hidden');
     this.setPrompt(null);
@@ -603,6 +606,7 @@ export class UI {
     if (res.card && r.scanned.length) this.audio.tone(1800, 'sine', 0.04, 0.15);
     this.reg = null;
     this.modal = null;
+    document.body.classList.remove('in-menu');
     $('register').classList.add('hidden');
     r.onDone?.(res);
   }
@@ -610,6 +614,7 @@ export class UI {
     const r = this.reg;
     this.reg = null;
     this.modal = null;
+    document.body.classList.remove('in-menu');
     $('register').classList.add('hidden');
     r?.onClose?.();
   }

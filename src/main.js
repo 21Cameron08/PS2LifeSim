@@ -2763,7 +2763,7 @@ const places = buildPlaces({ city, apts, state, store, job, crew, gullys, galler
 // buildings you own show up on the map (with a key)
 for (const p of PROPS) {
   const at = property.frontOf(p);
-  if (at) places.list.push({ id: `prop:${p.id}`, icon: () => 'key', color: () => '#d8b46a', at, name: () => p.name.toUpperCase(), sub: () => `Yours · ${p.where} · rent about ${money(property.rent(p))} a week`, status: () => ({ text: 'YOURS', open: true }), needs: () => [], hidden: () => !property.owns(p.id) });
+  if (at) places.list.push({ id: `prop:${p.id}`, icon: () => 'key', color: () => '#d8b46a', at, name: () => p.name.toUpperCase(), sub: () => `Yours · ${p.where} · rent about ${money(property.rent(p))} a week`, status: () => ({ text: 'YOURS', open: true }), needs: () => [], big: () => false, hidden: () => !property.owns(p.id) });
 }
 
 // ...and so do your cars, wherever you left them
@@ -2788,6 +2788,7 @@ for (let k = 0; k < 8; k++) {
     sub: () => 'Parked where you left it',
     status: () => ({ text: 'PARKED', open: true }),
     needs: () => ['fun'],
+    big: () => false,
     hidden: () => !rec() || driving?.rec === rec(),
   });
 }
@@ -3261,7 +3262,7 @@ function phoneApp(app) {
   if (app === 'markets') return openTerminal(`${PHONES[state.phone].name.toUpperCase()} · MARKETS`);
   if (app === 'bank') {
     player.locked = true;
-    return worthSheet(() => (player.locked = false));
+    return worthSheet(() => ui.closeDialog());
   }
   if (app === 'agency') return agencyMenu();
 }
@@ -4305,7 +4306,34 @@ function updateDriving(dt, free) {
   ui.setCar({ kmh: kmh(car.speed), name: left !== null ? `TEST DRIVE · ${left} MIN LEFT` : `${car.m.make} ${car.m.name}`, radio: `♪ ${st.name}` });
 }
 
+/**
+ * One frame. An error in any part of it is reported (once per message) and the loop carries
+ * on: one broken screen must never freeze the whole game.
+ */
+const frameErrors = new Set();
 function frame(now) {
+  try {
+    step(now);
+  } catch (e) {
+    const key = String(e?.message ?? e);
+    if (!frameErrors.has(key)) {
+      frameErrors.add(key);
+      console.error('Port Halcyon: an error in the game loop (it keeps running):', e);
+    }
+  }
+  try {
+    pipeline.render(scene, camera, time);
+  } catch (e) {
+    if (!frameErrors.has('render')) {
+      frameErrors.add('render');
+      console.error(e);
+    }
+  }
+  input.endFrame();
+  requestAnimationFrame(frame);
+}
+
+function step(now) {
   // the first frame's timestamp can be older than `last`: never let time run backwards
   const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
   last = now;
@@ -4517,9 +4545,6 @@ function frame(now) {
 
   // the shop's security cameras (only when you're close enough to see a monitor)
   if (!place && cctvTick++ % 4 === 0 && camera.position.distanceTo(store.doorCenter) < 30) store.renderCCTV(renderer, scene);
-  pipeline.render(scene, camera, time);
-  input.endFrame();
-  requestAnimationFrame(frame);
 }
 
 player.onStep = (run) => playing && audio.step(run);
@@ -4537,6 +4562,7 @@ requestAnimationFrame(frame);
 
 // handy for debugging from the console
 window.game = {
+  input,
   resale,
   soleSwap,
   property,

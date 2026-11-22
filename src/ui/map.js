@@ -307,7 +307,7 @@ export class CityMap {
     g.drawImage(this.base, 0, 0);
     const hour = ctx.hour();
     // your home building gets a green outline
-    const home = ctx.places.list.find((p) => p.id.startsWith('apt:') && p.big());
+    const home = ctx.places.list.find((p) => p.id.startsWith('apt:') && p.big?.());
     if (home) {
       const site = this.city.apartmentSites?.[home.id.slice(4)];
       if (site) {
@@ -354,7 +354,7 @@ export class CityMap {
       const [x, y] = this.m(p.at.x, p.at.z);
       const st = p.status(hour);
       const col = p.color();
-      const r = s * (p.big() ? 0.022 : 0.016);
+      const r = s * (p.big?.() ? 0.022 : 0.016);
       if (p === route) {
         g.strokeStyle = '#ffb05a';
         g.lineWidth = Math.max(2, s * 0.004);
@@ -393,7 +393,7 @@ export class CityMap {
         g.textAlign = 'center';
         g.fillText('!', x + r * 0.8, y - r * 0.78);
       }
-      if (p.big() || i === this.sel || p === route) {
+      if (p.big?.() || i === this.sel || p === route) {
         g.font = `700 ${Math.round(s * 0.022)}px Rajdhani, sans-serif`;
         g.textAlign = 'left';
         const name = p.name();

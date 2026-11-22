@@ -471,6 +471,26 @@ body.compact #prompt {
   color: var(--text);
   cursor: pointer;
 }
+/* a menu's own button (RESUME, DONE, CLOSE...) stays in view while the menu scrolls */
+.menu > .btn {
+  position: sticky;
+  bottom: -18px;
+  box-shadow: 0 -10px 16px rgba(6, 10, 30, 0.95);
+  background: rgba(30, 60, 110, 0.96);
+}
+/* on a phone: no keyboard help, the touch buttons step aside for conversations, and a long
+   conversation scrolls rather than running off the screen */
+body.touch #pause .controls {
+  display: none;
+}
+body.touch.in-dialog #touch,
+body.touch.in-dialog #stick {
+  display: none !important;
+}
+#dialog-choices {
+  max-height: 45vh;
+  overflow-y: auto;
+}
 .btn {
   display: block;
   margin: 14px auto 0;
@@ -858,6 +878,20 @@ body.touch .reg-head .reg-close {
 .ord-qty .arrow {
   width: 32px;
   height: 32px;
+}
+/* a phone (or a short screen): a shorter menu list and ticket, so PAY and CANCEL always show */
+@media (max-width: 640px), (max-height: 560px) {
+  .ord-menu {
+    max-height: 34vh;
+  }
+  #order .receipt {
+    min-height: 0;
+    max-height: 18vh;
+    overflow: auto;
+  }
+  body.touch #order .reg-foot {
+    display: none;
+  }
 }
 .ord-where,
 .ord-pay {

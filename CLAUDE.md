@@ -138,6 +138,12 @@ features, controls and the code map.
   banner, then park the hint, when even that doesn't fit. Toasts queue (`toastQ`) and stay up
   longer when they're long. New HUD panels should go in the HUD columns (`#hud-left`,
   `#hud-right`) so the message columns measure round them.
+- Phones: every screen has to open and close by tap alone. Full-screen panels set
+  `body.in-menu` and dialogs `body.in-dialog` (both hide the touch buttons); panels with a
+  `.reg-head` get a `.reg-close` ✕; long menus keep their buttons sticky (`.menu > .btn`).
+  Every `places.js` entry needs `big()` (the map calls `p.big?.()`). The game loop is
+  `frame()` → `step()` inside a try/catch that logs each error once, so one bad frame can't
+  freeze the game behind an open screen.
 - Secret cheat menu (money, warps, time) for testing: type `BLING` while walking around,
   or tap the money display five times. Code is in `main.js` (`openCheats`) and
   `ui/ui.js` (`openCheats`). Not listed in the in-game controls on purpose.
