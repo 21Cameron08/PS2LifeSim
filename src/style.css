@@ -631,6 +631,38 @@ body.touch #cheats .menu-foot {
   padding-bottom: 6px;
   margin-bottom: 10px;
 }
+/* the close button in every panel's header (on a phone it's the only way out) */
+.reg-head:has(.reg-close) > span:last-of-type {
+  margin-left: auto;
+}
+.reg-head .reg-close {
+  order: 3;
+  flex: none;
+  margin-left: 4px;
+  margin-top: -4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.reg-head .reg-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+body.touch .reg-head .reg-close {
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+  margin-top: -8px;
+}
 .reg-body {
   display: grid;
   grid-template-columns: 1.2fr 1fr;

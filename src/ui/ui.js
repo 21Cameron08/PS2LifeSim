@@ -543,7 +543,7 @@ export class UI {
           ? `<div><span>CARD</span><span>${m(total)}</span></div>`
           : `<div><span>CASH</span><span>${m(r.paid)}</span></div><div><span>CHANGE</span><span>${m(r.paid - total)}</span></div>`
         : '';
-    $('register').innerHTML = `<div class="reg-head"><span>HALCYON 24 · REGISTER 1</span><span>${r.today}</span></div>
+    $('register').innerHTML = `<div class="reg-head"><span>HALCYON 24 · REGISTER 1</span><span>${r.today}</span><button class="reg-close" data-x aria-label="Step away">✕</button></div>
       <div class="reg-body"><div>${left}</div><div class="receipt">${lines || '<div><span>— ready —</span></div>'}<div class="tot"><span>TOTAL</span><span>${m(total)}</span></div>${tail}</div></div>
       <div class="reg-foot">Esc: step away (they keep waiting) · keys: numbers, Y/N, Backspace, Enter</div>`;
     $('register').querySelectorAll('[data-scan]').forEach((b) => b.addEventListener('click', () => this.regScan(Number(b.dataset.scan))));
@@ -551,6 +551,7 @@ export class UI {
     $('register').querySelectorAll('[data-cash]').forEach((b) => b.addEventListener('click', () => this.regCash(Number(b.dataset.cash))));
     $('register').querySelectorAll('[data-clear]').forEach((b) => b.addEventListener('click', () => this.regCash(0)));
     $('register').querySelectorAll('[data-done]').forEach((b) => b.addEventListener('click', () => this.regDone()));
+    $('register').querySelector('[data-x]').addEventListener('click', () => this.closeRegister());
   }
   regAdvance() {
     const r = this.reg;
@@ -967,7 +968,7 @@ export class UI {
         </div>`;
       })
       .join('');
-    $('shop').innerHTML = `<div class="reg-head"><span>${r.title}</span><span>${money(r.cash())} cash · ${money(r.bank())} bank</span></div>
+    $('shop').innerHTML = `<div class="reg-head"><span>${r.title}</span><span>${money(r.cash())} cash · ${money(r.bank())} bank</span><button class="reg-close" data-x aria-label="Close">✕</button></div>
       <div class="shop-list">${html || `<div class="shop-empty">${r.empty}</div>`}</div>
       <div class="reg-note">${r.note || r.cartText()}</div>
       ${r.payText?.() ? `<div class="reg-btns shop-pay"><button class="reg-btn go" data-pay="1"><span>P</span>${r.payText()}</button></div>` : ''}
@@ -975,6 +976,7 @@ export class UI {
     const el = $('shop');
     el.querySelectorAll('[data-sel]').forEach((b) => b.addEventListener('click', () => ((r.sel = Number(b.dataset.sel)), this.renderShop())));
     el.querySelector('[data-pay]')?.addEventListener('click', () => this.shopPay());
+    el.querySelector('[data-x]').addEventListener('click', () => this.closeShop());
     el.querySelectorAll('[data-act]').forEach((b) =>
       b.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1079,7 +1081,7 @@ export class UI {
       this.drawChart(el.querySelector('.mk-chart'), M.history(s.sym, 30), path, prev);
       return;
     }
-    $('market').innerHTML = `<div class="reg-head"><span>${r.title}</span><span class="mk-status ${M.isOpen() ? 'open' : ''}">${M.statusText()}</span></div>
+    $('market').innerHTML = `<div class="reg-head"><span>${r.title}</span><span class="mk-status ${M.isOpen() ? 'open' : ''}">${M.statusText()}</span><button class="reg-close" data-x aria-label="Close">✕</button></div>
       <div class="mk-money">${moneyLine}</div>
       <div class="mk-body">
         <div class="mk-list"><div class="mk-row hd"><b>SYM</b><span class="nm">COMPANY</span><span class="px">PRICE</span><span class="chg">TODAY</span><span class="own">OWN</span></div>${rows}</div>
@@ -1104,6 +1106,7 @@ export class UI {
     el.querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => ((r.qtyI = Number(b.dataset.q)), this.renderMarket())));
     el.querySelector('[data-buy]').addEventListener('click', () => this.marketTrade('buy'));
     el.querySelector('[data-sell]').addEventListener('click', () => this.marketTrade('sell'));
+    el.querySelector('[data-x]').addEventListener('click', () => this.closeMarket());
     this.drawChart(el.querySelector('.mk-chart'), M.history(s.sym, 30), path, prev);
   }
   drawChart(cv, hist, today, prev) {
@@ -1207,12 +1210,13 @@ export class UI {
         </div>`,
       )
       .join('');
-    $('shop').innerHTML = `<div class="reg-head"><span>${r.title}</span><span>${r.sub?.() ?? ''}</span></div>
+    $('shop').innerHTML = `<div class="reg-head"><span>${r.title}</span><span>${r.sub?.() ?? ''}</span><button class="reg-close" data-x aria-label="Close">✕</button></div>
       <div class="shop-list">${html || `<div class="shop-empty">${r.empty}</div>`}</div>
       <div class="reg-note">${r.note}</div>
       <div class="reg-foot">${r.foot}</div>`;
     const el = $('shop');
     el.querySelectorAll('[data-sel]').forEach((b) => b.addEventListener('click', () => ((r.sel = Number(b.dataset.sel)), (r.note = ''), this.renderDecor())));
+    el.querySelector('[data-x]').addEventListener('click', () => this.closeDecor());
     el.querySelectorAll('[data-act]').forEach((b) =>
       b.addEventListener('click', (e) => {
         e.stopPropagation();

@@ -3127,6 +3127,8 @@ function cancelCarry() {
 function openDecorPanel() {
   if (!atHome() || seat) return;
   const apt = place;
+  // nothing bought and nothing placed: a line, not an empty panel
+  if (!decor.stored().length && !decor.placedIn(apt.id).length) return ui.toast('Nothing to place yet. ROOMSET (furniture) and BRIGHTWIRE (home tech), upstairs at the Halcyon Galleria, deliver.');
   player.locked = true;
   ui.openDecor({
     title: `${apt.L.name.toUpperCase()} · YOUR THINGS`,
