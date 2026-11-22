@@ -2039,6 +2039,16 @@ body.in-menu #hint {
   border: 3px solid #ff6ac8;
   box-shadow: 0 0 40px rgba(90, 232, 255, 0.35);
   width: min(960px, calc(100% - 24px));
+  /* short screens (a phone on its side): the screen shrinks so Leave stays on screen */
+  width: min(960px, calc(100% - 24px), calc((100vh - 112px) * 16 / 9));
+  width: min(960px, calc(100% - 24px), calc((100dvh - 112px) * 16 / 9));
+}
+@media (max-height: 500px) {
+  .arcade-cab {
+    padding: 10px;
+    gap: 6px;
+    width: min(960px, calc(100% - 24px), calc((100dvh - 84px) * 16 / 9));
+  }
 }
 .arcade-cab canvas {
   width: 100%;
@@ -2519,4 +2529,22 @@ body.touch .dance-foot .keys {
   border: 2px solid #fff;
   box-shadow: 0 6px 24px #000;
   transform: rotate(-2deg);
+}
+/* a phone on its side: the PHONE button sits left of the needs panel, clear of the touch buttons */
+body.touch.short.has-phone #hud-right {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-items: end;
+  align-items: start;
+}
+body.touch.short #hud-right > * {
+  grid-column: 1 / -1;
+}
+body.touch.short #hud-right > #needs {
+  grid-column: 2;
+}
+body.touch.short #hud-right > #phone-btn {
+  grid-column: 1;
+  grid-row: 2;
+  margin-top: 0;
 }
