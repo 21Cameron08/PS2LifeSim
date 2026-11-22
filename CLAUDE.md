@@ -130,6 +130,14 @@ features, controls and the code map.
   drawn from `city.blocks`/`city.footprints`, so new buildings show up on their own. A new
   hangout space needs an entry in `buildPlaces` (door position, live status/hours, needs it
   fills) to appear in the list, on the map and as a route target.
+- On-screen messages (`ui.toast`, `ui.hint`, `ui.showLocation`, `ui.setPrompt`, the job panel
+  `#shift`) live in two containers, `#msgs-top` and `#msgs-bottom`. On a desktop they keep
+  their absolute positions; on a phone or narrow window (`body.compact`) they become two
+  stacked columns placed by `ui.layoutMessages` (under the HUD / above the touch buttons, or
+  beside them on short `body.short` screens), so nothing overlaps; `crowd1`/`crowd2` drop the
+  banner, then park the hint, when even that doesn't fit. Toasts queue (`toastQ`) and stay up
+  longer when they're long. New HUD panels should go in the HUD columns (`#hud-left`,
+  `#hud-right`) so the message columns measure round them.
 - Secret cheat menu (money, warps, time) for testing: type `BLING` while walking around,
   or tap the money display five times. Code is in `main.js` (`openCheats`) and
   `ui/ui.js` (`openCheats`). Not listed in the in-game controls on purpose.

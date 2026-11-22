@@ -38,17 +38,19 @@
         </div>
       </div>
 
-      <div id="shift" class="hidden"><div id="shift-title"></div><ul id="shift-tasks"></ul></div>
       <div id="register" class="hidden"></div>
       <div id="order" class="hidden"></div>
       <div id="bar" class="hidden"></div>
       <div id="pos" class="hidden"></div>
       <div id="shop" class="hidden"></div>
       <div id="market" class="hidden"></div>
-      <div id="location"></div>
-      <div id="prompt"></div>
-      <div id="hint"></div>
-      <div id="toast"></div>
+      <!-- messages: on a phone these become two columns that can't overlap (body.compact) -->
+      <div id="msgs-top">
+        <div id="shift" class="hidden"><div id="shift-title"></div><ul id="shift-tasks"></ul></div>
+        <div id="location"></div>
+        <div id="toast"></div>
+      </div>
+      <div id="msgs-bottom"><div id="hint"></div><div id="prompt"></div></div>
 
       <div id="dialog" class="hidden">
         <div id="dialog-name"></div>

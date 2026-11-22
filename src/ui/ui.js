@@ -61,7 +61,9 @@ export class UI {
     this.audio = audio;
     this.modal = 'title';
     this.locTimer = 0;
-    this.toastTimer = 0;
+    this.toastQ = []; // toasts waiting their turn
+    this._toastText = null;
+    this.toastShown = 0;
     this.hintTimer = 0;
     this.dialog = null;
     this.menu = null;
@@ -276,17 +278,112 @@ export class UI {
     }, 420);
   }
 
+  /**
+   * A short message. They queue rather than overwrite each other: each one stays up long
+   * enough to read (longer for long ones), and shorter when others are waiting.
+   */
   toast(text) {
+    if (!text) return;
+    const q = (this.toastQ ??= []);
+    if (text === this._toastText) {
+      this.toastShown = Math.min(this.toastShown, 0.5); // the same thing again: keep it up
+      return;
+    }
+    if (q.includes(text)) return;
+    q.push(text);
+    if (q.length > 3) q.shift(); // a burst: keep the latest few
+    if (!this._toastText) this.nextToast();
+  }
+  nextToast() {
     const el = $('toast');
+    const text = this.toastQ?.shift();
+    if (!text) {
+      el.classList.remove('show');
+      this._toastText = null;
+      return;
+    }
     el.textContent = text;
+    el.classList.remove('show');
+    void el.offsetWidth; // restart the fade-in
     el.classList.add('show');
-    this.toastTimer = 2.4;
+    this._toastText = text;
+    this.toastShown = 0;
+    this.toastFor = Math.min(7, Math.max(2.4, 1.6 + text.length * 0.035));
+    this.toastBusyFor = Math.min(4, Math.max(1.8, 1.2 + text.length * 0.02));
   }
   hint(text, seconds = 8) {
     const el = $('hint');
     el.innerHTML = text;
     el.classList.add('show');
     this.hintTimer = seconds;
+  }
+
+  /**
+   * On a phone (or a narrow window) the messages go in two columns that can't overlap
+   * anything: the location and toasts, and the hint and the prompt. Tall screens: one under
+   * whatever HUD is showing, one just above the touch buttons. Short (landscape) screens:
+   * one in the gap between the HUD's two halves, one beside the touch buttons. Measured a
+   * few times a second, since the HUD grows and shrinks (a route, the speedometer).
+   */
+  layoutMessages(dt) {
+    if ((this.layoutT = (this.layoutT ?? 0) - dt) > 0) return;
+    this.layoutT = 0.2;
+    const B = document.body;
+    const compact = B.classList.contains('touch') || innerWidth <= 640;
+    B.classList.toggle('compact', compact);
+    if (!compact) return;
+    const rect = (id) => {
+      const el = $(id);
+      if (!el || el.offsetParent === null) return null;
+      const r = el.getBoundingClientRect();
+      return r.height > 1 ? r : null;
+    };
+    const L = rect('hud-left');
+    const R = rect('hud-right');
+    const T = rect('touch');
+    const W = innerWidth;
+    const short = innerHeight < 560;
+    B.classList.toggle('short', short);
+    const M = 12;
+    const v = { top: 16, topL: M, topR: M, bottom: 16, botL: M, botR: M };
+    // the top column (the job panel, the location, toasts)
+    const gapL = L ? L.right + 10 : M;
+    const gapR = Math.min(R ? R.left - 10 : W - M, T ? T.left - 10 : W - M); // clear of the buttons too
+    if (short && gapR - gapL >= 240) {
+      v.top = Math.round(L?.top ?? 8);
+      v.topL = Math.round(gapL);
+      v.topR = Math.round(W - gapR);
+    } else v.top = Math.round(Math.max(L?.bottom ?? 0, R?.bottom ?? 0) + 8);
+    // the bottom column
+    if (T) {
+      if (short && T.left - 2 * M >= 260) {
+        v.bottom = Math.round(innerHeight - T.bottom);
+        v.botR = Math.round(W - T.left + M);
+      } else v.bottom = Math.round(innerHeight - T.top + 10);
+    }
+    const key = JSON.stringify(v);
+    if (key !== this._msgLayout) {
+      this._msgLayout = key;
+      const root = document.documentElement.style;
+      root.setProperty('--msg-top', `${v.top}px`);
+      root.setProperty('--msg-top-l', `${v.topL}px`);
+      root.setProperty('--msg-top-r', `${v.topR}px`);
+      root.setProperty('--msg-bottom', `${v.bottom}px`);
+      root.setProperty('--msg-bot-l', `${v.botL}px`);
+      root.setProperty('--msg-bot-r', `${v.botR}px`);
+    }
+    // still too much for the screen (a small phone, a job, a route, a toast and a hint all
+    // at once): the location banner goes first, then the hint waits for the toast to go
+    const clash = () => {
+      const a = $('msgs-top').getBoundingClientRect();
+      const b = $('msgs-bottom').getBoundingClientRect();
+      return a.height > 0 && b.height > 0 && a.bottom > b.top - 6 && a.left < b.right && b.left < a.right;
+    };
+    B.classList.remove('crowd1', 'crowd2');
+    if (clash()) {
+      B.classList.add('crowd1');
+      if (clash()) B.classList.add('crowd2');
+    }
   }
 
   clearHint() {
@@ -296,8 +393,13 @@ export class UI {
 
   update(dt) {
     if (this.locTimer > 0 && (this.locTimer -= dt) <= 0) $('location').classList.remove('show');
-    if (this.toastTimer > 0 && (this.toastTimer -= dt) <= 0) $('toast').classList.remove('show');
-    if (this.hintTimer > 0 && (this.hintTimer -= dt) <= 0) $('hint').classList.remove('show');
+    if (this._toastText) {
+      this.toastShown += dt;
+      if (this.toastShown >= (this.toastQ.length ? this.toastBusyFor : this.toastFor)) this.nextToast();
+    }
+    this.layoutMessages(dt);
+    // (a hint parked for lack of room on a small screen doesn't use up its time)
+    if (this.hintTimer > 0 && !document.body.classList.contains('crowd2') && (this.hintTimer -= dt) <= 0) $('hint').classList.remove('show');
     const d = this.dialog;
     if (d && d.typing) {
       const before = Math.floor(d.shown);
