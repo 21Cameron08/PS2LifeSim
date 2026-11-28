@@ -2534,6 +2534,7 @@ body.touch .dance-foot .keys {
 body.touch.short.has-phone #hud-right {
   display: grid;
   grid-template-columns: auto auto;
+  grid-auto-flow: row dense; /* the button fills the free cell beside the needs panel */
   justify-items: end;
   align-items: start;
 }
@@ -2545,6 +2546,5 @@ body.touch.short #hud-right > #needs {
 }
 body.touch.short #hud-right > #phone-btn {
   grid-column: 1;
-  grid-row: 2;
   margin-top: 0;
 }
